@@ -1,10 +1,10 @@
+import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import {
   RoadmapCanvasSessionPersistenceProvider,
-  useRoadmapCanvasSession,
   type RoadmapCanvasSessionOptions,
 } from '@/features/roadmap/session/session';
 import type {
@@ -18,6 +18,7 @@ import type {
 } from '@/features/roadmap/canvas/commands/commands';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
+import { RoadmapClosedError } from '@/features/roadmap/session/access-lost';
 import { notify } from '@/shared/ui/notify';
 import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
@@ -63,7 +64,7 @@ const roadmap: RoadmapDto = {
 
 async function openCanvas(
   persistence: RoadmapCanvasSessionPersistence = createInMemoryRoadmapSessionPersistence(roadmap),
-  options: RoadmapCanvasSessionOptions = {},
+  options: Omit<RoadmapCanvasSessionOptions, 'canvas'> = {},
 ) {
   const onCommandApplied = vi.fn();
   const report = vi.fn<(action: PracticeCanvasAction) => void>();
@@ -74,14 +75,15 @@ async function openCanvas(
     </RoadmapCanvasSessionPersistenceProvider>
   );
   vi.spyOn(notify, 'success');
-  const { result } = renderHook(
-    () => useRoadmapCanvasSession(input, { onCommandApplied, ...options }),
+  const { result, unmount } = renderHook(
+    () => useTestCanvasSession(input, { onCommandApplied, ...options }),
     { wrapper },
   );
   await waitFor(() => expect(result.current.roadmap).not.toBeNull());
   const commands = () => result.current.canvasCommands;
   return {
     persistence,
+    unmount,
     onCommandApplied,
     reported: () => report.mock.calls.map(([action]) => action),
     commands,
@@ -162,6 +164,97 @@ async function nodeOf(persistence: RoadmapCanvasSessionPersistence, nodeId: stri
 
 describe('canvas commands', () => {
   afterEach(() => vi.restoreAllMocks());
+  test('a late Change impact after leaving the session runs no write', async () => {
+    const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+    let releaseImpact: (() => void) | undefined;
+    const canvas = await openCanvas({
+      ...adapter,
+      async readChangeImpact(command) {
+        const impact = await adapter.readChangeImpact(command);
+        await new Promise<void>((resolve) => (releaseImpact = resolve));
+        return impact;
+      },
+    });
+    let request: Promise<boolean> | undefined;
+    act(() => {
+      request = canvas.commands().request({
+        kind: 'create-dependency',
+        sourceNodeId: 'limits',
+        targetNodeId: 'integrals',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      });
+    });
+    await waitFor(() => expect(releaseImpact).toBeDefined());
+    canvas.unmount();
+    await act(async () => {
+      releaseImpact!();
+      await request;
+    });
+    expect((await adapter.load()).dependencies).toEqual(roadmap.dependencies);
+  });
+
+  test('a command finishing after leaving the session is not applied or announced', async () => {
+    const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+    let releaseWrite: (() => void) | undefined;
+    const canvas = await openCanvas(
+      intercepting(adapter, 'add-node', async (_, forward) => {
+        await new Promise<void>((resolve) => (releaseWrite = resolve));
+        return forward();
+      }),
+    );
+    let request: Promise<boolean> | undefined;
+    act(() => {
+      request = canvas.commands().request({
+        kind: 'add-node',
+        node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
+        position: { x: 480, y: 240 },
+        displaced: [],
+      });
+    });
+    await waitFor(() => expect(releaseWrite).toBeDefined());
+    canvas.unmount();
+    let applied: boolean | undefined;
+    await act(async () => {
+      releaseWrite!();
+      applied = await request;
+    });
+    expect((await adapter.load()).nodes.at(-1)?.title).toBe('Sucesiones');
+    expect(applied).toBe(false);
+    expect(successToasts()).toEqual([]);
+    expect(canvas.reported()).toEqual([]);
+    expect(canvas.onCommandApplied).not.toHaveBeenCalled();
+  });
+
+  test('a late closed Roadmap failure after leaving the session starts no refresh', async () => {
+    const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+    let rejectWrite: (() => void) | undefined;
+    const load = vi.fn(() => adapter.load());
+    const canvas = await openCanvas(
+      intercepting({ ...adapter, load }, 'add-node', async () => {
+        await new Promise<void>((_, reject) => {
+          rejectWrite = () => reject(new RoadmapClosedError('El roadmap está cerrado.'));
+        });
+      }),
+    );
+    let request: Promise<boolean> | undefined;
+    act(() => {
+      request = canvas.commands().request({
+        kind: 'add-node',
+        node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
+        position: { x: 480, y: 240 },
+        displaced: [],
+      });
+    });
+    await waitFor(() => expect(rejectWrite).toBeDefined());
+    canvas.unmount();
+    await act(async () => {
+      rejectWrite!();
+      await request;
+    });
+    expect(load).toHaveBeenCalledOnce();
+  });
+
   test('hiding a Node shows its Change impact and hides it on confirmation', async () => {
     const canvas = await openCanvas();
 
@@ -1486,6 +1579,82 @@ describe('canvas commands', () => {
         undefined,
       );
       expect(canvas.session().error).toBe('No se pudo actualizar el roadmap.');
+    });
+
+    test('ignores another preview activation while the draft guard is pending', async () => {
+      const first = Promise.withResolvers<boolean>();
+      const second = Promise.withResolvers<boolean>();
+      const guardDraft = vi
+        .fn()
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+      const base = createInMemoryRoadmapSessionPersistence(roadmap);
+      const loadCanvasPreview = vi.fn(base.loadCanvasPreview);
+      const canvas = await openCanvas({ ...base, loadCanvasPreview }, { guardDraft });
+      act(() => {
+        canvas.session().canvasPreviewWorkflow.requestEntry();
+        canvas.session().canvasPreviewWorkflow.requestEntry();
+      });
+      await act(async () => first.resolve(true));
+      await waitFor(() => expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(true));
+      await act(async () => second.resolve(true));
+      expect(loadCanvasPreview).toHaveBeenCalledOnce();
+      expect(guardDraft).toHaveBeenCalledOnce();
+      expect(canvas.reported()).toEqual([{ type: 'enterCanvasPreview' }]);
+    });
+
+    test('ignores another preview activation while the preview load is pending', async () => {
+      const base = createInMemoryRoadmapSessionPersistence(roadmap);
+      const loaded = Promise.withResolvers<Awaited<ReturnType<typeof base.loadCanvasPreview>>>();
+      const loadCanvasPreview = vi.fn(() => loaded.promise);
+      const guardDraft = vi.fn(async () => true);
+      const canvas = await openCanvas({ ...base, loadCanvasPreview }, { guardDraft });
+      await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+      expect(loadCanvasPreview).toHaveBeenCalledOnce();
+      await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+      expect(guardDraft).toHaveBeenCalledOnce();
+      expect(loadCanvasPreview).toHaveBeenCalledOnce();
+      await act(async () => loaded.resolve(await base.loadCanvasPreview()));
+      expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(true);
+      expect(canvas.reported()).toEqual([{ type: 'enterCanvasPreview' }]);
+    });
+
+    test.each(['guard', 'load'] as const)(
+      'retries preview entry after a rejected %s',
+      async (failure) => {
+        const base = createInMemoryRoadmapSessionPersistence(roadmap);
+        const guardDraft = vi.fn(async () => true);
+        const loadCanvasPreview = vi.fn(base.loadCanvasPreview);
+        if (failure === 'guard') guardDraft.mockRejectedValueOnce(new Error('Guard failed'));
+        else loadCanvasPreview.mockRejectedValueOnce(new Error('Preview failed'));
+        const canvas = await openCanvas({ ...base, loadCanvasPreview }, { guardDraft });
+        await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+        expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(false);
+        await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+        await waitFor(() => expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(true));
+        expect(canvas.reported()).toEqual([{ type: 'enterCanvasPreview' }]);
+      },
+    );
+
+    test('does not report entering the Canvas preview when its pending load finishes after unmount', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+      let releasePreviewLoad: (() => void) | undefined;
+      const canvas = await openCanvas({
+        ...adapter,
+        async loadCanvasPreview() {
+          await new Promise<void>((resolve) => (releasePreviewLoad = resolve));
+          return adapter.loadCanvasPreview();
+        },
+      });
+
+      act(() => canvas.session().canvasPreviewWorkflow.requestEntry());
+      await waitFor(() => expect(releasePreviewLoad).toBeDefined());
+      canvas.unmount();
+      await act(async () => {
+        releasePreviewLoad!();
+      });
+
+      expect(canvas.reported()).toEqual([]);
     });
 
     test('reports entering the Canvas preview once per entry, not on every preview reload', async () => {

@@ -36,9 +36,7 @@ type NodeEditorContextValue = {
   previewNodeInformation: () => void;
 };
 
-const NodeEditorContext = createContext<NodeEditorContextValue | null>(null);
-
-export const NodeEditorProvider = NodeEditorContext.Provider;
+export const NodeEditorContext = createContext<NodeEditorContextValue | null>(null);
 
 export function useNodeEditorContext() {
   const context = useContext(NodeEditorContext);

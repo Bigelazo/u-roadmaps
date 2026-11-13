@@ -39,15 +39,25 @@ vi.mock('next/dynamic', async () => {
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
     projection,
+    selectedNodeId,
     onSelectNode,
     bottomLeftActions,
     bottomRightActions,
     overlaySlots,
+    onViewportChange,
+    viewportRestoration,
   }: RoadmapGraphProps) => (
     <>
       {bottomLeftActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
       {bottomRightActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
       {overlaySlots?.topCenter}
+      <button type="button" onClick={() => onViewportChange?.({ x: 120, y: -80, zoom: 1.4 })}>
+        Pan canvas
+      </button>
+      <output aria-label="Restored viewport">
+        {JSON.stringify(viewportRestoration?.viewport)}
+      </output>
+      <output aria-label="Selected node">{selectedNodeId}</output>
       {projection.roadmap.nodes.map((node) => (
         <button key={node.id} type="button" onClick={() => onSelectNode(node.id)}>
           {node.title}
@@ -358,4 +368,54 @@ test('retains a failed Node draft and retries through real persistence before an
   } finally {
     await act(async () => controlled.finish());
   }
+});
+
+test('leaving the Canvas preview restores the selected Node, editor and viewport', async () => {
+  const user = userEvent.setup();
+  renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap));
+  await user.click(await screen.findByRole('button', { name: 'Límites' }));
+  expect(await screen.findByRole('textbox', { name: 'Título' })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Pan canvas' }));
+  expect(screen.getByLabelText('Selected node').textContent).toBe('node-1');
+  await user.click(screen.getByRole('button', { name: 'Vista estudiante' }));
+  expect(screen.queryByLabelText('Panel de edición del roadmap')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Límites' }));
+  expect(await screen.findByLabelText('Límites')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
+  const editor = await screen.findByLabelText('Panel de edición del roadmap');
+  expect(await within(editor).findByRole('textbox', { name: 'Título' })).toHaveProperty(
+    'value',
+    'Límites',
+  );
+  expect(screen.getByLabelText('Selected node').textContent).toBe('node-1');
+  expect(screen.getByLabelText('Restored viewport').textContent).toBe(
+    '{"x":120,"y":-80,"zoom":1.4}',
+  );
+  expect(screen.queryByLabelText('Límites')).toBeNull();
+});
+
+test('an unsaved Node draft guards preview entry and cancellation permits another entry', async () => {
+  const user = userEvent.setup();
+  const base = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+  const loadCanvasPreview = vi.fn(base.loadCanvasPreview);
+  renderSession({ ...base, loadCanvasPreview });
+  await user.click(await screen.findByRole('button', { name: 'Límites' }));
+  const title = await screen.findByRole('textbox', { name: 'Título' });
+  await user.clear(title);
+  await user.paste('Unsaved title');
+  await user.click(screen.getByRole('button', { name: 'Vista estudiante' }));
+  const confirmation = await screen.findByRole('alertdialog', {
+    name: '¿Descartar los cambios sin guardar?',
+  });
+  expect(loadCanvasPreview).not.toHaveBeenCalled();
+  await user.click(within(confirmation).getByRole('button', { name: 'Seguir editando' }));
+  expect(title).toHaveProperty('value', 'Unsaved title');
+  await user.click(screen.getByRole('button', { name: 'Vista estudiante' }));
+  const retry = await screen.findByRole('alertdialog', {
+    name: '¿Descartar los cambios sin guardar?',
+  });
+  await user.click(within(retry).getByRole('button', { name: 'Descartar y previsualizar' }));
+  expect(await screen.findByRole('button', { name: 'Ir al editor' })).toBeTruthy();
+  expect(loadCanvasPreview).toHaveBeenCalledOnce();
+  expect((await base.load()).nodes[0].title).toBe('Límites');
 });

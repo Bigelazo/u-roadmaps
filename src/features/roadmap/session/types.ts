@@ -80,7 +80,6 @@ export type PracticeCanvasAction =
       readonly operation: TeacherBlockOperation;
     }
   | { readonly type: 'changeVisibility'; readonly nodeId: string; readonly isVisible: boolean }
-  | { readonly type: 'addResource'; readonly nodeId: string }
   | { readonly type: 'deleteNode'; readonly nodeId: string }
   | { readonly type: 'enterCanvasPreview' }
   | { readonly type: 'completeCanvasPreviewNode'; readonly nodeId: string }

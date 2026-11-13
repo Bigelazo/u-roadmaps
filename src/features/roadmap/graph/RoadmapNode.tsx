@@ -46,7 +46,6 @@ export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing'
 export type RoadmapNodeData = Record<string, unknown> &
   NodeActionCallbacks & {
     title: string;
-    roadmapId?: string;
     notificationsEnabled?: boolean;
     typeColor: string;
     typeName: string;
@@ -618,7 +617,7 @@ function NodeActionBadge({
 }
 
 function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | 'data'>) {
-  if (!data.notificationsEnabled || !data.roadmapId || data.status === 'locked') return null;
+  if (!data.notificationsEnabled || data.status === 'locked') return null;
   return <NodeChangeBadge nodeId={id} />;
 }
 

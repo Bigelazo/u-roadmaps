@@ -878,6 +878,29 @@ test('clears action-menu state when editing behavior is removed', async () => {
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
 
+test.each(['selection', 'editing'])(
+  'does not reopen an action menu after %s returns',
+  async (change) => {
+    const user = userEvent.setup();
+    const editing = editingCapability();
+    const view = (selectedNodeId: string, canEdit = true) => (
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap, editing: canEdit ? editing : undefined }}
+        selectedNodeId={selectedNodeId}
+        onSelectNode={vi.fn()}
+      />
+    );
+    const { rerender } = render(view('node-1'));
+    await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
+    expect(screen.getByRole('button', { name: 'Ejecutar acceso node-1' })).toBeTruthy();
+
+    rerender(change === 'selection' ? view('node-2') : view('node-1', false));
+    expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
+    rerender(view('node-1'));
+    expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
+  },
+);
+
 test('translates automatic-layout geometry into an automatic-layout command without moving Nodes', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();

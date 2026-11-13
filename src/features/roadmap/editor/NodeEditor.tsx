@@ -6,7 +6,6 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -21,7 +20,7 @@ import { Button } from '@/shared/ui/button';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import type { Resource, RoadmapNode, StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
-import { NodeEditorProvider } from './context';
+import { NodeEditorContext } from './context';
 import {
   createNodeEditorState,
   nodeDraftIsDirty,
@@ -137,12 +136,7 @@ function useNodeEditorController(
   const stateRef = useRef(state);
   const guardResolverRef = useRef<((proceed: boolean) => void) | null>(null);
   const effectIdRef = useRef(0);
-  const handledCommandIdRef = useRef<string | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  useLayoutEffect(() => {
-    stateRef.current = state;
-  }, [state]);
 
   const settleGuard = useCallback((proceed: boolean) => {
     const resolve = guardResolverRef.current;
@@ -369,9 +363,12 @@ function useNodeEditorController(
   }, [hasDraft]);
 
   useEffect(() => {
-    if (!command || command.nodeId !== state.nodeId || handledCommandIdRef.current === command.id)
+    if (
+      !command ||
+      command.nodeId !== state.nodeId ||
+      stateRef.current.consumedCommandIds.includes(command.id)
+    )
       return;
-    handledCommandIdRef.current = command.id;
     transition({ type: 'consume-command', command });
     const frame = requestAnimationFrame(() => {
       (
@@ -444,9 +441,9 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(
       <>
         <NodeEditorConflictNotice state={state} onResolve={transitions.resolveRemoteConflict} />
         {contextValue ? (
-          <NodeEditorProvider value={contextValue}>
+          <NodeEditorContext value={contextValue}>
             <NodeDetailsEditor />
-          </NodeEditorProvider>
+          </NodeEditorContext>
         ) : null}{' '}
         <ConfirmationDialog
           confirmation={

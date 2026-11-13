@@ -5,11 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type ReactNode,
+  type Dispatch,
 } from 'react';
+import type { CanvasState, CanvasStateAction } from '@/features/roadmap/canvas/state';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { canvasCommandCatalog } from '@/features/roadmap/canvas/commands/commands';
 import {
@@ -27,7 +30,6 @@ import type {
   RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
-import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 import {
   subscribeToRoadmapChanges,
   subscribeToRoadmapRecovery,
@@ -54,30 +56,14 @@ function matchesExperience(
   );
 }
 
-type CanvasPreviewView = {
-  selectedNodeId: string | null;
-  isEditorOpen: boolean;
-  isStudentDetailOpen: boolean;
-};
-
 export type RoadmapCanvasSessionOptions = {
+  canvas: { state: CanvasState; dispatch: Dispatch<CanvasStateAction> };
   guardDraft?: NodeEditorHandle['guardDraft'];
   onCommandApplied?: Parameters<typeof useCanvasCommands>[0]['onCommandApplied'];
-  canvasPreview?: {
-    currentView: CanvasPreviewView;
-    onEnter: () => void;
-    onExit: (returnState: CanvasPreviewView) => void;
-  };
 };
 
 const allowAnyDraft = async () => true;
 const noop = () => undefined;
-const initialCanvasPreviewView: CanvasPreviewView = {
-  selectedNodeId: null,
-  isEditorOpen: false,
-  isStudentDetailOpen: false,
-};
-
 export function RoadmapCanvasSessionPersistenceProvider({
   persistence,
   children,
@@ -111,56 +97,39 @@ function useInjectedSession(
 ): { state: RoadmapCanvasSessionState; commandSession: CanvasCommandSession } {
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [canvasPreviewRoadmap, setCanvasPreviewRoadmap] = useState<StudentRoadmapDto | null>(null);
-  const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
-  const [canvasPreviewKey, setCanvasPreviewKey] = useState<string | null>(null);
-  const [closedKey, setClosedKey] = useState<string | null>(null);
+  const [isClosed, setIsClosed] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
-  const [error, setError] = useState<{ message: string; key: string } | null>(null);
-  const key = roadmapCanvasSessionKey(input);
-  const activeKeyRef = useRef(key);
+  const [error, setError] = useState<string | null>(null);
+  const sessionAliveRef = useRef(true);
   const requestVersionRef = useRef(0);
   const canvasPreviewVersionRef = useRef(0);
   const courseCode = input.courseOffering.identifier.courseCode;
   const year = input.courseOffering.identifier.year;
   const semester = input.courseOffering.identifier.semester;
-  const title = input.courseOffering.title;
   const experienceKind = input.experience.kind;
   const experienceTerm = input.experience.term;
-  const stableInput = useMemo<RoadmapCanvasSessionInput>(
-    () => ({
-      courseOffering: {
-        identifier: { courseCode, year, semester },
-        title,
-      },
-      experience: { kind: experienceKind, term: experienceTerm },
-    }),
-    [courseCode, experienceKind, experienceTerm, semester, title, year],
-  );
-
   const loadRoadmap = useCallback(async () => {
     const loadedRoadmap = await persistence.load();
-    if (!matchesExperience(loadedRoadmap, stableInput.experience.kind)) {
+    if (!matchesExperience(loadedRoadmap, experienceKind)) {
       throw new Error(loadFailure);
     }
     return loadedRoadmap;
-  }, [persistence, stableInput]);
+  }, [experienceKind, persistence]);
 
   const refresh = useCallback(
     async (applyProjection = true) => {
       const requestVersion = ++requestVersionRef.current;
-      const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
         const loadedRoadmap = await loadRoadmap();
-        if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
+        if (requestVersion !== requestVersionRef.current) {
           return false;
         }
         if (applyProjection) {
           setRoadmap(loadedRoadmap);
-          setRoadmapKey(requestKey);
         }
         return true;
       } catch (cause) {
-        if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
+        if (requestVersion !== requestVersionRef.current) {
           return false;
         }
         if (cause instanceof RoadmapAccessLostError) {
@@ -171,7 +140,7 @@ function useInjectedSession(
         throw cause;
       }
     },
-    [loadRoadmap, stableInput],
+    [loadRoadmap],
   );
 
   useEffect(() => {
@@ -189,15 +158,12 @@ function useInjectedSession(
           }
         },
         (cause: unknown) => {
-          if (!active || activeKeyRef.current !== key) return;
+          if (!active) return;
           if (!(cause instanceof RoadmapAccessLostError)) {
             retry = setTimeout(recover, retryDelay);
             retryDelay = Math.min(retryDelay * 2, 30_000);
           }
-          setError({
-            message: messageFor(cause, refreshFailure),
-            key,
-          });
+          setError(messageFor(cause, refreshFailure));
         },
       );
     };
@@ -219,89 +185,68 @@ function useInjectedSession(
       stopChanges();
       stopRecovery();
     };
-  }, [courseCode, experienceKind, experienceTerm, key, refresh, semester, year]);
+  }, [courseCode, experienceKind, experienceTerm, refresh, semester, year]);
 
   useEffect(() => {
-    activeKeyRef.current = key;
-    setAccessLost(false);
+    sessionAliveRef.current = true;
     const requestVersion = ++requestVersionRef.current;
-    const canvasPreviewVersion = ++canvasPreviewVersionRef.current;
-    setRoadmap(null);
-    setCanvasPreviewRoadmap(null);
-    setRoadmapKey(null);
-    setCanvasPreviewKey(null);
-    setError(null);
     void loadRoadmap().then(
       (loadedRoadmap) => {
-        if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== key) return;
+        if (requestVersion !== requestVersionRef.current) return;
         setRoadmap(loadedRoadmap);
-        setRoadmapKey(key);
       },
       (cause: unknown) => {
-        if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== key) return;
+        if (requestVersion !== requestVersionRef.current) return;
         if (cause instanceof RoadmapAccessLostError) {
           setRoadmap(null);
           setAccessLost(true);
         }
-        setError({ message: messageFor(cause, loadFailure), key });
+        setError(messageFor(cause, loadFailure));
       },
     );
     return () => {
-      activeKeyRef.current = '';
-      requestVersionRef.current += 1;
-      canvasPreviewVersionRef.current = Math.max(
-        canvasPreviewVersionRef.current,
-        canvasPreviewVersion + 1,
-      );
+      sessionAliveRef.current = false;
+      canvasPreviewVersionRef.current += 1;
     };
-  }, [key, loadRoadmap]);
+  }, [loadRoadmap]);
 
   const dismissError = useCallback(() => {
     setError(null);
   }, []);
 
   const reportFailure = useCallback(
-    async (cause: unknown, requestKey: string) => {
-      if (activeKeyRef.current !== requestKey) return;
+    async (cause: unknown) => {
+      const sessionEndedBeforeFailureRefresh = !sessionAliveRef.current;
+      if (sessionEndedBeforeFailureRefresh) return;
       if (cause instanceof RoadmapClosedError) {
-        setClosedKey(requestKey);
+        setIsClosed(true);
         await refresh().catch(() => false);
       }
-      if (activeKeyRef.current !== requestKey) return;
-      setError({ message: messageFor(cause, genericFailure), key: requestKey });
+      setError(messageFor(cause, genericFailure));
     },
     [refresh],
   );
 
   const loadCanvasPreview = useCallback(async () => {
-    const requestKey = roadmapCanvasSessionKey(stableInput);
     const requestVersion = ++canvasPreviewVersionRef.current;
     try {
       const loadedCanvasPreview = await persistence.loadCanvasPreview();
-      if (
-        requestVersion !== canvasPreviewVersionRef.current ||
-        activeKeyRef.current !== requestKey
-      ) {
+      if (requestVersion !== canvasPreviewVersionRef.current) {
         return false;
       }
       setCanvasPreviewRoadmap(loadedCanvasPreview);
-      setCanvasPreviewKey(requestKey);
       setError(null);
       return true;
     } catch (cause) {
-      if (activeKeyRef.current === requestKey) {
-        setError({ message: messageFor(cause, genericFailure), key: requestKey });
-      }
+      setError(messageFor(cause, genericFailure));
       return false;
     }
-  }, [persistence, stableInput]);
+  }, [persistence]);
 
   const recordResourceAccess = useCallback(
     (resource: Resource, scope: ResourceAccessScope) => {
-      const requestKey = roadmapCanvasSessionKey(stableInput);
       void persistence.recordResourceAccess(resource, scope).then(
         ({ countsAccess }) => {
-          if (activeKeyRef.current !== requestKey) return;
           const markAccessed = <Roadmap extends AnyRoadmapDto>(current: Roadmap | null) =>
             current ? withAccessedResource(current, resource.id, countsAccess) : current;
           if (scope === 'canvas-preview') setCanvasPreviewRoadmap(markAccessed);
@@ -310,47 +255,45 @@ function useInjectedSession(
         () => undefined,
       );
     },
-    [persistence, stableInput],
+    [persistence],
   );
 
   const readChangeImpact = useCallback<CanvasCommandSession['readChangeImpact']>(
     async (command) => {
-      const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
         const impact = await persistence.readChangeImpact(command);
-        return activeKeyRef.current === requestKey ? impact : null;
+        const sessionEndedBeforeImpactCouldWrite = !sessionAliveRef.current;
+        return sessionEndedBeforeImpactCouldWrite ? null : impact;
       } catch (cause) {
-        await reportFailure(cause, requestKey);
+        await reportFailure(cause);
         return null;
       }
     },
-    [persistence, reportFailure, stableInput],
+    [persistence, reportFailure],
   );
 
   const execute = useCallback<CanvasCommandSession['execute']>(
     async (command, previewVersion) => {
-      const requestKey = roadmapCanvasSessionKey(stableInput);
       let result: ExecutionResult | void;
       try {
         result = await persistence.execute(command, previewVersion);
       } catch (cause) {
-        await reportFailure(cause, requestKey);
+        await reportFailure(cause);
         return { applied: false };
       }
       const { changesCanvasPreview } = canvasCommandCatalog[command.kind];
       try {
         if (!changesCanvasPreview) await refresh();
-        if (activeKeyRef.current === requestKey) setError(null);
+        setError(null);
       } catch (cause) {
-        if (activeKeyRef.current === requestKey) {
-          setError({ message: messageFor(cause, refreshFailure), key: requestKey });
-        }
+        setError(messageFor(cause, refreshFailure));
       }
-      const applied = activeKeyRef.current === requestKey;
+      const sessionAliveToAnnounceAppliedCommand = sessionAliveRef.current;
+      const applied = sessionAliveToAnnounceAppliedCommand;
       if (applied && changesCanvasPreview) await loadCanvasPreview();
       return { applied, ...result };
     },
-    [loadCanvasPreview, persistence, refresh, reportFailure, stableInput],
+    [loadCanvasPreview, persistence, refresh, reportFailure],
   );
 
   const commandSession = useMemo(
@@ -360,15 +303,13 @@ function useInjectedSession(
 
   return {
     state: {
-      roadmap: roadmapKey === key ? roadmap : null,
-      canvasPreviewRoadmap: canvasPreviewKey === key ? canvasPreviewRoadmap : null,
-      error: error?.key === key ? error.message : null,
+      roadmap,
+      canvasPreviewRoadmap,
+      error,
       dismissError,
       accessLost,
       isClosed:
-        input.experience.term === 'historical' ||
-        closedKey === key ||
-        (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
+        input.experience.term === 'historical' || isClosed || Boolean(roadmap?.roadmap.closedAt),
       loadCanvasPreview,
       recordResourceAccess,
     },
@@ -378,7 +319,7 @@ function useInjectedSession(
 
 export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
-  options: RoadmapCanvasSessionOptions = {},
+  options: RoadmapCanvasSessionOptions,
 ): RoadmapCanvasSession {
   const providedPersistence = useContext(persistenceContext);
   const { courseCode, year, semester } = input.courseOffering.identifier;
@@ -402,19 +343,16 @@ export function useRoadmapCanvasSession(
     (nodeId: string) => request({ kind: 'complete-canvas-preview-node', nodeId }),
     [request],
   );
-  const prepareCanvasPreview = options.canvasPreview?.onEnter ?? noop;
   const enterCanvasPreview = useCallback(() => {
-    prepareCanvasPreview();
     report?.({ type: 'enterCanvasPreview' });
-  }, [prepareCanvasPreview, report]);
+  }, [report]);
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
-    currentView: options.canvasPreview?.currentView ?? initialCanvasPreviewView,
+    canvas: options.canvas,
     isHistorical: active.isClosed,
     guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
     loadCanvasPreview: active.loadCanvasPreview,
     completeCanvasPreviewNode,
     onEnter: enterCanvasPreview,
-    onExit: options.canvasPreview?.onExit ?? noop,
   });
   const {
     roadmap: canonicalRoadmap,
@@ -423,9 +361,12 @@ export function useRoadmapCanvasSession(
     isClosed,
     ...state
   } = active;
+  const refreshActivePreview = useEffectEvent(() => {
+    if (canvasPreviewWorkflow.isActive) void reloadPreview();
+  });
   useEffect(() => {
-    if (canvasPreviewWorkflow.isActive && canonicalRoadmap) void reloadPreview();
-  }, [canonicalRoadmap, reloadPreview, canvasPreviewWorkflow.isActive]);
+    if (canonicalRoadmap) refreshActivePreview();
+  }, [canonicalRoadmap, reloadPreview]);
   const isCanvasPreview = canvasPreviewWorkflow.isActive;
   const accessResource = useCallback(
     (resource: Resource) => {

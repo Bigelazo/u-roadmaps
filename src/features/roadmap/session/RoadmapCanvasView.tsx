@@ -170,28 +170,6 @@ function useRoadmapCanvasController({ input }: Props) {
     },
     [requestNodeFocusReturn],
   );
-  const prepareCanvasPreview = useCallback(() => {
-    dispatchCanvas({ type: 'prepareCanvasPreview' });
-  }, []);
-  const restoreCanvasPreview = useCallback(
-    ({
-      selectedNodeId: previousSelectedNodeId,
-      isEditorOpen: wasEditorOpen,
-      isStudentDetailOpen: wasStudentDetailOpen,
-    }: {
-      selectedNodeId: string | null;
-      isEditorOpen: boolean;
-      isStudentDetailOpen: boolean;
-    }) => {
-      dispatchCanvas({
-        type: 'restoreCanvasPreview',
-        selectedNodeId: previousSelectedNodeId,
-        isEditorOpen: wasEditorOpen,
-        isStudentDetailOpen: wasStudentDetailOpen,
-      });
-    },
-    [],
-  );
   const {
     roadmap,
     error,
@@ -205,11 +183,7 @@ function useRoadmapCanvasController({ input }: Props) {
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
     onCommandApplied: followAppliedCommand,
-    canvasPreview: {
-      currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
-      onEnter: prepareCanvasPreview,
-      onExit: restoreCanvasPreview,
-    },
+    canvas: { state: canvasState, dispatch: dispatchCanvas },
   });
   useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
 
