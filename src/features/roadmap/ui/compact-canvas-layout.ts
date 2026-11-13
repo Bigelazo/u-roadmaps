@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 export const compactCanvasLayoutQuery = '(max-width: 1023px)';
 
-const coarsePointerQuery = '(pointer: coarse)';
+export const coarsePointerQuery = '(pointer: coarse)';
 
 function subscribeTo(query: string) {
   return (onChange: () => void) => {

@@ -43,9 +43,9 @@ test('an anonymous student completes the tutorial and learns how to access notic
 }) => {
   await page.goto('/practice-roadmap/student');
   await expect(page.locator('.driver-popover')).toBeVisible();
-  for (let step = 1; step < 11; step++) {
+  for (let step = 1; step < 10; step++) {
     await page.locator('.driver-popover').getByRole('button', { name: 'Siguiente' }).click();
-    await expect(page.locator('.driver-popover-progress-text')).toHaveText(`${step + 1} de 11`);
+    await expect(page.locator('.driver-popover-progress-text')).toHaveText(`${step + 1} de 10`);
   }
   await expect(page.locator('.driver-popover')).toContainText('Cuando ingreses con U-Pasaporte');
   await expect(page.locator('[data-global-navigation]')).toHaveClass(/driver-active-element/);

@@ -2,6 +2,43 @@
 
 import { useEffect, useState } from 'react';
 
+export const TOAST_OBSTACLES_EVENT = 'u-roadmaps:toast-obstacles';
+
+type Area = Readonly<{ left: number; top: number; right: number; bottom: number }>;
+
+function overlaps(a: Area, b: Area) {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+export function clearOfAvoidedAreas(
+  placement: Readonly<{ right: number; bottom: number }>,
+  size: Readonly<{ width: number; height: number }>,
+  avoided: readonly Area[],
+  viewport: Readonly<{ width: number; height: number }>,
+) {
+  const gap = 12;
+  const area = ({ right, bottom }: Readonly<{ right: number; bottom: number }>): Area => ({
+    left: viewport.width - right - size.width,
+    top: viewport.height - bottom - size.height,
+    right: viewport.width - right,
+    bottom: viewport.height - bottom,
+  });
+  const fits = (candidate: Readonly<{ right: number; bottom: number }>) => {
+    const placed = area(candidate);
+    return (
+      placed.left >= 16 &&
+      placed.top >= 16 &&
+      avoided.every((obstacle) => !overlaps(placed, obstacle))
+    );
+  };
+  if (fits(placement)) return placement;
+  const candidates = avoided.flatMap((obstacle) => [
+    { right: placement.right, bottom: viewport.height - obstacle.top + gap },
+    { right: viewport.width - obstacle.left + gap, bottom: placement.bottom },
+  ]);
+  return candidates.find(fits) ?? placement;
+}
+
 export function useToastViewportPosition() {
   const [viewport, setViewport] = useState<HTMLElement | null>(null);
 
@@ -75,11 +112,16 @@ export function useToastViewportPosition() {
         ),
       );
       bottom = Math.min(bottom, Math.max(20, window.innerHeight - toastHeight - 16));
-      element.style.setProperty(
-        '--toast-right',
-        `${Math.min(right, Math.max(20, window.innerWidth - 216))}px`,
+      const placement = clearOfAvoidedAreas(
+        { right: Math.min(right, Math.max(20, window.innerWidth - 216)), bottom },
+        { width: element.getBoundingClientRect().width, height: toastHeight },
+        Array.from(document.querySelectorAll('[data-toast-avoid]'), (avoided) =>
+          avoided.getBoundingClientRect(),
+        ).filter((avoided) => avoided.width > 0 && avoided.height > 0),
+        { width: window.innerWidth, height: window.innerHeight },
       );
-      element.style.setProperty('--toast-bottom', `${bottom}px`);
+      element.style.setProperty('--toast-right', `${placement.right}px`);
+      element.style.setProperty('--toast-bottom', `${placement.bottom}px`);
     }
 
     function schedule() {
@@ -94,6 +136,7 @@ export function useToastViewportPosition() {
       attributeFilter: ['data-open', 'data-closed'],
     });
     window.addEventListener('resize', schedule);
+    window.addEventListener(TOAST_OBSTACLES_EVENT, schedule);
     window.addEventListener('scroll', schedule, { capture: true, passive: true });
     update();
     return () => {
@@ -101,6 +144,7 @@ export function useToastViewportPosition() {
       resizeObserver?.disconnect();
       mutationObserver.disconnect();
       window.removeEventListener('resize', schedule);
+      window.removeEventListener(TOAST_OBSTACLES_EVENT, schedule);
       window.removeEventListener('scroll', schedule, true);
     };
   }, [viewport]);

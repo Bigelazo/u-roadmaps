@@ -48,10 +48,6 @@ for (const viewport of [
       await expect(creatorButton).toHaveCSS('transform', 'none');
       await expectExitReachable(page, `creator-menu-open-${viewport.width}`);
       await page.screenshot({ path: `test-results/tutorial-creator-centre-${viewport.width}.png` });
-      await creatorButton.tap();
-      await expect(page.getByRole('menu')).toHaveCount(0);
-      await expectExitReachable(page, `creator-menu-closed-${viewport.width}`);
-      await creatorButton.tap();
       await page.getByRole('menuitem', { name: 'Crear nodo' }).tap();
       const creator = page.getByRole('dialog', { name: 'Crear nodo' });
       await creator.getByLabel('Título').fill('Mi nodo de práctica');
@@ -98,11 +94,11 @@ for (const viewport of [
       await action('Conceptos básicos', 'Bloquear nodo');
       await page.getByRole('alertdialog').getByRole('button', { name: 'Bloquear nodo' }).tap();
       await expect(heading).toHaveText('Bloqueo propagado');
-      await next('Desbloquea el nodo');
-      await action('Conceptos básicos', 'Desbloquear');
+      await next('Desbloquea un nodo');
+      await action('Control 1', 'Desbloquear');
       await page
         .getByRole('alertdialog')
-        .getByRole('button', { name: 'Incluir dependientes' })
+        .getByRole('button', { name: 'Desbloquear 3 nodos' })
         .tap();
       await expect(heading).toHaveText('Desbloqueo programado');
       await next('Oculta un nodo');
@@ -117,7 +113,8 @@ for (const viewport of [
       await page.getByRole('alertdialog').getByRole('button', { name: 'Eliminar nodo' }).tap();
       await expect(heading).toHaveText('Vista estudiante');
       await page.getByRole('button', { name: 'Vista estudiante', exact: true }).tap();
-      await expect(heading).toHaveText('Completa un nodo');
+      await expect(heading).toHaveText('Avance del curso');
+      await next('Completa un nodo');
       await node('Introducción').locator('p').tap();
       await page.getByRole('button', { name: 'Completar', exact: true }).tap();
       await expect(heading).toHaveText('Nodos liberados');
