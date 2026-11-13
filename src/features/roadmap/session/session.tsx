@@ -206,6 +206,7 @@ function useInjectedSession(
     );
     return () => {
       sessionAliveRef.current = false;
+      canvasPreviewVersionRef.current += 1;
     };
   }, [loadRoadmap]);
 

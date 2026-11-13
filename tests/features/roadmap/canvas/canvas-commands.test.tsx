@@ -1636,6 +1636,27 @@ describe('canvas commands', () => {
       },
     );
 
+    test('does not report entering the Canvas preview when its pending load finishes after unmount', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+      let releasePreviewLoad: (() => void) | undefined;
+      const canvas = await openCanvas({
+        ...adapter,
+        async loadCanvasPreview() {
+          await new Promise<void>((resolve) => (releasePreviewLoad = resolve));
+          return adapter.loadCanvasPreview();
+        },
+      });
+
+      act(() => canvas.session().canvasPreviewWorkflow.requestEntry());
+      await waitFor(() => expect(releasePreviewLoad).toBeDefined());
+      canvas.unmount();
+      await act(async () => {
+        releasePreviewLoad!();
+      });
+
+      expect(canvas.reported()).toEqual([]);
+    });
+
     test('reports entering the Canvas preview once per entry, not on every preview reload', async () => {
       const canvas = await openCanvas();
       const preview = () => canvas.session().canvasPreviewWorkflow;
