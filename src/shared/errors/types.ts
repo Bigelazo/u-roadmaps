@@ -1,6 +1,6 @@
 import type { ResultAsync } from 'neverthrow';
 
-export type ApplicationErrorStatus = 400 | 401 | 403 | 404 | 409 | 500;
+export type ApplicationErrorStatus = 400 | 401 | 403 | 404 | 409 | 500 | 502 | 503;
 
 export class ApplicationError extends Error {
   constructor(
