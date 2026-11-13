@@ -1,10 +1,10 @@
+import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import {
   RoadmapCanvasSessionPersistenceProvider,
-  useRoadmapCanvasSession,
   type RoadmapCanvasSessionOptions,
 } from '@/features/roadmap/session/session';
 import type {
@@ -64,7 +64,7 @@ const roadmap: RoadmapDto = {
 
 async function openCanvas(
   persistence: RoadmapCanvasSessionPersistence = createInMemoryRoadmapSessionPersistence(roadmap),
-  options: RoadmapCanvasSessionOptions = {},
+  options: Omit<RoadmapCanvasSessionOptions, 'canvas'> = {},
 ) {
   const onCommandApplied = vi.fn();
   const report = vi.fn<(action: PracticeCanvasAction) => void>();
@@ -76,7 +76,7 @@ async function openCanvas(
   );
   vi.spyOn(notify, 'success');
   const { result, unmount } = renderHook(
-    () => useRoadmapCanvasSession(input, { onCommandApplied, ...options }),
+    () => useTestCanvasSession(input, { onCommandApplied, ...options }),
     { wrapper },
   );
   await waitFor(() => expect(result.current.roadmap).not.toBeNull());
@@ -1580,6 +1580,61 @@ describe('canvas commands', () => {
       );
       expect(canvas.session().error).toBe('No se pudo actualizar el roadmap.');
     });
+
+    test('ignores another preview activation while the draft guard is pending', async () => {
+      const first = Promise.withResolvers<boolean>();
+      const second = Promise.withResolvers<boolean>();
+      const guardDraft = vi
+        .fn()
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+      const base = createInMemoryRoadmapSessionPersistence(roadmap);
+      const loadCanvasPreview = vi.fn(base.loadCanvasPreview);
+      const canvas = await openCanvas({ ...base, loadCanvasPreview }, { guardDraft });
+      act(() => {
+        canvas.session().canvasPreviewWorkflow.requestEntry();
+        canvas.session().canvasPreviewWorkflow.requestEntry();
+      });
+      await act(async () => first.resolve(true));
+      await waitFor(() => expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(true));
+      await act(async () => second.resolve(true));
+      expect(loadCanvasPreview).toHaveBeenCalledOnce();
+      expect(guardDraft).toHaveBeenCalledOnce();
+      expect(canvas.reported()).toEqual([{ type: 'enterCanvasPreview' }]);
+    });
+
+    test('ignores another preview activation while the preview load is pending', async () => {
+      const base = createInMemoryRoadmapSessionPersistence(roadmap);
+      const loaded = Promise.withResolvers<Awaited<ReturnType<typeof base.loadCanvasPreview>>>();
+      const loadCanvasPreview = vi.fn(() => loaded.promise);
+      const guardDraft = vi.fn(async () => true);
+      const canvas = await openCanvas({ ...base, loadCanvasPreview }, { guardDraft });
+      await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+      expect(loadCanvasPreview).toHaveBeenCalledOnce();
+      await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+      expect(guardDraft).toHaveBeenCalledOnce();
+      expect(loadCanvasPreview).toHaveBeenCalledOnce();
+      await act(async () => loaded.resolve(await base.loadCanvasPreview()));
+      expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(true);
+      expect(canvas.reported()).toEqual([{ type: 'enterCanvasPreview' }]);
+    });
+
+    test.each(['guard', 'load'] as const)(
+      'retries preview entry after a rejected %s',
+      async (failure) => {
+        const base = createInMemoryRoadmapSessionPersistence(roadmap);
+        const guardDraft = vi.fn(async () => true);
+        const loadCanvasPreview = vi.fn(base.loadCanvasPreview);
+        if (failure === 'guard') guardDraft.mockRejectedValueOnce(new Error('Guard failed'));
+        else loadCanvasPreview.mockRejectedValueOnce(new Error('Preview failed'));
+        const canvas = await openCanvas({ ...base, loadCanvasPreview }, { guardDraft });
+        await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+        expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(false);
+        await act(async () => canvas.session().canvasPreviewWorkflow.requestEntry());
+        await waitFor(() => expect(canvas.session().canvasPreviewWorkflow.isActive).toBe(true));
+        expect(canvas.reported()).toEqual([{ type: 'enterCanvasPreview' }]);
+      },
+    );
 
     test('reports entering the Canvas preview once per entry, not on every preview reload', async () => {
       const canvas = await openCanvas();

@@ -1,3 +1,4 @@
+import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import type { ReactNode } from 'react';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,10 +9,7 @@ import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { practiceNodeIds, practiceRoadmap } from '@/features/roadmap/practice/practice-roadmap';
 import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
-import {
-  RoadmapCanvasSessionPersistenceProvider,
-  useRoadmapCanvasSession,
-} from '@/features/roadmap/session/session';
+import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 
 it('gives "Retroalimentación del control" the Contenido Node type', () => {
@@ -82,7 +80,7 @@ function renderPracticeSession(reported: PracticeCanvasAction[]) {
       onAction: (action: PracticeCanvasAction) => reported.push(action),
     },
   };
-  return renderHook(() => useRoadmapCanvasSession(input), {
+  return renderHook(() => useTestCanvasSession(input), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
         {children}

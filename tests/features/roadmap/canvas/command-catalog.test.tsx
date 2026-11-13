@@ -1,3 +1,4 @@
+import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -7,10 +8,7 @@ import {
   createInMemoryRoadmapSessionPersistence,
   type PracticeRoadmap,
 } from '@/features/roadmap/session/in-memory-persistence';
-import {
-  RoadmapCanvasSessionPersistenceProvider,
-  useRoadmapCanvasSession,
-} from '@/features/roadmap/session/session';
+import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
@@ -121,7 +119,7 @@ test('the command engine runs a catalog-only command with its success copy and P
       {children}
     </RoadmapCanvasSessionPersistenceProvider>
   );
-  const { result } = renderHook(() => useRoadmapCanvasSession(input, { onCommandApplied }), {
+  const { result } = renderHook(() => useTestCanvasSession(input, { onCommandApplied }), {
     wrapper,
   });
   await waitFor(() => expect(result.current.roadmap).not.toBeNull());

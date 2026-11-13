@@ -5,11 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type ReactNode,
+  type Dispatch,
 } from 'react';
+import type { CanvasState, CanvasStateAction } from '@/features/roadmap/canvas/state';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { canvasCommandCatalog } from '@/features/roadmap/canvas/commands/commands';
 import {
@@ -53,30 +56,14 @@ function matchesExperience(
   );
 }
 
-type CanvasPreviewView = {
-  selectedNodeId: string | null;
-  isEditorOpen: boolean;
-  isStudentDetailOpen: boolean;
-};
-
 export type RoadmapCanvasSessionOptions = {
+  canvas: { state: CanvasState; dispatch: Dispatch<CanvasStateAction> };
   guardDraft?: NodeEditorHandle['guardDraft'];
   onCommandApplied?: Parameters<typeof useCanvasCommands>[0]['onCommandApplied'];
-  canvasPreview?: {
-    currentView: CanvasPreviewView;
-    onEnter: () => void;
-    onExit: (returnState: CanvasPreviewView) => void;
-  };
 };
 
 const allowAnyDraft = async () => true;
 const noop = () => undefined;
-const initialCanvasPreviewView: CanvasPreviewView = {
-  selectedNodeId: null,
-  isEditorOpen: false,
-  isStudentDetailOpen: false,
-};
-
 export function RoadmapCanvasSessionPersistenceProvider({
   persistence,
   children,
@@ -331,7 +318,7 @@ function useInjectedSession(
 
 export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
-  options: RoadmapCanvasSessionOptions = {},
+  options: RoadmapCanvasSessionOptions,
 ): RoadmapCanvasSession {
   const providedPersistence = useContext(persistenceContext);
   const { courseCode, year, semester } = input.courseOffering.identifier;
@@ -355,19 +342,16 @@ export function useRoadmapCanvasSession(
     (nodeId: string) => request({ kind: 'complete-canvas-preview-node', nodeId }),
     [request],
   );
-  const prepareCanvasPreview = options.canvasPreview?.onEnter ?? noop;
   const enterCanvasPreview = useCallback(() => {
-    prepareCanvasPreview();
     report?.({ type: 'enterCanvasPreview' });
-  }, [prepareCanvasPreview, report]);
+  }, [report]);
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
-    currentView: options.canvasPreview?.currentView ?? initialCanvasPreviewView,
+    canvas: options.canvas,
     isHistorical: active.isClosed,
     guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
     loadCanvasPreview: active.loadCanvasPreview,
     completeCanvasPreviewNode,
     onEnter: enterCanvasPreview,
-    onExit: options.canvasPreview?.onExit ?? noop,
   });
   const {
     roadmap: canonicalRoadmap,
@@ -376,9 +360,12 @@ export function useRoadmapCanvasSession(
     isClosed,
     ...state
   } = active;
+  const refreshActivePreview = useEffectEvent(() => {
+    if (canvasPreviewWorkflow.isActive) void reloadPreview();
+  });
   useEffect(() => {
-    if (canvasPreviewWorkflow.isActive && canonicalRoadmap) void reloadPreview();
-  }, [canonicalRoadmap, reloadPreview, canvasPreviewWorkflow.isActive]);
+    if (canonicalRoadmap) refreshActivePreview();
+  }, [canonicalRoadmap, reloadPreview]);
   const isCanvasPreview = canvasPreviewWorkflow.isActive;
   const accessResource = useCallback(
     (resource: Resource) => {
