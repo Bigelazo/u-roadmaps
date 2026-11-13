@@ -46,7 +46,7 @@ test('pages and Roadmap HTTP routes share the normalized Course offering identif
   expect(invalidPage?.status()).toBe(404);
 });
 
-test('teacher creates and edits a custom node type with visual pickers', async ({
+test('teacher creates, edits, and deletes a custom node type with visual pickers', async ({
   page,
   course,
   teacherApi: api,
@@ -64,37 +64,44 @@ test('teacher creates and edits a custom node type with visual pickers', async (
 
   await dialog.getByRole('button', { name: 'Icono: sin selección' }).click();
   await page
-    .getByRole('dialog', { name: 'Elegir Icono' })
+    .getByRole('dialog', { name: 'Elegir icono' })
     .getByRole('button', { name: 'Química' })
     .click();
   await dialog.getByRole('button', { name: 'Color: sin selección' }).click();
   await page
     .getByRole('dialog', { name: 'Elegir color' })
-    .getByRole('button', { name: 'Verde hoja' })
+    .getByRole('button', { name: 'Amarillo' })
     .click();
   await expect(create).toBeEnabled();
   await create.click();
   await expect(dialog.getByText(typeName)).toBeVisible();
 
+  await dialog.getByLabel('Nombre').fill(`  ${typeName.toLocaleUpperCase('es-CL')}  `);
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Ya existe un tipo disponible con ese nombre.',
+  );
+  await expect(create).toBeDisabled();
+  await dialog.getByLabel('Nombre').fill('');
+
   await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
   await expect(dialog.getByRole('button', { name: 'Icono: Química' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Color: Verde hoja' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Color: Amarillo' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Icono: Química' }).click();
   await page
-    .getByRole('dialog', { name: 'Elegir Icono' })
+    .getByRole('dialog', { name: 'Elegir icono' })
     .getByRole('button', { name: 'Cálculo' })
     .click();
-  await dialog.getByRole('button', { name: 'Color: Verde hoja' }).click();
+  await dialog.getByRole('button', { name: 'Color: Amarillo' }).click();
   await page
     .getByRole('dialog', { name: 'Elegir color' })
-    .getByRole('button', { name: 'Violeta' })
+    .getByRole('button', { name: 'Amatista' })
     .click();
   const updateResponse = await Promise.all([
     page.waitForResponse(
       (response) =>
         response.request().method() === 'PATCH' && response.url().includes('/node-types/'),
     ),
-    dialog.getByRole('button', { name: 'Guardar tipo' }).click(),
+    dialog.getByRole('button', { name: 'Guardar cambios' }).click(),
   ]).then(([response]) => response);
   expect(updateResponse.status()).toBe(200);
 
@@ -102,7 +109,21 @@ test('teacher creates and edits a custom node type with visual pickers', async (
   const nodeType = (await roadmap.json()).nodeTypes.find(
     (type: { name: string }) => type.name === typeName,
   );
-  expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#7540B8' });
+  expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#9333EA' });
+
+  await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
+  await expect(dialog.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+  await dialog.getByLabel('Nombre').fill('Borrador sin guardar');
+  await dialog.getByRole('button', { name: 'Cerrar tipos de nodo' }).click();
+  const discard = page.getByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
+  await discard.getByRole('button', { name: 'Seguir editando' }).click();
+  await expect(dialog.getByLabel('Nombre')).toHaveValue('Borrador sin guardar');
+  await dialog.getByLabel('Nombre').fill(typeName);
+  await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await dialog.getByRole('button', { name: `Eliminar tipo ${typeName}` }).click();
+  const deletion = page.getByRole('alertdialog', { name: `¿Eliminar el tipo ${typeName}?` });
+  await deletion.getByRole('button', { name: 'Eliminar tipo', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: `Editar tipo ${typeName}` })).toHaveCount(0);
 });
 
 test('course participants receive their authorized roadmap representation', async ({
@@ -1288,7 +1309,6 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
 
 test('landing access starts VTI and dismisses authentication failures without reloading', async ({
   page,
-  request,
 }) => {
   await page.goto('/?error=Authentication');
   await expect(
@@ -1309,9 +1329,12 @@ test('landing access starts VTI and dismisses authentication failures without re
     page.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).toHaveCount(0);
 
-  const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
-  await ok(protectedRoute, 307);
-  expect(protectedRoute.headers().location).toContain('/api/plogin/start');
+  await page.route('**/api/plogin/start', (route) =>
+    route.fulfill({ contentType: 'text/html', body: 'Ingreso institucional de prueba' }),
+  );
+  await page.goto('/academic-overview');
+  await expect(page).toHaveURL('/api/plogin/start');
+  await expect(page.getByText('Ingreso institucional de prueba')).toBeVisible();
 });
 
 test('logout requires confirmation and removes the application session', async ({

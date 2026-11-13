@@ -28,20 +28,16 @@ async function center(locator: Locator) {
 
 async function dragToNodeBody(page: Page, source: Locator, target: Locator) {
   await source.getByTestId('roadmap-card').hover();
-  await expect(source.getByTestId('roadmap-card')).toHaveAttribute(
-    'data-connection-hovered',
-    'true',
-  );
-  const bounds = await source.getByTestId('roadmap-card').boundingBox();
-  if (!bounds) throw new Error('Source perimeter is not visible.');
-  const start = { x: bounds.x + bounds.width + 3, y: bounds.y + bounds.height / 4 };
+  const port = source.locator('[data-node-connector="right"]');
+  await expect(port).toHaveCSS('visibility', 'visible');
+  const start = await center(port);
   const end = await center(target.locator('p'));
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 12 });
 }
 
-test('the exterior perimeter creates a saved Dependency by dropping on the target title', async ({
+test('the connector creates a saved Dependency by dropping on the target title', async ({
   page,
   course,
   createCourse,
@@ -67,61 +63,44 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
 
   const card = source.getByTestId('roadmap-card');
   await expectSettled(card);
-  const handle = source.locator('.react-flow__handle-right');
-  await expect(handle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  await expect(handle).toHaveCSS('opacity', '0');
-  expect(await handle.evaluate((element) => getComputedStyle(element, '::after').content)).toMatch(
-    /^(none|normal|"")$/,
-  );
+  const port = source.locator('[data-node-connector="right"]');
   await page.mouse.move(0, 0);
-  await expect(handle).toHaveCSS('pointer-events', 'none');
+  await expect(port).toHaveCSS('visibility', 'hidden');
+  await expect(port).toHaveCSS('pointer-events', 'none');
   const initialNodeTransform = await source.evaluate((element) => element.style.transform);
-  const idleBounds = await bounds(card);
-  await page.mouse.move(idleBounds.x + idleBounds.width + 3, idleBounds.y + idleBounds.height / 4);
-  await expect(handle).toHaveCSS('pointer-events', 'none');
+  const restingPort = await center(port);
+  await page.mouse.move(restingPort.x, restingPort.y);
   await expect(card).not.toHaveAttribute('data-connection-hovered', 'true');
   await page.mouse.down();
-  await page.mouse.move(
-    idleBounds.x + idleBounds.width + 75,
-    idleBounds.y + idleBounds.height / 4 + 20,
-    { steps: 6 },
-  );
+  await page.mouse.move(restingPort.x + 75, restingPort.y + 20, { steps: 6 });
   await expect(page.locator('.react-flow__connection-path')).toHaveCount(0);
-  await expect(card).not.toHaveAttribute('data-connection-hovered', 'true');
   await page.mouse.up();
-  await expect(page.locator('.react-flow__connection-path')).toHaveCount(0);
   await expect(page.locator('.react-flow__edge')).toHaveCount(0);
   expect(await source.evaluate((element) => element.style.transform)).toBe(initialNodeTransform);
 
   await page.mouse.move(0, 0);
-  const normalShadow = await card.evaluate((element) => getComputedStyle(element).boxShadow);
   await card.hover();
   await expect(card).toHaveAttribute('data-connection-hovered', 'true');
-  await expect(handle).toHaveCSS('pointer-events', 'auto');
-  await expect
-    .poll(() => card.evaluate((element) => getComputedStyle(element).boxShadow))
-    .not.toBe(normalShadow);
-  await card.evaluate(async (element) => {
-    await Promise.all(element.getAnimations().map((animation) => animation.finished));
-  });
-  const shadows = await card.evaluate((element) => getComputedStyle(element).boxShadow);
-  for (const shadow of shadows.split(/,(?![^(]*\))/)) {
-    const pixels = shadow.match(/-?\d+(?:\.\d+)?px/g)?.map(Number.parseFloat) ?? [];
-    expect(
-      pixels[2],
-      'The connection affordance should blur outward rather than form a hard ring',
-    ).toBeGreaterThan(0);
-  }
-  const armedBounds = await bounds(card);
-  await page.mouse.move(
-    armedBounds.x + armedBounds.width + 3,
-    armedBounds.y + armedBounds.height / 4,
-  );
+  await expect(port).toHaveCSS('visibility', 'visible');
+  await expect(port).toHaveCSS('pointer-events', 'auto');
+  await expect(port).toHaveAccessibleName('Agregar un nodo que requiera Prerrequisito de conexión');
+  const cardBounds = await bounds(card);
+  const portBounds = await bounds(port);
+  expect(
+    portBounds.x + portBounds.width / 2,
+    'The connector circle sits outside the card',
+  ).toBeGreaterThan(cardBounds.x + cardBounds.width + 10);
+  await page.mouse.move(portBounds.x + portBounds.width / 2, portBounds.y + portBounds.height / 2);
   await expect(card).toHaveAttribute('data-connection-hovered', 'true');
-  await expect(handle).toHaveCSS('pointer-events', 'auto');
-  await page.screenshot({ path: testInfo.outputPath('connection-perimeter-hover-desktop.png') });
+  await expect(port).toHaveCSS('cursor', 'pointer');
+  expect(
+    await port.evaluate((element) => getComputedStyle(element, '::before').backgroundColor),
+    'The connector disc stays opaque so grid and edge lines never cross it',
+  ).not.toMatch(/\/|rgba|transparent/);
+  await expect(page.getByText('Arrastrar dependencia')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('connection-port-hover-desktop.png') });
   await page.mouse.move(0, 0);
-  await expect(handle).toHaveCSS('pointer-events', 'none');
+  await expect(port).toHaveCSS('pointer-events', 'none');
   await expect(card).not.toHaveAttribute('data-connection-hovered', 'true');
 
   await dragToNodeBody(page, source, target);
@@ -177,7 +156,14 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   expect(tip.height).toBeGreaterThan(8);
 
   await dragToNodeBody(page, target, source);
+  await expect(source).toHaveClass(/roadmap-node--connection-rejected/);
+  await expect(source).not.toHaveClass(/roadmap-node--connection-target/);
+  await expect(source.getByTestId('roadmap-card')).toHaveCSS('outline-style', 'dashed');
   await page.mouse.up();
+  await expect(page.locator('[data-slot="toast-title"][data-type="error"]')).toHaveText(
+    'Prerrequisito de conexión ya es prerrequisito de Destino de conexión y se formaría un ciclo.',
+  );
+  await expect(source).not.toHaveClass(/roadmap-node--connection-rejected/);
   await expect(page.locator('.react-flow__connection-path')).toHaveCount(0);
   await expect(page.locator('.react-flow__edge')).toHaveCount(1);
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
@@ -188,4 +174,45 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   await expect(source).toBeInViewport();
   await expect(target).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath('dependency-mobile.png') });
+});
+
+test('clicking the connector and then a Node creates the Dependency without dragging', async ({
+  page,
+  course,
+  createCourse,
+  teacherApi,
+}) => {
+  const empty = await createCourse({
+    roadmap: false,
+    participants: [{ user: course.users.teacher, role: 'TEACHER' }],
+  });
+  await ok(await teacherApi.post(empty.apiPath(), { data: {} }), 201);
+  const creator = await prepareNodeCreator(teacherApi, empty);
+  const origin = await creator.createNode('Origen por clic', 0);
+  const destination = await creator.createNode('Destino por clic', 360);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(empty.pagePath());
+  const source = page.locator(`.react-flow__node[data-id="${origin.id}"]`);
+  const target = page.locator(`.react-flow__node[data-id="${destination.id}"]`);
+  await expectSettled(source.getByTestId('roadmap-card'));
+  await source.getByTestId('roadmap-card').hover();
+  await source.locator('[data-node-connector="right"]').click();
+  const banner = page.locator('[data-arrow-mode-controls] [role="status"]');
+  await expect(banner).toContainText('Haz clic en el nodo que requiere Origen por clic');
+  await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && response.url().endsWith('/dependencies'),
+  );
+  await target.locator('p').click();
+  expect((await saved).status()).toBe(201);
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+  await expect(banner).toHaveCount(0);
+
+  await target.getByTestId('roadmap-card').click();
+  await page.mouse.move(0, 0);
+  await expect(target).toHaveClass(/selected/);
+  await expect(target.locator('[data-node-connector="right"]')).toHaveCSS('visibility', 'hidden');
 });

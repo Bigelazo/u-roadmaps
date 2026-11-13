@@ -487,7 +487,7 @@ describe('RoadmapCanvasSession', () => {
     await user.click(await screen.findByText('Tipos de nodo'));
     await user.click(await screen.findByRole('button', { name: 'Eliminar tipo Taller' }));
     const dialog = await screen.findByRole('alertdialog', { name: '¿Eliminar el tipo Taller?' });
-    await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar tipo' }));
 
     await waitFor(async () =>
       expect((await persistence.load()).nodeTypes.map(({ name }) => name)).toEqual(['Contenido']),

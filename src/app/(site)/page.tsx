@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { CourseRouteComparison } from '@/app/_components/landing/CourseRouteComparison';
+import { LandingTutorialButton } from '@/app/_components/landing/LandingTutorialButton';
 import { InstitutionalLoginForm } from '@/app/_components/InstitutionalLoginForm';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
@@ -101,6 +102,12 @@ export default async function Home() {
               Usa tu cuenta U-Pasaporte. Tus cursos se cargan desde{' '}
               <span className="whitespace-nowrap">U-Campus</span>.
             </p>
+            <div className="mt-6">
+              <LandingTutorialButton />
+              <p className="mt-2 text-sm leading-normal text-primary-soft">
+                Sin iniciar sesión. Practica como docente o estudiante; nada se guarda.
+              </p>
+            </div>
           </div>
           <CourseRouteComparison className="mt-14 xl:mt-0" />
         </div>

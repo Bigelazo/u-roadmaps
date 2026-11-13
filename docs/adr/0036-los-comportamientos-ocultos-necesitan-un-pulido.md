@@ -65,6 +65,8 @@ Descubrimos por casualidad que el lienzo permite eliminar varias Dependencias a 
 - La primera visita reconoce los Avisos pendientes sin mostrar nada; desde la segunda aparece una vez el Resumen de cambios. La previsualización y la práctica no reconocen.
 - La marca de cambios de un Nodo se limpia solo al abrir su panel y se oculta en Nodos bloqueados.
 - La bandeja agrupa tres o más Avisos de un Roadmap; la campana por curso solo aparece con Avisos pendientes.
+- Los Avisos no llegan en tiempo real: la campana, la bandeja y las campanas por curso muestran lo pendiente al cargar la página y solo bajan cuando se reconoce un Roadmap (ADR 0037). Un Aviso nuevo aparece al recargar.
+- Las marcas de cambios de los Nodos tampoco se refrescan en vivo cuando otro docente edita; se actualizan al recargar.
 - El lienzo docente se recarga con señales de cambio, al volver a la pestaña o al recuperar la conexión. El lienzo del estudiante no se actualiza solo y queda desactualizado hasta recargar (`src/features/roadmap/session/session.tsx:173-218`).
 - Perder el acceso redirige a `/academic-overview?accessLost=1` con una alerta.
 - Si otro docente elimina o bloquea el Nodo abierto, el panel se cierra con un aviso; un borrador local muestra «Conservar mi borrador sobre la versión actual» (`src/features/roadmap/editor/NodeEditor.tsx:452-480`).

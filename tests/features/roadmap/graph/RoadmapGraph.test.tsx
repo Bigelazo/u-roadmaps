@@ -91,8 +91,12 @@ vi.mock('@xyflow/react', () => ({
     setViewport: vi.fn(),
     getInternalNode: () => undefined,
   }),
-  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
-    selector({ transform: [0, 0, 1] }),
+  useStore: (
+    selector: (state: {
+      transform: [number, number, number];
+      connection: { fromNode: null };
+    }) => unknown,
+  ) => selector({ transform: [0, 0, 1], connection: { fromNode: null } }),
   useNodesInitialized: () => true,
   useUpdateNodeInternals: () => () => undefined,
 }));

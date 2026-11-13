@@ -45,6 +45,13 @@ export type AcademicOverviewApiResponse = Readonly<{
   offerings: AcademicOverviewApiOffering[];
 }>;
 
+export type AcademicOverviewBrowserResponse = Readonly<{
+  userId: string;
+  overview: AcademicOverviewPage;
+  status: 'local' | 'complete' | 'partial' | 'unavailable';
+  cache: import('./domain/browser-cache').AcademicCourseCache | null;
+}>;
+
 export type AcademicOverviewTerm = Readonly<{
   year: number;
   semester: number;
@@ -52,6 +59,6 @@ export type AcademicOverviewTerm = Readonly<{
 }>;
 
 export type AcademicOverviewPage = Readonly<{
-  source: AcademicOverviewSource;
+  source: AcademicOverviewSource | 'CACHE';
   terms: AcademicOverviewTerm[];
 }>;

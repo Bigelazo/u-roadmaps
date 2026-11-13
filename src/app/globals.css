@@ -155,50 +155,111 @@ body:has([data-viewport-page]) [data-global-navigation] {
 }
 
 .react-flow__handle.roadmap-node-handle {
-  --roadmap-connection-depth: 18px;
-  z-index: 1;
   min-width: 0;
   min-height: 0;
+  width: 1px;
+  height: 1px;
   border: 0;
-  border-radius: 0;
   background: transparent;
   opacity: 0;
   pointer-events: none !important;
-  cursor: crosshair;
 }
 
-.roadmap-node-handle.react-flow__handle-top,
-.roadmap-node-handle.react-flow__handle-bottom {
-  left: 50%;
-  width: calc(100% + var(--roadmap-connection-depth) * 2 + 4px);
-  height: var(--roadmap-connection-depth);
+.react-flow__handle.roadmap-node-handle.roadmap-node-port {
+  --roadmap-port-reach: 18px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  color: var(--roadmap-node-color, var(--primary));
+  cursor: pointer;
+  visibility: hidden;
+  opacity: 1;
+  transition: visibility 0s linear 120ms;
 }
 
-.roadmap-node-handle.react-flow__handle-left,
-.roadmap-node-handle.react-flow__handle-right {
+.roadmap-node-port-visual {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.roadmap-node-port-visual::before,
+.roadmap-node-port-visual > svg {
+  grid-area: 1 / 1;
+}
+
+.roadmap-node-port-visual::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: var(--card);
+  box-shadow:
+    inset 0 0 0 1.5px currentColor,
+    0 2px 6px color-mix(in srgb, currentColor 22%, transparent);
+  transition: background-color 120ms ease-out;
+}
+
+.roadmap-node-port-visual > svg {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.roadmap-node-port.react-flow__handle-right {
   top: 50%;
-  width: var(--roadmap-connection-depth);
-  height: calc(100% + 4px);
+  right: auto;
+  left: 100%;
+  transform: translate(calc(2px + var(--roadmap-port-reach) - 50%), -50%);
 }
 
-.roadmap-node-handle.react-flow__handle-top {
-  top: -2px;
-  transform: translate(-50%, -100%);
+.roadmap-node-port.react-flow__handle-left {
+  top: 50%;
+  right: 100%;
+  left: auto;
+  transform: translate(calc(-2px - var(--roadmap-port-reach) + 50%), -50%);
 }
 
-.roadmap-node-handle.react-flow__handle-bottom {
-  bottom: -2px;
-  transform: translate(-50%, 100%);
+.roadmap-node-port.react-flow__handle-bottom {
+  top: 100%;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, calc(2px + var(--roadmap-port-reach) - 50%));
 }
 
-.roadmap-node-handle.react-flow__handle-left {
-  left: -2px;
-  transform: translate(-100%, -50%);
+.roadmap-node-port.react-flow__handle-top {
+  top: auto;
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, calc(-2px - var(--roadmap-port-reach) + 50%));
 }
 
-.roadmap-node-handle.react-flow__handle-right {
-  right: -2px;
-  transform: translate(100%, -50%);
+.react-flow__node.roadmap-node--arrow-source .roadmap-node-port,
+.react-flow__handle.roadmap-node-port.connectingfrom {
+  visibility: visible;
+  pointer-events: auto !important;
+  transition: visibility 0s;
+}
+
+.react-flow__handle.roadmap-node-port:hover .roadmap-node-port-visual::before,
+.react-flow__handle.roadmap-node-port.connectingfrom .roadmap-node-port-visual::before,
+.react-flow__node.roadmap-node--arrow-source .roadmap-node-port-visual::before {
+  background: color-mix(in srgb, currentColor 12%, var(--card));
+}
+
+.react-flow__node.roadmap-node--arrow-source .roadmap-node-port-visual {
+  transform: scale(1) !important;
+}
+
+.react-flow__handle.roadmap-node-port.connectingfrom {
+  cursor: pointer;
 }
 
 .react-flow__node.roadmap-node--connection-target > [data-slot='roadmap-card'] {
@@ -217,13 +278,23 @@ body:has([data-viewport-page]) [data-global-navigation] {
 
 @media (hover: hover) and (pointer: fine) {
   [data-slot='roadmap-card'][data-connection-enabled='true'][data-connection-hovered='true']
-    > .react-flow__handle.roadmap-node-handle {
+    > .react-flow__handle.roadmap-node-port {
+    visibility: visible;
     pointer-events: auto !important;
+    transition: visibility 0s;
   }
+}
 
-  [data-slot='roadmap-card'][data-connection-enabled='true'][data-connection-hovered='true'] {
-    box-shadow: var(--shadow-roadmap-node-connection);
-  }
+.react-flow__node.roadmap-node--connection-rejected > [data-slot='roadmap-card'] {
+  --shadow-roadmap-node-hover: none;
+  --shadow-roadmap-node-connection: none;
+  outline: 2px dashed var(--muted-foreground);
+  outline-offset: 4px;
+}
+
+.react-flow__node.roadmap-node--connection-rejected,
+.react-flow__node.roadmap-node--connection-rejected * {
+  cursor: not-allowed !important;
 }
 
 .react-flow__node.roadmap-node--arrow-source > [data-slot='roadmap-card'] {

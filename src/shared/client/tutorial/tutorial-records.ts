@@ -26,6 +26,6 @@ export function useClaimTutorialInvitation(invitation: TutorialInvitation, shown
   useOnce(shown, () => post('/api/tutorial/invitations', { invitation }));
 }
 
-export function useRecordTutorialOpening(experience: PracticeExperience) {
-  useOnce(true, () => post('/api/tutorial/openings', { experience }));
+export function useRecordTutorialOpening(experience: PracticeExperience, enabled: boolean) {
+  useOnce(enabled, () => post('/api/tutorial/openings', { experience }));
 }

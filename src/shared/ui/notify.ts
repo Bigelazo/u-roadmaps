@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { toast } from '@/shared/ui/toast-manager';
 
 type Tone = 'success' | 'error' | 'neutral';
@@ -15,7 +16,7 @@ const tones = {
   neutral: { priority: 'low', timeout: 0 },
 } as const;
 
-function show(tone: Tone, message: string, { id, onClose }: NotifyOptions = {}) {
+function show(tone: Tone, message: ReactNode, { id, onClose }: NotifyOptions = {}) {
   const { priority, timeout } = tones[tone];
   return toast.add({
     id,
@@ -28,8 +29,8 @@ function show(tone: Tone, message: string, { id, onClose }: NotifyOptions = {}) 
 }
 
 export const notify = {
-  success: (message: string, options?: NotifyOptions) => show('success', message, options),
-  error: (message: string, options?: NotifyOptions) => show('error', message, options),
-  neutral: (message: string, options?: NotifyOptions) => show('neutral', message, options),
+  success: (message: ReactNode, options?: NotifyOptions) => show('success', message, options),
+  error: (message: ReactNode, options?: NotifyOptions) => show('error', message, options),
+  neutral: (message: ReactNode, options?: NotifyOptions) => show('neutral', message, options),
   close: (id: string) => toast.close(id),
 };

@@ -34,6 +34,7 @@ const MotionButton = motion.create(Button);
 
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
+  nodes?: readonly { nodeTypeId: string }[];
   onSubmit: (node: NodeInput) => Promise<boolean>;
   onCreateNodeType: (nodeType: NodeTypeInput) => Promise<boolean>;
   onUpdateNodeType: (nodeTypeId: string, nodeType: NodeTypeInput) => Promise<boolean>;
@@ -42,6 +43,7 @@ type Props = {
 
 export function NodeCreator({
   nodeTypes,
+  nodes,
   onSubmit,
   onCreateNodeType,
   onUpdateNodeType,
@@ -232,22 +234,15 @@ export function NodeCreator({
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog open={isNodeTypesDialogOpen} onOpenChange={setIsNodeTypesDialogOpen}>
-        <DialogContent className="gap-5 sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Tipos de nodo</DialogTitle>
-            <DialogDescription>
-              Organiza el contenido del roadmap con categorías, iconos y colores.
-            </DialogDescription>
-          </DialogHeader>
-          <NodeTypesEditor
-            nodeTypes={nodeTypes}
-            onAdd={onCreateNodeType}
-            onUpdate={onUpdateNodeType}
-            onRequestDelete={onRequestDeleteNodeType}
-          />
-        </DialogContent>
-      </Dialog>
+      <NodeTypesEditor
+        open={isNodeTypesDialogOpen}
+        onOpenChange={setIsNodeTypesDialogOpen}
+        nodeTypes={nodeTypes}
+        nodes={nodes}
+        onAdd={onCreateNodeType}
+        onUpdate={onUpdateNodeType}
+        onRequestDelete={onRequestDeleteNodeType}
+      />
     </div>
   );
 }

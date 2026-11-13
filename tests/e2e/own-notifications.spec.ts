@@ -3,7 +3,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { insert, literal, queryJson, sql } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { listNotices, storeTitleNotices } from './notices';
+import { openInbox, countNotices, listNotices, storeTitleNotices } from './notices';
 
 test('own Inbox requires authentication and isolates notice identities', async ({
   request,
@@ -16,7 +16,7 @@ test('own Inbox requires authentication and isolates notice identities', async (
   expect(await response.json()).toMatchObject({ notifications: [], hasMore: false });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
-  await page.getByRole('button', { name: 'Avisos', exact: true }).click();
+  await openInbox(page, 'Avisos');
   await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
 });
 
@@ -81,7 +81,7 @@ test('Roadmap creation persists one own notice for each eligible Participation a
     );
   await authenticateAs(page.context(), multiCourseStudent.id);
   await page.goto(course.pagePath());
-  await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
+  await openInbox(page, 'Avisos, 1 sin leer');
   const row = page
     .getByRole('list', { name: 'Lista de avisos' })
     .getByRole('button', { name: first.courseName });
@@ -129,7 +129,7 @@ test('pagination and visible rows preserve notices when entry recognition fails'
     Date.now = () => realNow() + 86_400_000;
   });
   await page.goto(otherCourse.pagePath());
-  await page.getByRole('button', { name: 'Avisos, 12 sin leer', exact: true }).click();
+  await openInbox(page, 'Avisos, 12 sin leer');
   await expect(
     page
       .getByRole('list', { name: 'Lista de avisos' })
@@ -155,55 +155,27 @@ test('pagination and visible rows preserve notices when entry recognition fails'
     .click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toHaveCount(0);
-  expect((await getJson(api, `/api/notifications/counts?roadmapId=${roadmapId}`)).count).toBe(12);
-});
-
-test('Inbox query errors remain visible and can be retried', async ({ page, course }) => {
-  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  await page.route('**/api/notifications?*', (route) => route.fulfill({ status: 503, body: '{}' }));
-  await page.goto('/academic-overview');
-  await page.getByRole('button', { name: 'Avisos', exact: true }).click();
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'No se pudieron cargar los avisos.' }),
-  ).toBeVisible();
-  await expect(page.getByText('No tienes avisos todavía.')).toHaveCount(0);
-  await page.unroute('**/api/notifications?*');
-  await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
-  await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
+  expect(await countNotices(api, `roadmapId=${roadmapId}`)).toBe(12);
 });
 
 for (const viewport of [
   { width: 1280, height: 800 },
   { width: 390, height: 844 },
 ]) {
-  test(`Inbox loading, retry and focus work by keyboard at ${viewport.width}px`, async ({
+  test(`Inbox opens and returns focus by keyboard at ${viewport.width}px`, async ({
     page,
     course,
   }) => {
     await page.setViewportSize(viewport);
     await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-    let release: () => void = () => undefined;
-    const loading = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await page.route('**/api/notifications?*', async (route) => {
-      await loading;
-      await route.fulfill({ status: 503, body: '{}' });
-    });
     await page.goto('/academic-overview');
     const bell = page.getByRole('button', { name: 'Avisos', exact: true });
-    await bell.focus();
-    await bell.press('Enter');
-    await expect(page.getByRole('status').filter({ hasText: 'Cargando avisos…' })).toBeVisible();
-    release();
-    await expect(
-      page.getByRole('alert').filter({ hasText: 'No se pudieron cargar los avisos.' }),
-    ).toBeVisible();
-    await expect(page.getByText('No tienes avisos todavía.')).toHaveCount(0);
-    await page.unroute('**/api/notifications?*');
-    const retry = page.getByRole('button', { name: 'Reintentar', exact: true });
-    await retry.focus();
-    await retry.press('Enter');
+    const inbox = page.getByRole('dialog', { name: 'Avisos' });
+    await expect(async () => {
+      await bell.focus();
+      if (!(await inbox.isVisible())) await bell.press('Enter');
+      await expect(inbox).toBeVisible({ timeout: 1000 });
+    }).toPass();
     await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(bell).toBeFocused();

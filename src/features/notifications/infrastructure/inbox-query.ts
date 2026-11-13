@@ -110,7 +110,11 @@ export async function queryInboxPage(
     limit,
     grouped,
     cursor,
-  }: { limit: number; grouped: boolean; cursor: { id: string; availableAt: Date } | null },
+  }: {
+    limit: number | null;
+    grouped: boolean;
+    cursor: { id: string; availableAt: Date } | null;
+  },
 ) {
   const standalone = Prisma.sql`data->>'noticeTarget' = ${NOTICE_TARGET.roadmapAvailability}`;
   const rows = await prisma.$queryRaw<InboxNotice[]>(Prisma.sql`
@@ -124,13 +128,13 @@ export async function queryInboxPage(
       "targetCount", "isGroup"
     -- A group shows only its most recent notice.
     FROM ranked WHERE (NOT "isGroup" OR position = 1) ${cursor ? Prisma.sql`AND ("availableAt", id) < (${cursor.availableAt}, ${cursor.id}::uuid)` : Prisma.empty}
-    ORDER BY "availableAt" DESC, id DESC LIMIT ${limit + 1}
+    ORDER BY "availableAt" DESC, id DESC ${limit === null ? Prisma.empty : Prisma.sql`LIMIT ${limit + 1}`}
   `);
   return {
     notices: rows
-      .slice(0, limit)
+      .slice(0, limit ?? rows.length)
       .map((row) => (row.isGroup ? groupedRoadmapNotice(row, Number(row.targetCount)) : row)),
-    hasMore: rows.length > limit,
+    hasMore: limit !== null && rows.length > limit,
   };
 }
 
@@ -140,6 +144,22 @@ export async function queryInboxCounts(recipient: InboxRecipient, filter: InboxF
     SELECT count(*) AS count FROM visible
   `);
   return { count: Number(row?.count ?? 0) };
+}
+
+export async function queryInboxOfferingCounts(recipient: InboxRecipient) {
+  const rows = await prisma.$queryRaw<
+    { roadmapId: string; courseCode: string; year: number; semester: number; unread: bigint }[]
+  >(Prisma.sql`
+    ${visibleNotices(recipient, {})}
+    SELECT visible."roadmapId", offering."courseCode", offering.year, offering.semester,
+      count(*) AS unread
+    FROM visible
+    JOIN "Roadmap" roadmap ON roadmap.id = visible."roadmapId"
+    JOIN "CourseOffering" offering ON offering.id = roadmap."courseOfferingId"
+    GROUP BY visible."roadmapId", offering."courseCode", offering.year, offering.semester
+    ORDER BY offering.year DESC, offering.semester DESC, offering."courseCode"
+  `);
+  return rows.map(({ unread, ...offering }) => ({ ...offering, unread: Number(unread) }));
 }
 
 export async function queryNodeChangeCounts(recipient: InboxRecipient, roadmapId: string) {

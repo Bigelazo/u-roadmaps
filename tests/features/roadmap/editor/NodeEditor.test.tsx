@@ -69,7 +69,7 @@ const nodeTypes: RoadmapDto['nodeTypes'] = [
     id: 'assessment',
     name: 'Evaluación',
     icon: 'ClipboardCheck',
-    color: '#B42355',
+    color: '#DB2777',
     isPredefined: true,
   },
 ];

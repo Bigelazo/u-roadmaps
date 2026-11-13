@@ -1,6 +1,10 @@
 import { AnimatePresence, motion, type MotionStyle } from 'motion/react';
 import { useNodeEntryProgress } from '@/features/roadmap/graph/DependencyAnimation';
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   CircleCheckBig,
   CircleEllipsis,
   EyeOff,
@@ -11,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -22,6 +27,7 @@ import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/r
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
+import { NodeConnectorContext } from '@/features/roadmap/graph/node-connector';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import {
   nodeActionMenuCloseDurationMs,
@@ -97,6 +103,78 @@ function StatusIconBadge({
         {children}
       </TooltipTrigger>
       <TooltipContent side={side}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+const nodeHandles = [
+  ['top', Position.Top],
+  ['right', Position.Right],
+  ['bottom', Position.Bottom],
+  ['left', Position.Left],
+] as const;
+
+const connectorArrows = {
+  [Position.Top]: ArrowUp,
+  [Position.Right]: ArrowRight,
+  [Position.Bottom]: ArrowDown,
+  [Position.Left]: ArrowLeft,
+};
+
+function NodeConnectorPort({
+  handleId,
+  position,
+  title,
+  enabled,
+  revealed,
+  onStart,
+}: {
+  handleId: string;
+  position: Position;
+  title: string;
+  enabled: boolean;
+  revealed: boolean;
+  onStart: () => void;
+}) {
+  const Arrow = connectorArrows[position];
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={400}
+        closeOnClick
+        disabled={!enabled}
+        render={
+          <Handle
+            id={handleId}
+            data-testid="roadmap-node-handle"
+            data-node-connector={handleId}
+            aria-label={`Agregar un nodo que requiera ${title}`}
+            className="roadmap-node-handle roadmap-node-port"
+            type="source"
+            position={position}
+            isConnectable={enabled}
+            onTouchStartCapture={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (enabled) onStart();
+            }}
+            style={enabled ? undefined : { visibility: 'hidden', pointerEvents: 'none' }}
+          />
+        }
+      >
+        <motion.span
+          className="roadmap-node-port-visual"
+          initial={false}
+          animate={{ scale: revealed ? 1 : 0 }}
+          transition={{
+            duration: revealed ? 0.18 : 0.12,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+        >
+          <Arrow aria-hidden="true" strokeWidth={2.25} />
+        </motion.span>
+      </TooltipTrigger>
+      <TooltipContent side={position}>Arrastrar dependencia</TooltipContent>
     </Tooltip>
   );
 }
@@ -562,6 +640,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       wrapper.style.visibility = '';
     };
   }, [entryProgress]);
+  const connector = useContext(NodeConnectorContext);
   const [connectionHovered, setConnectionHovered] = useState(false);
   const size = roadmapNodeSizeForTitle(data.title);
   const locked = data.status === 'locked';
@@ -574,6 +653,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
     !data.isActionMenuOpen &&
     !data.isActionMenuClosing;
   const connectionHoverActive = canConnect && connectionHovered;
+  const connectionStarted = useStore((state) => state.connection.fromNode?.id === id);
   useEffect(() => {
     if (!canConnect) setConnectionHovered(false);
   }, [canConnect]);
@@ -666,27 +746,15 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       </div>
       <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
       <NodeActionBadge id={id} data={data} selected={selected} />
-      {(
-        [
-          ['top', Position.Top],
-          ['right', Position.Right],
-          ['bottom', Position.Bottom],
-          ['left', Position.Left],
-        ] as const
-      ).map(([id, position]) => (
-        <Handle
-          key={id}
-          id={id}
-          data-testid="roadmap-node-handle"
-          className="roadmap-node-handle"
-          type="source"
+      {nodeHandles.map(([handleId, position]) => (
+        <NodeConnectorPort
+          key={handleId}
+          handleId={handleId}
           position={position}
-          isConnectable={canConnect}
-          onTouchStartCapture={(event) => event.stopPropagation()}
-          style={{
-            visibility: canConnect ? 'visible' : 'hidden',
-            pointerEvents: canConnect ? undefined : 'none',
-          }}
+          title={data.title}
+          enabled={canConnect}
+          revealed={canConnect && (connectionHoverActive || connectionStarted)}
+          onStart={() => connector.start(id)}
         />
       ))}
       <NodeNotificationBadge id={id} data={data} />

@@ -1,7 +1,6 @@
 import { expect } from 'vitest';
 import { test } from './fixtures';
 import { prisma } from '@/shared/server/db';
-import { countOwnNotices } from '@/features/notifications/server';
 import {
   addNode,
   deferredNoticePort,
@@ -9,6 +8,7 @@ import {
   pendingNotices,
   summaryInInboxWords,
   teacherEdits,
+  inboxCount,
 } from './roadmap';
 
 const descriptionTargets = <N extends { data: unknown }>(notices: N[]) =>
@@ -73,9 +73,7 @@ test('a pending description hides while the Node is blocked and reappears when u
   const [pending] = descriptionTargets(await pendingNotices(course.studentId, course.roadmapId));
   await edits.block(node.id);
   expect(descriptionTargets(await pendingNotices(course.studentId, course.roadmapId))).toEqual([]);
-  expect(
-    await countOwnNotices(course.studentId, new URLSearchParams({ roadmapId: course.roadmapId })),
-  ).toEqual({ count: 1 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 1 });
   await edits.unblock(node.id);
   expect(
     descriptionTargets(await pendingNotices(course.studentId, course.roadmapId)),

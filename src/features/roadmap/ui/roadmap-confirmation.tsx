@@ -465,8 +465,9 @@ export function nodeTypeDeletionConfirmation(
         ¿Eliminar el tipo <NodeName title={nodeType.name} nodeType={nodeType} />?
       </>
     ),
-    description: 'Esta acción no se puede deshacer.',
+    description:
+      'Solo se eliminará este tipo, que debe estar sin uso. Esta acción no se puede deshacer.',
     intent: 'destructive',
-    actions: [{ id: canvasConfirmationChoices.deleteNodeType, label: 'Eliminar' }],
+    actions: [{ id: canvasConfirmationChoices.deleteNodeType, label: 'Eliminar tipo' }],
   };
 }

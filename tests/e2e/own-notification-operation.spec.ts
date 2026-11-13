@@ -2,10 +2,10 @@ import { expect, test } from './fixtures';
 import { authenticateAs, reviewNodeResources } from './helpers';
 import { createExistingNode } from './existing-node';
 import { literal, sql } from './database';
-import { openNativeStream, streamFrames, type StreamWindow } from './notices';
+import { openInbox, openNativeStream, streamFrames, type StreamWindow } from './notices';
 import { connectNodes } from './previewed-writes';
 
-test('native SSE isolates Inbox and Roadmap frames from a User outside the Course', async ({
+test('native SSE isolates Roadmap frames from a User outside the Course', async ({
   browser,
   course,
   apiAs,
@@ -31,11 +31,11 @@ test('native SSE isolates Inbox and Roadmap frames from a User outside the Cours
     ).toBe(200);
     await expect
       .poll(async () => (await streamFrames(recipientPage)).map((frame) => frame.kind))
-      .toEqual(expect.arrayContaining(['inbox', 'roadmap']));
+      .toEqual(expect.arrayContaining(['roadmap']));
     const delivered = await streamFrames(recipientPage);
+    expect(delivered.map((frame) => frame.kind)).not.toContain('inbox');
     expect(delivered).toEqual(
       expect.arrayContaining([
-        { kind: 'inbox', data: { userId: course.users.studentWithProgress.id } },
         expect.objectContaining({
           kind: 'roadmap',
           data: expect.objectContaining({
@@ -64,7 +64,7 @@ test('native SSE isolates Inbox and Roadmap frames from a User outside the Cours
   }
 });
 
-test('Resource notices stream to two tabs while student content stays stable until re-entry', async ({
+test('Resource notices reach other tabs on page load while student content stays stable until re-entry', async ({
   browser,
   course,
 }, testInfo) => {
@@ -93,24 +93,22 @@ test('Resource notices stream to two tabs while student content stays stable unt
     expect(response.headers()['x-accel-buffering']).toBe('no');
     expect(response.headers()['cache-control']).toContain('no-transform');
     await other.goto('/academic-overview');
-    await other.getByRole('button', { name: 'Avisos', exact: true }).click();
     const path = course.apiPath(`/nodes/${nodeId}/resources`);
     const created = await teacher.request.post(path, {
       data: { title: 'Primera guía', type: 'LINK', url: 'https://example.test/guide' },
     });
     expect(created.status()).toBe(201);
     const resourceId = (await created.json()).resource.id;
-    await expect(other.getByRole('button', { name: /Primera guía/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Primera guía' })).toBeHidden();
-    await expect(
-      page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
-    ).toBeVisible();
-    await expect(
-      other.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
-    ).toBeVisible();
     const notices = async () =>
       (await (await student.request.get(`/api/notifications?nodeId=${nodeId}`)).json())
         .notifications;
+    await expect.poll(notices).toHaveLength(1);
+    await expect(page.getByRole('link', { name: 'Primera guía' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
+    await expect(other.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
+    await other.reload();
+    await openInbox(other, 'Avisos, 1 sin leer');
+    await expect(other.getByRole('button', { name: /Primera guía/ })).toBeVisible();
     const first = (await notices())[0];
     for (const title of ['Segunda guía', 'Última guía']) {
       expect(
@@ -124,10 +122,10 @@ test('Resource notices stream to two tabs while student content stays stable unt
     await expect.poll(async () => (await notices())[0]?.data.resourceTitle).toBe('Última guía');
     expect(await notices()).toHaveLength(1);
     await expect(page.getByRole('link', { name: 'Última guía' })).toBeHidden();
+    await expect(other.getByRole('button', { name: /Primera guía/ })).toBeVisible();
+    await other.reload();
+    await openInbox(other, 'Avisos, 1 sin leer');
     await expect(other.getByRole('button', { name: /Última guía/ })).toBeVisible();
-    await expect(
-      other.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
-    ).toBeVisible();
     const [latest] = await notices();
     expect(latest.id).toBe(first.id);
     expect(latest).toMatchObject({

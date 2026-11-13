@@ -3,7 +3,7 @@ import { prepareNodeCreator } from './create-node';
 import { sql } from './database';
 import { createExistingNode } from './existing-node';
 import { ok } from './helpers';
-import { findNode, listNotices, prepareOpening } from './notices';
+import { countNotices, findNode, listNotices, prepareOpening } from './notices';
 import { changeTeacherBlock, hideNode } from './previewed-writes';
 
 test('blocking hides a pending description from Inbox and counts; unblocking restores the same notice', async ({
@@ -24,10 +24,7 @@ test('blocking hides a pending description from Inbox and counts; unblocking res
     await recipient.get(`/api/notifications/node-changes?roadmapId=${course.roadmapId}`)
   ).json();
   expect(count.byNode[course.nodes.first]).toBe(1);
-  expect(
-    (await (await recipient.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)).json())
-      .count,
-  ).toBe(1);
+  expect(await countNotices(recipient, `roadmapId=${course.roadmapId}`)).toBe(1);
   await ok(await changeTeacherBlock(author, path, 'UNBLOCK'));
   await expect.poll(async () => (await notices()).map((notice) => notice.id)).toEqual([noticeId]);
 });

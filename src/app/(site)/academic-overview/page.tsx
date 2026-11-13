@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
-import { CreateRoadmapDialog } from '@/features/roadmap';
 import { isFirstVisitInvitationDue } from '@/features/roadmap/server';
-import { AcademicOverview } from '@/features/academic-overview';
-import { getAcademicOverviewPage } from '@/app/_adapters/academic-overview';
+import { AcademicOverviewClient } from './AcademicOverviewClient';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 
@@ -13,8 +11,8 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
   if (!user) redirect('/api/plogin/start');
 
   return (
-    <AcademicOverview
-      overview={await getAcademicOverviewPage(user)}
+    <AcademicOverviewClient
+      userId={user.id}
       notice={
         searchParams.accessLost === '1' ? (
           <Alert role="status">
@@ -25,7 +23,6 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
           </Alert>
         ) : null
       }
-      renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
       tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
     />
   );

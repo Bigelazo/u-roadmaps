@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { expect } from 'vitest';
+import { inboxCount } from './roadmap';
 import { test } from './fixtures';
 import { prisma } from '@/shared/server/db';
-import {
-  countOwnNodeChangeTargets,
-  countOwnNotices,
-  listOwnNotices,
-} from '@/features/notifications/server';
+import { countOwnNodeChangeTargets, listOwnNotices } from '@/features/notifications/server';
 import { isNoticeVisible } from '@/features/notifications/application/notice-visibility';
 import { participantNodeAccess } from '@/features/roadmap/domain/participant-view';
 
@@ -148,7 +145,7 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
         state,
         role: participant.role,
         listed: await listedIds(recipientId, roadmapId),
-        counts: await countOwnNotices(recipientId, params),
+        counts: await inboxCount(recipientId, roadmapId),
         marks: await countOwnNodeChangeTargets(recipientId, params),
       }).toEqual({
         state,

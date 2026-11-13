@@ -62,13 +62,13 @@ export const predefinedNodeTypes = [
     id: developmentFixtureIds.predefinedNodeTypes.assessment,
     name: 'Evaluación',
     icon: 'ClipboardCheck',
-    color: '#FF5050',
+    color: '#DB2777',
   },
   {
     id: developmentFixtureIds.predefinedNodeTypes.supplementary,
     name: 'Material extra',
     icon: 'LibraryBig',
-    color: '#356373',
+    color: '#0F4C81',
   },
 ] as const;
 
@@ -875,7 +875,7 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
       id: developmentFixtureIds.customNodeTypes.fi1001Historical,
       name: 'Actividad experimental',
       icon: 'Shapes',
-      color: '#007C75',
+      color: '#00758A',
     },
     theme: 'análisis cuantitativo y física newtoniana',
     layout: 'MIXED',

@@ -1,131 +1,108 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { recognize } from './notices';
-import { literal, sql } from './database';
-import { deleteNode } from './previewed-writes';
+import { countNotices, findNode, openInbox, storeTitleNotices } from './notices';
 
-test('real SSE keeps student content stable while notices and counters update, including recovery', async ({
-  browser,
+const bell = (page: Page) => page.getByRole('button', { name: /^Avisos(,|$)/ });
+const noticeRows = (page: Page) =>
+  page.getByRole('list', { name: 'Lista de avisos' }).getByRole('button');
+
+test('a new notice appears only after a page load, with bell and list agreeing', async ({
+  page,
   course,
-}, testInfo) => {
-  const baseURL = testInfo.project.use.baseURL as string;
-  const teacher = await browser.newContext({ baseURL });
-  const student = await browser.newContext({ baseURL });
-  let nodeId: string | undefined;
-  try {
-    await authenticateAs(teacher, course.users.teacher.id);
-    await authenticateAs(student, course.users.studentWithoutProgress.id);
-    const created = await teacher.request.post(course.apiPath('/nodes'), {
-      data: {
-        title: `SSE ${crypto.randomUUID()}`,
-        description: 'Original SSE detail',
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 350,
-        positionY: 150,
-      },
-    });
-    nodeId = (await (await ok(created, 201)).json()).node.id;
-    const teacherPage = await teacher.newPage();
-    await teacherPage.goto(course.pagePath());
-    await teacherPage.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-    const page = await student.newPage();
-    const other = await student.newPage();
-    const stream = page.waitForResponse((response) =>
-      response.url().endsWith('/api/notifications/stream'),
-    );
-    await page.goto(course.pagePath());
-    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-    expect((await stream).headers()['content-type']).toContain('text/event-stream');
-    await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
-    await other.goto('/academic-overview');
-    await other.getByRole('button', { name: /^Avisos(,|$)/ }).click();
-    const filter = `nodeId=${nodeId}`;
-    const count = async () =>
-      (await (await student.request.get(`/api/notifications/counts?${filter}`)).json()).count;
-    await expect.poll(count).toBe(0);
-    await expect(other.getByRole('button', { name: /^Avisos(,|$)/ })).toHaveAttribute(
-      'aria-label',
-      'Avisos',
-    );
-    const originalCounter = await other
-      .getByRole('button', { name: /^Avisos(,|$)/ })
-      .getAttribute('aria-label');
-    const title = `Live SSE ${crypto.randomUUID()}`;
-    await teacherPage.getByLabel('Título', { exact: true }).fill(title);
-    await teacherPage.getByLabel('Descripción').fill('Delivered through real SSE');
-    await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
-    await expect(other.getByRole('button', { name: new RegExp(title) })).toHaveCount(2);
-    await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
-    await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
-    await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeHidden();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect.poll(() => count()).toBe(2);
-    const roadmapId = (await (await student.request.get(course.apiPath())).json()).roadmap.id;
-    await recognize(page.request, roadmapId);
-    await expect.poll(count).toBe(0);
-    await expect(other.getByRole('button', { name: /^Avisos(,|$)/ })).toHaveAttribute(
-      'aria-label',
-      originalCounter!,
-    );
-    await student.setOffline(true);
-    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-    await ok(
-      await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
-        data: { description: 'Recovered after reconnect' },
-      }),
-    );
-    const reconnected = page.waitForResponse((response) =>
-      response.url().endsWith('/api/notifications/stream'),
-    );
-    await student.setOffline(false);
-    expect((await reconnected).status()).toBe(200);
-    await page.bringToFront();
-    await expect.poll(() => count()).toBe(1);
-    await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
-    await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
-    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeHidden();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+  teacherApi: author,
+  studentApi: recipient,
+}) => {
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
+  await page.goto('/academic-overview');
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos');
 
-    await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
-    await page
-      .getByRole('button', { name: new RegExp(title) })
-      .first()
-      .click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Entendido' }).click();
-    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
-    await page.reload();
-    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
-    await ok(
-      await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
-        data: { description: 'Actualizado al refrescar' },
-      }),
-    );
+  const roadmap = await (await author.get(course.apiPath())).json();
+  const node = findNode(roadmap, course.nodes.first);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${node.id}`), {
+      data: { title: `${node.title} renombrado` },
+    }),
+  );
+  await expect.poll(() => countNotices(recipient, `roadmapId=${course.roadmapId}`)).toBe(1);
 
-    await expect.poll(count).toBe(1);
-    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
-    await page.reload();
-    await page.getByRole('button', { name: 'Entendido' }).click();
-    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-    await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeVisible();
+  await openInbox(page);
+  await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos');
+  await page.keyboard.press('Escape');
 
-    const denied = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === course.apiPath() && response.status() === 403,
-    );
-    await sql(`UPDATE "Participation" SET "isActive" = false
-      WHERE "courseOfferingId" = ${literal(course.id)}
-      AND "userId" = ${literal(course.users.studentWithoutProgress.id)};`);
-    expect((await denied).status()).toBe(403);
-    await expect(page).toHaveURL(/academic-overview\?accessLost=1/);
-    await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeHidden();
-  } finally {
-    // eslint-disable-next-line playwright/no-conditional-in-test
-    if (nodeId) await deleteNode(teacher.request, course.apiPath(`/nodes/${nodeId}`));
-    await student.close();
-    await teacher.close();
-  }
+  await page.reload();
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 1 sin leer');
+  await expect(
+    page.getByRole('button', { name: `1 avisos sin leer para el curso ${course.courseName}` }),
+  ).toBeVisible();
+  await openInbox(page);
+  await expect(noticeRows(page)).toHaveCount(1);
+});
+
+test('loading the academic overview and opening the bell request no notifications', async ({
+  page,
+  course,
+}) => {
+  await storeTitleNotices(course, course.users.studentWithoutProgress.id, 2);
+  const notificationReads: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith('/api/notifications') && pathname !== '/api/notifications/stream')
+      notificationReads.push(`${request.method()} ${pathname}`);
+  });
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
+  await page.goto('/academic-overview');
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 2 sin leer');
+  await openInbox(page);
+  await expect(noticeRows(page)).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await openInbox(page, `2 avisos sin leer para el curso ${course.courseName}`);
+  await expect(noticeRows(page)).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 2 sin leer');
+  expect(notificationReads).toEqual([]);
+});
+
+test('entering a Roadmap clears its bell and course counts without a reload, also after going back', async ({
+  page,
+  course,
+  createCourse,
+}) => {
+  const student = course.users.studentWithoutProgress;
+  const other = await createCourse({ participants: [{ user: student, role: 'STUDENT' }] });
+  await storeTitleNotices(course, student.id, 2);
+  await storeTitleNotices({ ...other, roadmapId: other.roadmapId! }, student.id, 1);
+  await authenticateAs(page.context(), student.id);
+  await page.goto('/academic-overview');
+  const courseCount = page.getByRole('button', {
+    name: `2 avisos sin leer para el curso ${course.courseName}`,
+  });
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 3 sin leer');
+  await expect(courseCount).toBeVisible();
+
+  const acknowledged = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/notifications/acknowledge') &&
+      response.request().method() === 'POST',
+  );
+  await openInbox(page, `2 avisos sin leer para el curso ${course.courseName}`);
+  await noticeRows(page).first().click();
+  await expect(page).toHaveURL(course.pagePath());
+  expect((await acknowledged).status()).toBe(200);
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 1 sin leer');
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/academic-overview$/);
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 1 sin leer');
+  await expect(page.getByRole('button', { name: /avisos sin leer para el curso/ })).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: `1 avisos sin leer para el curso ${other.courseName}` }),
+  ).toBeVisible();
+  await openInbox(page);
+  await expect(noticeRows(page)).toHaveCount(1);
 });
 
 test('the SSE endpoint requires an authenticated User', async ({ request }) => {

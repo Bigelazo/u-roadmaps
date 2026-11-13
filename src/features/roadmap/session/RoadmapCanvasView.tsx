@@ -860,6 +860,7 @@ function RoadmapCanvasGraph({
           ? (placeNewNode) => (
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
+                nodes={roadmap.nodes}
                 onSubmit={(node) => addNodeAtOpenPosition(node, placeNewNode)}
                 onCreateNodeType={(nodeType) =>
                   canvasCommands.request({ kind: 'add-node-type', nodeType })

@@ -7,12 +7,9 @@ import {
   summaryInInboxWords,
   teacherEdits,
   announceRoadmap,
+  inboxCount,
 } from './roadmap';
-import {
-  countOwnNodeChangeTargets,
-  countOwnNotices,
-  listOwnNotices,
-} from '@/features/notifications/server';
+import { countOwnNodeChangeTargets, listOwnNotices } from '@/features/notifications/server';
 
 const titleTargets = (notices: { data: unknown }[]) =>
   notices.filter(({ data }) => (data as { noticeTarget?: string }).noticeTarget === 'node-title');
@@ -128,7 +125,7 @@ test('counts, the Node change mark and the Grouped roadmap notice count title ta
   const params = new URLSearchParams({ roadmapId: course.roadmapId });
   await edits.rename(nodeId, 'Recursión');
   await edits.rename(nodeId, 'Recursión avanzada');
-  expect(await countOwnNotices(course.studentId, params)).toEqual({ count: 1 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 1 });
   await enterRoadmap(course.studentId, course.roadmapId);
   await edits.rename(nodeId, 'Recursión');
   expect(await countOwnNodeChangeTargets(course.studentId, params)).toEqual({
@@ -138,7 +135,7 @@ test('counts, the Node change mark and the Grouped roadmap notice count title ta
     const node = await addNode(course, title);
     await edits.rename(node.id, `${title} dobles`);
   }
-  expect(await countOwnNotices(course.studentId, params)).toEqual({ count: 3 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 3 });
   const grouped = await listOwnNotices(
     course.studentId,
     new URLSearchParams({ roadmapId: course.roadmapId, groupBy: 'roadmapId' }),
