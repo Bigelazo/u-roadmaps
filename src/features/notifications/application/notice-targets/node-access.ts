@@ -28,6 +28,7 @@ export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   previousValue: (fact) => fact.previous,
   knowers: async (fact) => [fact.recipientId],
   audience: async (fact) => [fact.recipientId],
+  factRecipients: (fact) => [fact.recipientId],
   currentAtEdit: (fact) => ({ recipientIds: [fact.recipientId], value: fact.current }),
   async current(target, roadmap) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);

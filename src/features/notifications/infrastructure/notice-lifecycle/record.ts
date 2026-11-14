@@ -1,7 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { prisma, type Prisma } from '@/shared/server/db';
-import type { RoadmapChanges } from '@/shared/roadmap-changes';
+import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import {
   descriptorForFact,
@@ -11,7 +11,12 @@ import {
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
 import { nodeCreationRef } from '../../application/absorption';
-import { forgetDeletedNode, recordKnowersValueAtEdit, recordKnownValues } from './known-values';
+import {
+  forgetDeletedNode,
+  recordKnowersValueAtEdit,
+  recordKnownValues,
+  recordRecipientKnownValues,
+} from './known-values';
 import {
   roadmapView,
   type ParticipantAccessReader,
@@ -45,14 +50,27 @@ export async function recordNoticeTargets(
 ): Promise<NoticeDelivery | undefined> {
   const roadmap = roadmapView(transaction, changes.roadmapId, readAccess, readRoadmapAccess);
   await lockOwnChanges(transaction, changes);
-  const targets: RecordedTarget[] = [];
-  const ownTargets: OwnTarget[] = [];
-  for (const fact of changes.facts) {
+  const recorded: { order: number; target?: RecordedTarget; own?: OwnTarget }[] = [];
+  const fromFacts: FactRecipientTarget[] = [];
+  for (const [order, fact] of changes.facts.entries()) {
     const descriptor = descriptorForFact(fact);
     if (!descriptor) continue;
     const target = descriptor.target(fact, changes);
     const previousValue = descriptor.previousValue(fact);
     const previousContext = descriptor.previousContext?.(fact);
+    const factRecipients = descriptor.factRecipients?.(fact);
+    if (factRecipients) {
+      fromFacts.push({
+        order,
+        descriptor,
+        fact,
+        target,
+        previousValue,
+        previousContext,
+        factRecipients,
+      });
+      continue;
+    }
     const knowers = await descriptor.knowers(fact, changes, roadmap);
     await recordKnownValues(
       transaction,
@@ -64,9 +82,7 @@ export async function recordNoticeTargets(
     );
     const atEdit = descriptor.currentAtEdit?.(fact);
     if (atEdit) {
-      const knowerIds = new Set(knowers);
-      if (atEdit.recipientIds.some((recipientId) => !knowerIds.has(recipientId)))
-        throw new Error(`${descriptor.noticeTarget}: currentAtEdit names a non-knower.`);
+      requireKnowers(descriptor, knowers, atEdit.recipientIds);
       await recordKnowersValueAtEdit(
         transaction,
         changes.roadmapId,
@@ -77,8 +93,6 @@ export async function recordNoticeTargets(
       );
     }
     const audience = await descriptor.audience(fact, changes, roadmap);
-    if (audience.includes(changes.actorId))
-      ownTargets.push({ descriptor, fact, target, previousValue });
     let recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
     let unawareRecipientIds: string[] = [];
     if (fact.kind === 'node-deleted') {
@@ -91,17 +105,29 @@ export async function recordNoticeTargets(
       recipientIds = settled.aware;
       unawareRecipientIds = settled.unaware;
     }
-    if (recipientIds.length || unawareRecipientIds.length)
-      targets.push({
-        descriptor,
-        target,
-        previousValue,
-        previousContext,
-        context: descriptor.factContext?.(fact, changes),
-        recipientIds,
-        unawareRecipientIds,
-      });
+    recorded.push({
+      order,
+      own: audience.includes(changes.actorId)
+        ? { descriptor, fact, target, previousValue }
+        : undefined,
+      target:
+        recipientIds.length || unawareRecipientIds.length
+          ? {
+              descriptor,
+              target,
+              previousValue,
+              previousContext,
+              context: descriptor.factContext?.(fact, changes),
+              recipientIds,
+              unawareRecipientIds,
+            }
+          : undefined,
+    });
   }
+  recorded.push(...(await recordFactRecipientTargets(transaction, changes, fromFacts)));
+  recorded.sort((a, b) => a.order - b.order);
+  const targets = recorded.flatMap(({ target }) => (target ? [target] : []));
+  const ownTargets = recorded.flatMap(({ own }) => (own ? [own] : []));
   await recordOwnChanges(transaction, changes, roadmap, ownTargets);
   if (!targets.length) return undefined;
   const eventId = randomUUID();
@@ -117,6 +143,73 @@ export async function recordNoticeTargets(
       console.warn('Roadmap notice delivery failed', { roadmapId: changes.roadmapId });
     }
   };
+}
+
+type FactRecipientTarget = Readonly<{
+  order: number;
+  descriptor: NoticeTargetDescriptor;
+  fact: RoadmapChangeFact;
+  target: NoticeTargetRef;
+  previousValue: string;
+  previousContext?: TargetContext;
+  factRecipients: readonly string[];
+}>;
+
+function requireKnowers(
+  descriptor: NoticeTargetDescriptor,
+  knowers: readonly string[],
+  editedRecipientIds: readonly string[],
+) {
+  const knowerIds = new Set(knowers);
+  if (editedRecipientIds.some((recipientId) => !knowerIds.has(recipientId)))
+    throw new Error(`${descriptor.noticeTarget}: currentAtEdit names a non-knower.`);
+}
+
+async function recordFactRecipientTargets(
+  transaction: Prisma.TransactionClient,
+  changes: RoadmapChanges,
+  fromFacts: readonly FactRecipientTarget[],
+) {
+  await recordRecipientKnownValues(
+    transaction,
+    changes.roadmapId,
+    fromFacts.flatMap(
+      ({ descriptor, fact, target, previousValue, previousContext, factRecipients }) => {
+        const atEdit = descriptor.currentAtEdit?.(fact);
+        if (atEdit) requireKnowers(descriptor, factRecipients, atEdit.recipientIds);
+        const edited = new Set(atEdit?.recipientIds);
+        return factRecipients.map((recipientId) => ({
+          recipientId,
+          target,
+          knownValue: previousValue,
+          context: previousContext ?? {},
+          currentValue: atEdit && edited.has(recipientId) ? atEdit.value : undefined,
+        }));
+      },
+    ),
+  );
+  return fromFacts.map(
+    ({ order, descriptor, fact, target, previousValue, previousContext, factRecipients }) => {
+      const recipientIds = factRecipients.filter((recipientId) => recipientId !== changes.actorId);
+      return {
+        order,
+        own: factRecipients.includes(changes.actorId)
+          ? { descriptor, fact, target, previousValue }
+          : undefined,
+        target: recipientIds.length
+          ? {
+              descriptor,
+              target,
+              previousValue,
+              previousContext,
+              context: descriptor.factContext?.(fact, changes),
+              recipientIds,
+              unawareRecipientIds: [],
+            }
+          : undefined,
+      };
+    },
+  );
 }
 
 type RecordedChange = Readonly<{
