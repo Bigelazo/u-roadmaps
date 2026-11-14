@@ -1,6 +1,8 @@
 import type { Resource, StudentNodeAccess, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
+  studentAccessGraph,
   studentNodeAccessById,
+  studentNodeAccessInGraph,
   visibleRoadmapGraph,
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
@@ -45,10 +47,31 @@ export function participantNodeAccess<
           completedNodeIds: participant.completedNodeIds,
         })
       : new Map(graph.nodes.map((node) => [node.id, teachingStaffAccess(node)]));
-  const accessibleNodeIds: ReadonlySet<string> = new Set(
+  const accessibleNodeIds: ReadonlySet<string> = accessibleIds(accessByNodeId);
+  return { ...graph, accessByNodeId, accessibleNodeIds };
+}
+
+function accessibleIds(accessByNodeId: ReadonlyMap<string, StudentNodeAccess>) {
+  return new Set(
     [...accessByNodeId].filter(([, access]) => access.status === 'ACCESSIBLE').map(([id]) => id),
   );
-  return { ...graph, accessByNodeId, accessibleNodeIds };
+}
+
+export function participantAccessibleNodeIds<
+  Node extends ParticipantNode,
+  Dependency extends RoadmapGraphDependency,
+>({ nodes, dependencies }: { nodes: readonly Node[]; dependencies: readonly Dependency[] }) {
+  const graph = visibleRoadmapGraph(nodes, dependencies);
+  const studentGraph = studentAccessGraph(graph);
+  let teachingStaff: ReadonlySet<string> | undefined;
+  return (participant: Participant): ReadonlySet<string> => {
+    if (participant.role === 'STUDENT')
+      return accessibleIds(studentNodeAccessInGraph(studentGraph, participant.completedNodeIds));
+    teachingStaff ??= accessibleIds(
+      new Map(graph.nodes.map((node) => [node.id, teachingStaffAccess(node)])),
+    );
+    return teachingStaff;
+  };
 }
 
 type StudentRoadmapSourceNode = ParticipantNode & {
