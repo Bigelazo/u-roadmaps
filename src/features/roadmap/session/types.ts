@@ -8,6 +8,7 @@ import type {
   AnyRoadmapDto,
   CourseOfferingIdentifier,
   Resource,
+  RoadmapDependency,
   StudentRoadmapDto,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
@@ -32,6 +33,8 @@ export type ScheduledUnlockOutcome = {
 
 export type ExecutionResult = {
   readonly createdNodeId?: string;
+  readonly dependency?: RoadmapDependency;
+  readonly teacherBlockedNodeIds?: readonly string[];
   readonly scheduledUnlock?: ScheduledUnlockOutcome;
 };
 
