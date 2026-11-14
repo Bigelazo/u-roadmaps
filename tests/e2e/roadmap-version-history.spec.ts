@@ -165,7 +165,7 @@ test('students and outsiders are refused the version history', async ({
   await authenticateAs(page.context(), course.users.studentWithProgress.id);
   await page.goto(course.pagePath());
   await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Historial de versiones' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Secciones del curso' })).toHaveCount(0);
   const visit = await page.goto(`/courses/${course.courseCode}/versions`);
   expect(visit?.status()).toBe(404);
 });
@@ -194,7 +194,10 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
 
   await authenticateAs(page.context(), teacher.id);
   await page.goto(latest.pagePath());
-  await page.getByRole('link', { name: 'Historial de versiones' }).click();
+  await page
+    .getByRole('navigation', { name: 'Secciones del curso' })
+    .getByRole('link', { name: 'Versiones' })
+    .click();
   await expect(page).toHaveURL(new RegExp(`/courses/${past.courseCode}/versions$`));
   const version = page.getByRole('listitem', { name: `Edición ${pastTerm.year}-1` });
   await expect(version).toContainText('Creada desde cero');

@@ -1,0 +1,201 @@
+.layer {
+  --speed-dial-trigger-size: 3.5rem;
+  --speed-dial-action-size: 2.75rem;
+  --speed-dial-gap: 0.75rem;
+  --speed-dial-shadow: 0 4px 12px rgb(18 33 58 / 18%);
+  --speed-dial-shadow-hover: 0 8px 20px rgb(18 33 58 / 22%);
+  --speed-dial-halo: 0 0 32px 8px rgb(2 74 216 / 16%);
+  --speed-dial-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  position: relative;
+  z-index: 2;
+}
+
+button.trigger {
+  position: relative;
+  z-index: 2;
+  width: var(--speed-dial-trigger-size);
+  height: var(--speed-dial-trigger-size);
+  min-height: var(--speed-dial-trigger-size);
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: var(--speed-dial-shadow), var(--speed-dial-halo);
+  transition:
+    background-color 250ms var(--speed-dial-easing),
+    box-shadow 250ms var(--speed-dial-easing);
+}
+
+button.trigger:hover,
+button.triggerOpen {
+  background: var(--primary-deep);
+  box-shadow: var(--speed-dial-shadow-hover), var(--speed-dial-halo);
+}
+
+button.trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.triggerIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 250ms var(--speed-dial-easing);
+}
+
+.triggerOpen .triggerIcon {
+  transform: rotate(45deg);
+}
+
+.triggerIcon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.positioner {
+  z-index: 1;
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--speed-dial-gap);
+  padding-right: calc((var(--speed-dial-trigger-size) - var(--speed-dial-action-size)) / 2);
+  padding-bottom: var(--speed-dial-gap);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 250ms;
+}
+
+.popup[data-open] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  outline: none;
+  opacity: 0;
+  transform: scale(0.4);
+  transform-origin: calc(100% - var(--speed-dial-action-size) / 2) 50%;
+  transition:
+    opacity 200ms var(--speed-dial-easing),
+    transform 200ms var(--speed-dial-easing);
+}
+
+.popup[data-open]:not([data-starting-style]) .action {
+  opacity: 1;
+  transform: none;
+}
+
+.popup[data-open] .action:nth-last-child(2) {
+  transition-delay: 30ms;
+}
+
+.popup[data-open] .action:nth-last-child(3) {
+  transition-delay: 60ms;
+}
+
+.popup[data-open] .action:nth-last-child(4) {
+  transition-delay: 90ms;
+}
+
+.popup[data-open] .action:nth-last-child(5) {
+  transition-delay: 120ms;
+}
+
+.popup[data-open] .action:nth-last-child(6) {
+  transition-delay: 150ms;
+}
+
+.actionLabel {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 0.75rem);
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--foreground);
+  color: var(--background);
+  font-family: var(--font-sans), Arial, sans-serif;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 150ms var(--speed-dial-easing);
+}
+
+.action[data-pinned-label] .actionLabel {
+  position: relative;
+  top: auto;
+  right: auto;
+  pointer-events: auto;
+  transform: none;
+}
+
+.actionLabel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -0.25rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background: var(--foreground);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.popup[data-open] .action:hover .actionLabel,
+.popup[data-open] .action[data-highlighted] .actionLabel,
+.popup[data-open] .action[data-pinned-label] .actionLabel {
+  opacity: 1;
+}
+
+.actionButton {
+  display: flex;
+  width: var(--speed-dial-action-size);
+  height: var(--speed-dial-action-size);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--popover);
+  color: var(--primary-deep);
+  box-shadow: var(--speed-dial-shadow);
+  transition:
+    background-color 250ms var(--speed-dial-easing),
+    border-color 250ms var(--speed-dial-easing),
+    box-shadow 250ms var(--speed-dial-easing);
+}
+
+.actionButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.action:hover .actionButton,
+.action[data-highlighted] .actionButton {
+  border-color: var(--primary-soft);
+  background: var(--primary-soft);
+  box-shadow: var(--speed-dial-shadow-hover);
+}
+
+.action:focus-visible .actionButton {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

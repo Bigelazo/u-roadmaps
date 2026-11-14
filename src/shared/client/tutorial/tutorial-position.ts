@@ -15,6 +15,22 @@ function box(rect: DOMRect): Box {
   return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
 }
 
+function visibleBox(element: Element): Box {
+  let visible = box(element.getBoundingClientRect());
+  for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(ancestor);
+    if (overflowX === 'visible' && overflowY === 'visible') continue;
+    const clip = box(ancestor.getBoundingClientRect());
+    visible = {
+      left: Math.max(visible.left, clip.left),
+      top: Math.max(visible.top, clip.top),
+      right: Math.min(visible.right, clip.right),
+      bottom: Math.min(visible.bottom, clip.bottom),
+    };
+  }
+  return visible;
+}
+
 function overlapArea(a: Box, b: Box) {
   const width = Math.min(a.right, b.right) - Math.max(a.left, b.left);
   const height = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
@@ -40,7 +56,7 @@ function protectedControls(roots: readonly Element[]) {
   return roots.flatMap((root) =>
     [...(root.matches(controlSelector) ? [root] : []), ...root.querySelectorAll(controlSelector)]
       .filter(isShown)
-      .map((control) => box(control.getBoundingClientRect())),
+      .map(visibleBox),
   );
 }
 
@@ -50,29 +66,36 @@ export function positionTutorialPopover(
   exitControl: Element | null,
   preferredSide: Side = 'bottom',
   highlightedElements: readonly Element[] = [],
-  offset = 0,
 ) {
   const wrapper = popover.wrapper;
   if (wrapper.style.getPropertyValue('--tutorial-popover-width'))
     wrapper.style.removeProperty('--tutorial-popover-width');
   let bounds = wrapper.getBoundingClientRect();
   const viewport: Box = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
-  if (!anchor) {
-    apply(
-      wrapper,
-      {
-        side: 'over',
-        left: (viewport.right - bounds.width) / 2,
-        top: (viewport.bottom - bounds.height) / 2,
-      },
-      bounds,
-      null,
+  const exit = exitControl ? box(exitControl.getBoundingClientRect()) : null;
+  const bottomCenter = (centerX: number): Placement => {
+    const left = Math.max(
+      gap,
+      Math.min(centerX - bounds.width / 2, viewport.right - bounds.width - gap),
     );
+    const bottom = viewport.bottom - bounds.height - gap;
+    const footprint = {
+      left,
+      top: bottom,
+      right: left + bounds.width,
+      bottom: bottom + bounds.height,
+    };
+    const top =
+      exit && overlapArea(inflate(footprint, gap), exit) > 0
+        ? Math.min(bottom, exit.top - bounds.height - gap)
+        : bottom;
+    return { side: 'over', left, top: Math.max(gap, top) };
+  };
+  if (!anchor) {
+    apply(wrapper, bottomCenter(viewport.right / 2), bounds, null);
     return;
   }
   const rect = anchor.getBoundingClientRect();
-  const exit = exitControl ? box(exitControl.getBoundingClientRect()) : null;
-  const anchorGap = gap + offset;
   const highlightedBounds = highlightedElements.map((element) =>
     box(element.getBoundingClientRect()),
   );
@@ -81,9 +104,7 @@ export function positionTutorialPopover(
   const targets = [anchor, ...highlightedElements];
   const layers = blockingLayers(wrapper);
   const hostLayers = layers.filter((layer) => targets.some((target) => layer.contains(target)));
-  const layerBoxes = layers
-    .filter((layer) => !hostLayers.includes(layer))
-    .map((layer) => box(layer.getBoundingClientRect()));
+  const layerBoxes = layers.filter((layer) => !hostLayers.includes(layer)).map(visibleBox);
   const hostControls = protectedControls(hostLayers).filter(
     (control) => overlapArea(control, box(rect)) === 0,
   );
@@ -96,16 +117,16 @@ export function positionTutorialPopover(
     Math.max(gap, Math.min(top, viewport.bottom - height - gap));
   const sideCandidate = (side: Side, width: number, height: number): Placement => {
     if (side === 'bottom')
-      return { side, left: clampX(centerX - width / 2, width), top: area.bottom + anchorGap };
+      return { side, left: clampX(centerX - width / 2, width), top: area.bottom + gap };
     if (side === 'top')
-      return { side, left: clampX(centerX - width / 2, width), top: area.top - height - anchorGap };
+      return { side, left: clampX(centerX - width / 2, width), top: area.top - height - gap };
     if (side === 'left')
       return {
         side,
-        left: area.left - width - anchorGap,
+        left: area.left - width - gap,
         top: clampY(centerY - height / 2, height),
       };
-    return { side, left: area.right + anchorGap, top: clampY(centerY - height / 2, height) };
+    return { side, left: area.right + gap, top: clampY(centerY - height / 2, height) };
   };
   const placed = (placement: Placement, width: number, height: number): Box => ({
     left: placement.left,
@@ -136,8 +157,7 @@ export function positionTutorialPopover(
     }
   }
   for (const side of sides.filter((side) => side === 'left' || side === 'right')) {
-    const room =
-      side === 'left' ? area.left - anchorGap - gap : viewport.right - area.right - anchorGap - gap;
+    const room = side === 'left' ? area.left - gap - gap : viewport.right - area.right - gap - gap;
     if (room < minimumWidth || room >= bounds.width) continue;
     wrapper.style.setProperty('--tutorial-popover-width', `${Math.floor(room)}px`);
     const narrow = wrapper.getBoundingClientRect();
@@ -149,6 +169,21 @@ export function positionTutorialPopover(
     wrapper.style.removeProperty('--tutorial-popover-width');
   }
   bounds = wrapper.getBoundingClientRect();
+  const visibleArea = {
+    left: Math.max(area.left, viewport.left),
+    top: Math.max(area.top, viewport.top),
+    right: Math.min(area.right, viewport.right),
+    bottom: Math.min(area.bottom, viewport.bottom),
+  };
+  const undirected = bottomCenter((visibleArea.left + visibleArea.right) / 2);
+  const undirectedBox = placed(undirected, bounds.width, bounds.height);
+  if (
+    contains(area, undirectedBox) &&
+    (!exit || overlapArea(inflate(undirectedBox, gap), exit) === 0)
+  ) {
+    apply(wrapper, undirected, bounds, null);
+    return;
+  }
   const fallbacks: Placement[] = [
     ...sides.map((side) => {
       const candidate = sideCandidate(side, bounds.width, bounds.height);
@@ -191,6 +226,15 @@ export function positionTutorialPopover(
     cost(candidate) < cost(winner) ? candidate : winner,
   );
   apply(wrapper, { ...best, side: 'over' }, bounds, null);
+}
+
+function contains(outer: Box, inner: Box) {
+  return (
+    inner.left >= outer.left &&
+    inner.top >= outer.top &&
+    inner.right <= outer.right &&
+    inner.bottom <= outer.bottom
+  );
 }
 
 function inflate(area: Box, by: number): Box {

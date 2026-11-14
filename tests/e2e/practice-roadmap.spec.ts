@@ -114,7 +114,7 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await authenticateAs(page.context(), user.id);
   await openPractice(page, 'teaching');
   await expect(page.locator('header').filter({ hasText: 'AA0000' })).toContainText('Tutorial');
-  await expect(page.getByRole('link', { name: 'Historial de versiones' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Secciones del curso' })).toHaveCount(0);
   await expect(page.getByLabel(`${titles.h}: oculto para estudiantes`)).toBeVisible();
 
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();

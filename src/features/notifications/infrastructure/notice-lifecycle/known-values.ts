@@ -1,7 +1,6 @@
 import 'server-only';
 import { ABSENT, nodeCreationRef } from '../../application/absorption';
 import { Prisma } from '@/shared/server/db';
-import { NOTICE_TARGET } from '../../application/notice-targets/kinds';
 import {
   targetContext,
   type NoticeTargetRef,
@@ -154,11 +153,13 @@ export async function forgetDeletedNode(
 }
 
 export const DEPENDENCY_ENDS = ['source', 'target'] as const;
-const DEPENDENCY_KEY_PART = { source: 2, target: 3 } as const;
+const DEPENDENCY_KEY_NODES = {
+  source: () => Prisma.sql`split_part("targetKey", ':', 2)`,
+  target: () => Prisma.sql`split_part("targetKey", ':', 3)`,
+} as const;
 
 export function dependencyKeyNode(end: (typeof DEPENDENCY_ENDS)[number]) {
-  return Prisma.raw(`split_part("targetKey", ':', ${DEPENDENCY_KEY_PART[end]})`);
+  return DEPENDENCY_KEY_NODES[end]();
 }
 
-export const dependencyIndexPredicate = () =>
-  Prisma.raw(`"noticeTarget" = '${NOTICE_TARGET.dependency}'`);
+export const dependencyIndexPredicate = () => Prisma.sql`"noticeTarget" = 'dependency'`;

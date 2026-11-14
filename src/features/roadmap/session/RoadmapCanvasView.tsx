@@ -842,38 +842,6 @@ function RoadmapCanvasGraph({
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
               <>
-                {canPreviewCanvas && !input.practice ? (
-                  <IconTooltip
-                    label="Historial de versiones"
-                    iconOnly={isCompactLayout}
-                    render={
-                      <Link
-                        aria-label="Historial de versiones"
-                        className={cn(buttonVariants({ variant: 'outline' }))}
-                        href={versionHistoryUrl(courseCode)}
-                      >
-                        <History data-icon="inline-start" />
-                        Historial de versiones
-                      </Link>
-                    }
-                  />
-                ) : null}
-                {canPreviewCanvas && !input.practice ? (
-                  <IconTooltip
-                    label="Integrantes"
-                    iconOnly={isCompactLayout}
-                    render={
-                      <Link
-                        aria-label="Integrantes"
-                        className={cn(buttonVariants({ variant: 'outline' }))}
-                        href={courseParticipantsUrl({ courseCode, year, semester })}
-                      >
-                        <Users data-icon="inline-start" />
-                        Integrantes
-                      </Link>
-                    }
-                  />
-                ) : null}
                 {canEnterCanvasPreview ? (
                   <IconTooltip
                     label="Vista estudiante"
@@ -927,6 +895,7 @@ function RoadmapCanvasGraph({
             semester={semester}
             isCanvasPreview={isCanvasPreview}
             isEditing={canvasMode.isEditing}
+            showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
           />
         ),
         topCenter: isCanvasPreview ? (
@@ -997,10 +966,11 @@ function RoadmapCanvasHeader({
   semester,
   isCanvasPreview,
   isEditing,
+  showsCourseLinks,
 }: Pick<
   ReturnType<typeof useRoadmapCanvasController>,
   'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
-> & { isEditing: boolean }) {
+> & { isEditing: boolean; showsCourseLinks: boolean }) {
   const isCompact = useCompactCanvasLayout();
   const hidesBadgeRow = isCanvasPreview && isCompact;
   return (
@@ -1032,6 +1002,35 @@ function RoadmapCanvasHeader({
         <span aria-hidden="true">·</span>
         <span>{termLabel({ year, semester })}</span>
       </p>
+      {showsCourseLinks ? (
+        <RoadmapCourseLinks courseCode={courseCode} year={year} semester={semester} />
+      ) : null}
     </header>
+  );
+}
+
+function RoadmapCourseLinks({
+  courseCode,
+  year,
+  semester,
+}: Pick<ReturnType<typeof useRoadmapCanvasController>, 'courseCode' | 'year' | 'semester'>) {
+  const linkClassName = cn(
+    buttonVariants({ variant: 'ghost', size: 'sm' }),
+    'pointer-events-auto justify-start text-primary hover:bg-primary-soft/50 hover:text-primary-deep',
+  );
+  return (
+    <nav
+      aria-label="Secciones del curso"
+      className="-mx-3 mt-2 -mb-2 flex flex-wrap gap-1 border-t border-border/70 p-1 [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:-mb-1.5"
+    >
+      <Link className={linkClassName} href={versionHistoryUrl(courseCode)}>
+        <History data-icon="inline-start" />
+        Versiones
+      </Link>
+      <Link className={linkClassName} href={courseParticipantsUrl({ courseCode, year, semester })}>
+        <Users data-icon="inline-start" />
+        Integrantes
+      </Link>
+    </nav>
   );
 }

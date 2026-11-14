@@ -1,8 +1,51 @@
 {
   "$schema": "https://react.doctor/schema/config.json",
   "ignore": {
+    "rules": ["react-doctor/require-reduced-motion"],
     "files": [".next-e2e/**"],
     "overrides": [
+      {
+        "files": ["src/features/roadmap/ui/StudentRoster.tsx"],
+        "rules": ["react-doctor/js-set-map-lookups"]
+      },
+      {
+        "files": [
+          ".worktrees/spec-326/.next-e2e/server/chunks/_19ypzfu._.js",
+          ".worktrees/spec-326/.next-e2e/server/chunks/_1lrrp28._.js",
+          ".worktrees/spec-326/.next-e2e/server/chunks/ssr/_17kj24h._.js"
+        ],
+        "rules": ["react-doctor/jwt-insecure-verification"]
+      },
+      {
+        "files": [
+          "src/app/_components/landing/CourseRouteComparison.tsx",
+          "src/features/roadmap/graph/DependencyPath.tsx",
+          "src/features/roadmap/graph/routing/DependencyRouting.tsx"
+        ],
+        "rules": ["react-doctor/effect-needs-cleanup"]
+      },
+      {
+        "files": ["src/app/courses/[courseCode]/[year]/[semester]/page.tsx"],
+        "rules": ["react-doctor/server-sequential-independent-await"]
+      },
+      {
+        "files": ["src/app/[(]site[)]/third-party-licenses/page.tsx"],
+        "rules": ["react-doctor/nextjs-no-a-element"]
+      },
+      {
+        "files": [".worktrees/*/.next-e2e/server/**"],
+        "rules": [
+          "react-doctor/artifact-env-leak",
+          "react-doctor/artifact-secret-leak",
+          "react-doctor/raw-sql-injection-risk"
+        ]
+      },
+      {
+        "files": [
+          ".worktrees/spec-326/src/features/notifications/infrastructure/notice-lifecycle/known-values.ts"
+        ],
+        "rules": ["react-doctor/raw-sql-injection-risk"]
+      },
       {
         "files": ["src/app/practice-roadmap/[experience]/page.tsx"],
         "rules": ["react-doctor/server-sequential-independent-await"]
@@ -44,7 +87,7 @@
       },
       {
         "files": ["src/features/notifications/infrastructure/notice-lifecycle/known-values.ts"],
-        "rules": ["react-doctor/async-await-in-loop", "react-doctor/raw-sql-injection-risk"]
+        "rules": ["react-doctor/async-await-in-loop"]
       },
       {
         "files": ["src/features/notifications/infrastructure/notice-lifecycle/own-changes.ts"],

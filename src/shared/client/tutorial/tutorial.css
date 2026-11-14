@@ -12,6 +12,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-xl, 16px);
   padding: 18px;
+  width: max-content;
   min-width: min(260px, var(--tutorial-popover-width, 260px));
   max-width: var(--tutorial-popover-width, min(340px, calc(100vw - 32px)));
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
@@ -135,19 +136,17 @@
   pointer-events: auto;
 }
 
-.driver-active
-  [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit))
-  > :is(
-    [data-slot='dialog-overlay'],
-    [data-slot='alert-dialog-overlay'],
-    [data-slot='sheet-overlay']
-  ) {
-  background-color: transparent;
-  backdrop-filter: none;
-}
-
 .driver-active [data-slot='toast-viewport'] {
   z-index: var(--tutorial-z-toast) !important;
+  transition: opacity 160ms ease-out;
+}
+.u-roadmaps-tour-settling [data-slot='toast-viewport'] {
+  opacity: 0;
+  transition: none;
+}
+.driver-active [data-slot='toast']:is([data-starting-style], [data-ending-style]) {
+  transform: none !important;
+  opacity: 0;
 }
 .driver-active [data-slot='toast'],
 .driver-active [data-slot='toast'] * {
@@ -160,7 +159,12 @@
 
 .driver-active.u-roadmaps-tour-acting
   [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit))
-  > :not([data-slot='toast-viewport']) {
+  > :not(
+    [data-slot='toast-viewport'],
+    [data-slot='dialog-overlay'],
+    [data-slot='alert-dialog-overlay'],
+    [data-slot='sheet-overlay']
+  ) {
   z-index: var(--tutorial-z-acting-layer) !important;
 }
 .driver-active.u-roadmaps-tour-acting
@@ -183,7 +187,12 @@
 
 .driver-active.u-roadmaps-tour-exclusive
   [data-base-ui-portal]:has(.u-roadmaps-tour-interactive)
-  > :not([data-slot='toast-viewport']) {
+  > :not(
+    [data-slot='toast-viewport'],
+    [data-slot='dialog-overlay'],
+    [data-slot='alert-dialog-overlay'],
+    [data-slot='sheet-overlay']
+  ) {
   z-index: var(--tutorial-z-acting-layer) !important;
 }
 .driver-active .u-roadmaps-tour-interactive,

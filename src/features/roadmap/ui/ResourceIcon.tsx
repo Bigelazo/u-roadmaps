@@ -47,12 +47,6 @@ export function ResourceIcon({
   return <Icon size={size} className={className} aria-hidden="true" />;
 }
 
-export function resourceActionLabel(resource: Pick<Resource, 'type' | 'title'>) {
-  return resource.type === 'FILE'
-    ? `Descargar ${resource.title}`
-    : `Abrir enlace ${resource.title}`;
-}
-
 export function ResourceActionIcon({
   type,
   size,

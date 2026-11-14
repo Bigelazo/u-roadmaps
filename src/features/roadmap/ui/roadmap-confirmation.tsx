@@ -1,3 +1,4 @@
+import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/scheduled-unlock-hint';
 import type { ReactNode } from 'react';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
@@ -9,7 +10,6 @@ import type {
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import { NodeName } from '@/features/roadmap/ui/NodeName';
 import {
-  scheduledUnlockPrerequisiteHint,
   UnlockScheduleField,
   type UnlockScheduleDraft,
 } from '@/features/roadmap/ui/UnlockScheduleField';

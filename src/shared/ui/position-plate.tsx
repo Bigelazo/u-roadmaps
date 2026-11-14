@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { cn } from 'cn';
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
 
-export const positionLabels: Record<InstitutionalCoursePosition, string> = {
+const positionLabels: Record<InstitutionalCoursePosition, string> = {
   COURSE_PROFESSOR: 'Profesor de cátedra',
   COORDINATING_PROFESSOR: 'Profesor coordinador',
   AUXILIARY_PROFESSOR: 'Auxiliar',

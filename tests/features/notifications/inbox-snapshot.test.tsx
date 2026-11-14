@@ -8,7 +8,7 @@ import {
   RoadmapEntryNotifications,
   useNotificationAcknowledgement,
 } from '@/features/notifications/components/NotificationsInbox';
-import { viewOwnInbox } from '@/features/notifications/components/inbox-store';
+import { viewOwnInbox } from '@/features/notifications/components/inbox-view';
 import type { OwnInboxSnapshot } from '@/features/notifications/contracts/own-inbox-snapshot';
 import { NodeName } from '@/features/roadmap/ui/NodeName';
 
@@ -70,11 +70,15 @@ function app(
   );
 }
 
-async function renderApp(inbox: Promise<OwnInboxSnapshot | null> | null, userId?: string) {
+async function renderApp(
+  inbox: Promise<OwnInboxSnapshot | null> | null,
+  userId?: string,
+  extra?: ReactNode,
+) {
   let view!: ReturnType<typeof render>;
   // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
-    view = render(app(inbox, userId));
+    view = render(app(inbox, userId, extra));
   });
   return view;
 }
@@ -191,4 +195,34 @@ test('acknowledged Roadmaps leave the total consistent with the remaining offeri
   expect(view.unreadFor(programming)).toBe(2);
   expect(view.noticesFor().map(({ id }) => id)).toEqual(['programming-notice']);
   expect(view.noticesFor(calculus)).toEqual([]);
+});
+
+test('resolving the inbox keeps the page interactive and preserves local input', async () => {
+  let resolveSnapshot!: (value: OwnInboxSnapshot) => void;
+  const pending = new Promise<OwnInboxSnapshot>((resolve) => {
+    resolveSnapshot = resolve;
+  });
+  await renderApp(pending, 'student', <input aria-label="Page draft" defaultValue="" />);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Page draft' }), {
+    target: { value: 'Unsaved work' },
+  });
+  await act(async () => resolveSnapshot(snapshot));
+  expect(screen.getByRole('button', { name: 'Avisos, 5 sin leer' })).toBeTruthy();
+  expect((screen.getByRole('textbox', { name: 'Page draft' }) as HTMLInputElement).value).toBe(
+    'Unsaved work',
+  );
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('a pending snapshot from the previous User cannot populate the current inbox', async () => {
+  let resolveSnapshot!: (value: OwnInboxSnapshot) => void;
+  const pending = new Promise<OwnInboxSnapshot>((resolve) => {
+    resolveSnapshot = resolve;
+  });
+  const { rerender } = await renderApp(pending);
+  rerender(app(Promise.resolve({ total: 0, offerings: [], notices: [] }), 'teacher'));
+  await settle();
+  await act(async () => resolveSnapshot(snapshot));
+  expect(screen.getByRole('button', { name: 'Avisos' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /sin leer para/ })).toBeNull();
 });

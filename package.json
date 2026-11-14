@@ -28,7 +28,8 @@
     "test:integration:locked": "sh scripts/with-test-db.sh notifications pnpm run test:integration",
     "loc:chart": "node scripts/loc-chart/generate.mjs",
     "worktree:setup": "sh scripts/worktree-setup.sh",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

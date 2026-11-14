@@ -1,15 +1,11 @@
 'use client';
 
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
-
-import { useRef, useState } from 'react';
-import { Menu } from '@base-ui/react/menu';
-import { AnimatePresence, motion } from 'motion/react';
-import { CircleAlert, CirclePlus, Plus, Shapes } from 'lucide-react';
+import { useState } from 'react';
+import { CircleAlert, CirclePlus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
-import { cn } from 'cn';
 import { Spinner } from '@/shared/ui/spinner';
+import { SpeedDial } from '@/shared/ui/speed-dial';
 import {
   Dialog,
   DialogClose,
@@ -27,9 +23,9 @@ import { StudentAccessField } from './StudentAccessField';
 import {
   composerHasContent,
   STAGED_RESOURCE_COMPOSER_ID,
-  StagedResources,
   type StagedResourceComposer,
-} from './StagedResources';
+} from './staged-resource-composer';
+import { StagedResources } from './StagedResources';
 import {
   CREATE_NODE_MENU_ITEM_LABEL,
   NODE_TYPES_MENU_ITEM_LABEL,
@@ -38,8 +34,6 @@ import {
   type NodeTypeInput,
   type StagedResource,
 } from './types';
-
-const MotionButton = motion.create(Button);
 
 const NODE_CONTENT_PLACEHOLDER = 'Explica el contenido, la actividad o la evaluación de este nodo';
 const MISSING_TITLE_ERROR = 'Escribe un título para el nodo.';
@@ -76,7 +70,6 @@ export function NodeCreator({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNodeDialogOpen, setIsNodeDialogOpen] = useState(false);
   const [isNodeTypesDialogOpen, setIsNodeTypesDialogOpen] = useState(false);
-  const menuLayerRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState<NodeInput>(() => ({
     title: '',
     description: '',
@@ -131,121 +124,35 @@ export function NodeCreator({
     : (nodeTypes[0]?.id ?? '');
 
   return (
-    <div ref={menuLayerRef} className={styles.menuLayer}>
-      <Menu.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-        <Tooltip>
-          <TooltipTrigger
-            delay={150}
-            render={
-              <Menu.Trigger
-                data-toast-anchor=""
-                aria-label="Crear en el mapa"
-                render={
-                  <MotionButton
-                    type="button"
-                    size="icon-lg"
-                    className={cn(styles.trigger, isMenuOpen && styles.triggerOpen)}
-                    whileHover={{ scale: 1.06, y: -2 }}
-                    whileTap={{ scale: 0.92, y: 0 }}
-                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                  />
-                }
-              >
-                <motion.span
-                  aria-hidden="true"
-                  className={styles.menuIcon}
-                  initial={false}
-                  animate={{ rotate: isMenuOpen ? 135 : 0 }}
-                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <Plus />
-                </motion.span>
-              </Menu.Trigger>
-            }
-          />
-          <TooltipContent>Crear en el mapa</TooltipContent>
-        </Tooltip>
-        <AnimatePresence>
-          {isMenuOpen && (
-            <Menu.Portal container={menuLayerRef} keepMounted>
-              <Menu.Positioner
-                data-toast-obstacle=""
-                align="end"
-                side="top"
-                sideOffset={14}
-                className={styles.positioner}
-              >
-                <Menu.Popup
-                  className={styles.menu}
-                  render={
-                    <motion.div
-                      initial={{ opacity: 1 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, transition: { duration: 0.14 } }}
-                    />
-                  }
-                >
-                  <Menu.Group className={styles.actions}>
-                    <Menu.Item
-                      className={styles.menuItem}
-                      aria-label={NODE_TYPES_MENU_ITEM_LABEL}
-                      render={
-                        <motion.div
-                          initial={{ opacity: 0, y: 124, scale: 0.72 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{
-                            opacity: 0,
-                            y: 124,
-                            scale: 0.72,
-                            transition: { duration: 0.14, delay: 0 },
-                          }}
-                          transition={{ duration: 0.24, delay: 0.035, ease: [0.16, 1, 0.3, 1] }}
-                        />
-                      }
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setIsNodeTypesDialogOpen(true);
-                      }}
-                    >
-                      <span className={styles.actionLabel}>Tipos de nodo</span>
-                      <span className={styles.actionIcon} aria-hidden="true">
-                        <Shapes />
-                      </span>
-                    </Menu.Item>
-                    <Menu.Item
-                      className={cn(styles.menuItem, styles.primaryAction)}
-                      render={
-                        <motion.div
-                          initial={{ opacity: 0, y: 64, scale: 0.72 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{
-                            opacity: 0,
-                            y: 64,
-                            scale: 0.72,
-                            transition: { duration: 0.12, delay: 0 },
-                          }}
-                          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-                        />
-                      }
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setIsTitleMissing(false);
-                        setCreationFailure(null);
-                        setIsNodeDialogOpen(true);
-                      }}
-                    >
-                      <span className={styles.actionLabel}>{CREATE_NODE_MENU_ITEM_LABEL}</span>
-                      <span className={styles.actionIcon} aria-hidden="true">
-                        <CirclePlus />
-                      </span>
-                    </Menu.Item>
-                  </Menu.Group>
-                </Menu.Popup>
-              </Menu.Positioner>
-            </Menu.Portal>
-          )}
-        </AnimatePresence>
-      </Menu.Root>
+    <div className={styles.creator}>
+      <SpeedDial
+        label="Crear en el mapa"
+        open={isMenuOpen}
+        onOpenChange={setIsMenuOpen}
+        actionsFromTopToTrigger={[
+          {
+            id: 'node-types',
+            label: 'Tipos de nodo',
+            accessibleLabel: NODE_TYPES_MENU_ITEM_LABEL,
+            icon: <Shapes />,
+            onSelect: () => {
+              setIsMenuOpen(false);
+              setIsNodeTypesDialogOpen(true);
+            },
+          },
+          {
+            id: 'create-node',
+            label: CREATE_NODE_MENU_ITEM_LABEL,
+            icon: <CirclePlus />,
+            onSelect: () => {
+              setIsMenuOpen(false);
+              setIsTitleMissing(false);
+              setCreationFailure(null);
+              setIsNodeDialogOpen(true);
+            },
+          },
+        ]}
+      />
       <Dialog
         open={isNodeDialogOpen}
         onOpenChange={(open) => {

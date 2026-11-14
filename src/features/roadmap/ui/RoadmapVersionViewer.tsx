@@ -1,16 +1,14 @@
 'use client';
 
+import { resourceActionLabel } from '@/features/roadmap/ui/resource-action-label';
+
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ChevronDown, Download, FileText, Lock, X } from 'lucide-react';
 import { cn } from 'cn';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-import {
-  ResourceActionIcon,
-  ResourceIcon,
-  resourceActionLabel,
-} from '@/features/roadmap/ui/ResourceIcon';
+import { ResourceActionIcon, ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { originLabel } from '@/features/roadmap/ui/version-labels';
 import { VersionTeachingStaff } from '@/features/roadmap/ui/VersionTeachingStaff';

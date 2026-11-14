@@ -167,7 +167,7 @@ test('groups editing controls without visual overlap on narrow viewports', async
   const controls = [
     page.getByRole('button', { name: /Ordenar/ }),
     page.getByRole('button', { name: 'Crear en el mapa' }),
-    page.getByRole('link', { name: 'Historial de versiones' }),
+    page.getByRole('button', { name: 'Vista estudiante' }),
   ];
   for (const control of controls) await expect(control).toBeVisible();
 

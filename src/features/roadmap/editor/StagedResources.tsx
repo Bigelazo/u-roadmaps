@@ -1,3 +1,8 @@
+import {
+  emptyComposer,
+  STAGED_RESOURCE_COMPOSER_ID,
+  type StagedResourceComposer,
+} from './staged-resource-composer';
 import { Plus, X } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
@@ -7,22 +12,7 @@ import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 import { ResourceMetadata } from '@/features/roadmap/ui/ResourceMetadata';
 import { dividedItemClassName } from './primitives';
 import { ResourceComposerForm } from './ResourceComposer';
-import { stagedResourceTitle, type ResourceInput, type StagedResource } from './types';
-
-type Mode = 'file' | 'link';
-type Composer = { mode: Mode; value: ResourceInput; file: File | null };
-
-export const STAGED_RESOURCE_COMPOSER_ID = 'new-node-resource';
-
-const emptyComposer = (mode: Mode): Composer => ({
-  mode,
-  value: { title: '', url: '', type: 'LINK' },
-  file: null,
-});
-
-export function composerHasContent(composer: Composer | null) {
-  return Boolean(composer && (composer.file || composer.value.title || composer.value.url));
-}
+import { stagedResourceTitle, type StagedResource } from './types';
 
 function stagedResourceView(resource: StagedResource) {
   return resource.type === 'FILE'
@@ -52,9 +42,9 @@ export function StagedResources({
   onRemove,
 }: {
   resources: readonly StagedResource[];
-  composer: Composer | null;
+  composer: StagedResourceComposer | null;
   disabled: boolean;
-  onComposerChange: (composer: Composer | null) => void;
+  onComposerChange: (composer: StagedResourceComposer | null) => void;
   onAdd: (resource: StagedResource) => void;
   onRemove: (resourceId: string) => void;
 }) {
@@ -155,5 +145,3 @@ export function StagedResources({
     </section>
   );
 }
-
-export type { Composer as StagedResourceComposer };

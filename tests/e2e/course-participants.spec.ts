@@ -108,7 +108,10 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
 
   await page.getByRole('link', { name: 'Volver al roadmap' }).click();
   await expect(page).toHaveURL(course.pagePath());
-  await page.getByRole('link', { name: 'Integrantes', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Secciones del curso' })
+    .getByRole('link', { name: 'Integrantes', exact: true })
+    .click();
   await expect(page).toHaveURL(participantsPath(course));
 });
 

@@ -65,8 +65,24 @@ test('the tour keeps its exit, dialogs and feedback usable around the steps', as
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await expect(dialog).toHaveClass(/driver-active-element/);
-  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCSS('backdrop-filter', 'none');
+  await expect(page.locator('[data-slot="dialog-overlay"]')).not.toHaveCSS(
+    'backdrop-filter',
+    'none',
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() => Boolean(document.elementFromPoint(8, 400)?.closest('.driver-overlay'))),
+    )
+    .toBe(true);
   await expect.poll(() => receivesPointerAtCenter(dialog)).toBe(true);
+  await dialog.getByRole('button', { name: 'Editar contenido en pantalla completa' }).click();
+  const fullscreen = page.getByRole('dialog', { name: 'Nuevo nodo' });
+  await fullscreen.getByRole('textbox').fill('Contenido en pantalla completa');
+  await fullscreen.getByRole('button', { name: 'Cerrar pantalla completa' }).click();
+  await expect(fullscreen).toHaveCount(0);
+  await expect(dialog.getByRole('textbox', { name: /Contenido/ })).toHaveValue(
+    'Contenido en pantalla completa',
+  );
   for (const button of ['Cancelar', 'Crear nodo'])
     await expect
       .poll(() => separated(tourPopover(page), dialog.getByRole('button', { name: button })))
@@ -110,4 +126,36 @@ test('a student detail stays highlighted when the layout switches to mobile', as
   await expect(detail).toHaveClass(/driver-active-element/);
   await expect(tourPopover(page).getByRole('button', { name: 'Siguiente' })).toBeEnabled();
   await expect.poll(() => receivesPointerAtCenter(page.locator('[data-tutorial-exit]'))).toBe(true);
+});
+
+test('an undirected step stays at the bottom center while the map is dragged', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/practice-roadmap/teaching');
+  const popover = tourPopover(page);
+  await expect(popover.locator('.driver-popover-title')).toHaveText('Muévete por el mapa');
+  const canvas = page.locator('.react-flow');
+  const placement = async () => {
+    const [popoverBox, canvasBox] = await Promise.all([
+      popover.boundingBox().then((box) => box!),
+      canvas.boundingBox().then((box) => box!),
+    ]);
+    return {
+      centerOffset: Math.round(
+        popoverBox.x + popoverBox.width / 2 - (canvasBox.x + canvasBox.width / 2),
+      ),
+      bottomGap: Math.round(800 - (popoverBox.y + popoverBox.height)),
+    };
+  };
+  await expect.poll(placement).toEqual({ centerOffset: 0, bottomGap: 16 });
+
+  for (const [x, y] of [
+    [900, 600],
+    [300, 200],
+  ]) {
+    await page.mouse.move(640, 400);
+    await page.mouse.down();
+    await page.mouse.move(x, y, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(placement).toEqual({ centerOffset: 0, bottomGap: 16 });
+  }
 });

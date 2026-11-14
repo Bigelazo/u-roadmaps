@@ -10,7 +10,6 @@ export type TutorialStep<Action = never> = Readonly<{
   title: string;
   description: string | (() => ReactNode);
   side?: 'top' | 'right' | 'bottom' | 'left';
-  popoverOffset?: number;
   allowInteraction?: boolean;
   focusZoom?: number;
   onEnter?: () => (() => void) | void;

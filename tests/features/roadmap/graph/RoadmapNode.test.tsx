@@ -543,6 +543,30 @@ test('omits the title tooltip while the whole title fits and adds it once a resi
   expect(heading.hasAttribute('title')).toBe(false);
 });
 
+test('omits the title tooltip when the title fits but its layout rounds one pixel taller', () => {
+  const title = 'Nombre';
+  stubTitleLayout({ scrollHeight: 20, clientHeight: 19 });
+  renderNode(studentNodeProps({ id: 'rounded-title', data: { title } }));
+
+  expect(screen.getByText(title).hasAttribute('title')).toBe(false);
+});
+
+test('rechecks whether the title is cut when the pointer reaches it', () => {
+  const title = 'Nombre';
+  const layout = { scrollHeight: 38, clientHeight: 19 };
+  stubTitleLayout(layout);
+  renderNode(studentNodeProps({ id: 'stale-title', data: { title } }));
+  const heading = screen.getByText(title);
+  expect(heading.getAttribute('title')).toBe(title);
+
+  layout.scrollHeight = 19;
+  act(() => {
+    heading.dispatchEvent(new Event('pointerenter'));
+  });
+
+  expect(heading.hasAttribute('title')).toBe(false);
+});
+
 function mountChangedNode(data: Partial<RoadmapFlowNode['data']>) {
   const fetch = vi.fn(async () => Response.json({ byNode: { 'changed-node': 3 } }));
   vi.stubGlobal('fetch', fetch);

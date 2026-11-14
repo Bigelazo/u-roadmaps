@@ -3,7 +3,7 @@ import { cn } from 'cn';
 import type { Resource } from '@/features/roadmap/types';
 import { formatFileSize } from '@/shared/file-size-format';
 
-export function accessCountLabel(count: number) {
+function accessCountLabel(count: number) {
   return count === 1 ? '1 acceso' : `${count} accesos`;
 }
 

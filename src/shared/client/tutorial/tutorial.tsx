@@ -42,6 +42,7 @@ import {
 const actingClass = 'u-roadmaps-tour-acting';
 const exclusiveClass = 'u-roadmaps-tour-exclusive';
 const interactiveClass = 'u-roadmaps-tour-interactive';
+const settlingClass = 'u-roadmaps-tour-settling';
 const dummyElementId = 'driver-dummy-element';
 const navigationKeys = new Set(['Escape', 'ArrowLeft', 'ArrowRight', 'Tab']);
 
@@ -130,7 +131,6 @@ export function RoadmapTutorial<Action = never>({
         getExitControl(),
         step.side,
         highlighted,
-        step.popoverOffset,
       );
       announcePopoverArea(popover.wrapper);
     };
@@ -188,6 +188,12 @@ export function RoadmapTutorial<Action = never>({
         return;
       }
       moving = true;
+      document.body.classList.add(settlingClass);
+      const completedPopover = byAction ? tour.getState().popover?.wrapper : undefined;
+      if (completedPopover) {
+        completedPopover.style.display = 'none';
+        announcePopoverArea(completedPopover);
+      }
       leaveStep?.();
       leaveStep = undefined;
       following = false;
@@ -202,8 +208,15 @@ export function RoadmapTutorial<Action = never>({
         panelsAtEntry = new Set(openPanels());
       } finally {
         moving = false;
+        if (cancelled || !tour.isActive()) document.body.classList.remove(settlingClass);
       }
     };
+    const settle = () =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (!moving) document.body.classList.remove(settlingClass);
+        }),
+      );
     const tour = driver({
       ...baseConfig,
       showProgress: true,
@@ -238,6 +251,7 @@ export function RoadmapTutorial<Action = never>({
       onHighlighted: () => {
         highlighting = false;
         positionPopover();
+        settle();
       },
       onPopoverRender: (popover) => {
         popover.wrapper.setAttribute('data-toast-avoid', '');
@@ -265,6 +279,7 @@ export function RoadmapTutorial<Action = never>({
         leaveStep?.();
         leaveStep = undefined;
         syncInteraction(undefined);
+        document.body.classList.remove(settlingClass);
         releaseTutorialExit(getExitControl());
         announcePopoverArea(null);
       },
@@ -399,7 +414,7 @@ export function RoadmapTutorial<Action = never>({
       window.removeEventListener('keypress', onKeyRelease, true);
       tour.destroy();
       for (const element of interactiveElements) element.classList.remove(interactiveClass);
-      document.body.classList.remove(actingClass, exclusiveClass);
+      document.body.classList.remove(actingClass, exclusiveClass, settlingClass);
       groupHighlight.remove();
       releaseTutorialExit(getExitControl());
       announcePopoverArea(null);

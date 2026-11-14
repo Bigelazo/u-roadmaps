@@ -1,3 +1,4 @@
+import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/scheduled-unlock-hint';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import { useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
 import { cn } from 'cn';
@@ -20,10 +21,7 @@ import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
-import {
-  scheduledUnlockPrerequisiteHint,
-  UnlockDateTimePicker,
-} from '@/features/roadmap/ui/UnlockScheduleField';
+import { UnlockDateTimePicker } from '@/features/roadmap/ui/UnlockScheduleField';
 
 function NodeHeader() {
   const { node, nodeTypes, closeNode } = useNodeEditorContext();
@@ -179,7 +177,7 @@ function NodeForm() {
 
 function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
   const { blockedPrerequisites, scheduleTeacherUnlock } = useNodeEditorContext();
-  const [draft, setDraft] = useState(scheduledAt ? new Date(scheduledAt) : null);
+  const [draft, setDraft] = useState(() => (scheduledAt ? new Date(scheduledAt) : null));
   const canSchedule = draft !== null && draft.toISOString() !== scheduledAt;
 
   return (

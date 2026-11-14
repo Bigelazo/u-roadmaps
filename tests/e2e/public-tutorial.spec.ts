@@ -15,7 +15,9 @@ for (const { option, experience } of [
     await page.goto('/');
     await page.getByRole('button', { name: 'Probar tutorial' }).click();
     const choice = page.getByRole('dialog', { name: '¿Cómo deseas realizar el tutorial?' });
-    await expect(choice).toContainText('Nada de lo que hagas se guarda.');
+    await expect(choice).toContainText(
+      'Aprende los conceptos básicos de la plataforma en un Roadmap de prueba.',
+    );
     await choice.getByRole('button', { name: option, exact: true }).click();
 
     await expect(page).toHaveURL(`/practice-roadmap/${experience}?origin=%2F`);

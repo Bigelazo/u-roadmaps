@@ -36,6 +36,7 @@ function IconPicker({
   reservedIcons = [],
 }: Pick<Props, 'value' | 'onChange' | 'reservedIcons'>) {
   const selectedIcon = value.icon ? nodeTypeIcons.find(({ id }) => id === value.icon) : undefined;
+  const reservedIconIds = new Set(reservedIcons);
 
   return (
     <PopoverSwatchPicker
@@ -56,7 +57,7 @@ function IconPicker({
       sections={teachingIconCatalog.map((category) => ({
         label: category.label,
         swatches: category.icons
-          .filter(([icon]) => !reservedIcons.includes(icon))
+          .filter(([icon]) => !reservedIconIds.has(icon))
           .map(([icon, label]) => ({
             value: icon,
             label,

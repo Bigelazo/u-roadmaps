@@ -1,10 +1,10 @@
+import { ConnectionTargetContext } from '@/features/roadmap/graph/connection-preview-context';
 import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import { ConnectionLineType, Position, type ConnectionLineComponentProps } from '@xyflow/react';
 import {
   ConnectionPreview,
-  ConnectionTargetContext,
   TouchConnectionPreview,
 } from '@/features/roadmap/graph/ConnectionPreview';
 

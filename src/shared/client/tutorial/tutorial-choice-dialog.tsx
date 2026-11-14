@@ -32,7 +32,7 @@ export function TutorialChoiceDialog({
         <DialogHeader>
           <DialogTitle>¿Cómo deseas realizar el tutorial?</DialogTitle>
           <DialogDescription>
-            Practica en un Roadmap de prueba. Nada de lo que hagas se guarda.
+            Aprende los conceptos básicos de la plataforma en un Roadmap de prueba.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -41,9 +41,7 @@ export function TutorialChoiceDialog({
               Ahora no
             </Button>
           ) : null}
-          <Button variant="outline" onClick={() => start('teaching')}>
-            Docente
-          </Button>
+          <Button onClick={() => start('teaching')}>Docente</Button>
           <Button onClick={() => start('student')}>Estudiante</Button>
         </DialogFooter>
       </DialogContent>

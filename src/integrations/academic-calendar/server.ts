@@ -30,13 +30,15 @@ const termName: Record<Semester, string> = {
   2: 'primavera',
 };
 
+const santiagoDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Santiago',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 function santiagoDate(now: Date) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
+  const parts = santiagoDateFormatter.formatToParts(now);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((candidate) => candidate.type === type)?.value ?? '';
   return {

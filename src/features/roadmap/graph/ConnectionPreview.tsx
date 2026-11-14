@@ -1,4 +1,8 @@
-import { createContext, useContext } from 'react';
+import {
+  ConnectionTargetContext,
+  ConnectionRejectedTargetContext,
+} from './connection-preview-context';
+import { useContext } from 'react';
 import {
   getSmoothStepPath,
   useReactFlow,
@@ -16,7 +20,6 @@ import {
 import { useConnectionPreviewRoute } from '@/features/roadmap/graph/routing/DependencyRouting';
 import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
 
-export const ConnectionTargetContext = createContext<(NodeRect & { id: string }) | null>(null);
 const previewStyle = { stroke: 'var(--primary)', strokeWidth: 1.5, pointerEvents: 'none' } as const;
 const rejectedPreviewStyle = {
   stroke: 'var(--muted-foreground)',
@@ -24,8 +27,6 @@ const rejectedPreviewStyle = {
   strokeDasharray: '4 4',
   pointerEvents: 'none',
 } as const;
-
-export const ConnectionRejectedTargetContext = createContext<NodeRect | null>(null);
 
 function sourceTowardsPointer(source: NodeRect, point: Point) {
   const sourcePosition = nearestSide(nodeCenter(source), point);

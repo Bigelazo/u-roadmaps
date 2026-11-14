@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  ConnectionTargetContext,
+  ConnectionRejectedTargetContext,
+} from '@/features/roadmap/graph/connection-preview-context';
+
 import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import {
@@ -74,8 +79,6 @@ import { NodeConnectorContext } from '@/features/roadmap/graph/node-connector';
 import { notify } from '@/shared/ui/notify';
 import {
   ConnectionPreview,
-  ConnectionRejectedTargetContext,
-  ConnectionTargetContext,
   TouchConnectionPreview,
 } from '@/features/roadmap/graph/ConnectionPreview';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
