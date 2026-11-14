@@ -97,10 +97,9 @@ export type ConfirmationContext = {
   readonly isPending?: boolean;
 };
 
-export type CommandOutcome<Command> = ExecutionResult & {
+export type CommandOutcome = ExecutionResult & {
   readonly choice?: CanvasConfirmationChoice;
   readonly input?: ConfirmationInput;
-  readonly remaining?: Command;
 };
 
 type ConfirmedAction<Command extends { kind: string }, Impact> = {
@@ -113,7 +112,7 @@ type ConfirmedAction<Command extends { kind: string }, Impact> = {
     impact: Impact,
     choice: CanvasConfirmationChoice | undefined,
     input?: ConfirmationInput,
-  ): Promise<boolean | { retry: Command }>;
+  ): Promise<boolean>;
   confirmation(
     command: Command,
     impact: Impact | null,
@@ -133,8 +132,8 @@ export type CommandEntry<Command extends { kind: string }, Impact> = {
     previewVersion?: string,
   ): ExecutionResult | void;
   readonly changesCanvasPreview?: true;
-  success?(command: Command, outcome: CommandOutcome<Command>, impact?: Impact | null): string;
-  report?(command: Command, outcome: CommandOutcome<Command>): PracticeCanvasAction | null;
+  success?(command: Command, outcome: CommandOutcome, impact?: Impact | null): string;
+  report?(command: Command, outcome: CommandOutcome): PracticeCanvasAction | null;
   readonly confirmedAction?: ConfirmedAction<Command, Impact>;
 } & (Command['kind'] extends keyof PlannedChangeImpactOf
   ? { readonly changeImpact: { path(command: Command): string; readonly failure: string } }
@@ -565,38 +564,25 @@ export const canvasCommandCatalog = {
     kind: 'delete-dependencies';
     dependencyIds: readonly string[];
   }>({
-    requests: ({ dependencyIds }) =>
-      dependencyIds.map((dependencyId) => ({
-        method: 'DELETE',
-        path: `/dependencies/${dependencyId}`,
-      })),
+    requests: ({ dependencyIds }) => ({
+      method: 'DELETE',
+      path: '/dependencies',
+      body: { dependencyIds },
+    }),
     failure: 'No se pudo eliminar la dependencia.',
-    practice: (practice, { dependencyIds }) =>
-      practice.settleEach(dependencyIds, (dependencyId) => {
-        if (!practice.roadmap.dependencies.some(({ id }) => id === dependencyId))
-          throw new Error('La dependencia no existe en este roadmap.');
-        practice.roadmap = {
-          ...practice.roadmap,
-          dependencies: practice.roadmap.dependencies.filter(({ id }) => id !== dependencyId),
-        };
-      }),
+    practice: (practice, { dependencyIds }) => {
+      const removed = new Set(dependencyIds);
+      practice.roadmap = {
+        ...practice.roadmap,
+        dependencies: practice.roadmap.dependencies.filter(({ id }) => !removed.has(id)),
+      };
+    },
     confirmedAction: {
-      apply: async (session, command) => {
-        const deleted = await Promise.all(
-          command.dependencyIds.map(
-            async (dependencyId) =>
-              (await session.execute({ ...command, dependencyIds: [dependencyId] })).applied,
-          ),
-        );
-        const failed = command.dependencyIds.filter((_, index) => !deleted[index]);
-        if (failed.length === 0) return true;
-        if (failed.length === command.dependencyIds.length) return false;
-        return { retry: { ...command, dependencyIds: failed } };
-      },
+      apply: executeAsRequested,
       confirmation: ({ dependencyIds }) => roadmapDependencyDeletionConfirmation(dependencyIds),
     },
-    success: ({ dependencyIds }, { remaining }) =>
-      dependencyIds.length - (remaining?.dependencyIds.length ?? 0) === 1
+    success: ({ dependencyIds }) =>
+      dependencyIds.length === 1
         ? 'Dependencia eliminada exitosamente.'
         : 'Dependencias eliminadas exitosamente.',
   }),

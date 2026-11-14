@@ -9,6 +9,7 @@ import {
   updateRoadmapNode,
   createRoadmapDependency,
   deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   changeTeacherBlock,
   previewRoadmapDependency,
   previewTeacherBlock,
@@ -259,6 +260,46 @@ test('dependencies report the pair and distinct access for each recipient; Compl
     { kind: 'dependency', previous: true, current: false },
     { kind: 'node-access', recipientId: course.classmateId, previous: 'Bloqueado' },
   ]);
+});
+
+test('Dependencies deleted together report one change and ignore those that no longer exist', async ({
+  course,
+  otherCourse,
+}) => {
+  const recording = recordingChangePort();
+  const edits = teacherEdits(course, recording.port);
+  const middle = await addNode(course, 'Listas');
+  const last = await addNode(course, 'Árboles');
+  const first = await edits.connect(course.change.nodeId, middle.id);
+  const second = await edits.connect(middle.id, last.id);
+  const foreignTarget = await addNode(otherCourse, 'Colas');
+  const foreign = await teacherEdits(otherCourse).connect(
+    otherCourse.change.nodeId,
+    foreignTarget.id,
+  );
+  await edits.disconnect(second);
+  const third = await edits.connect(middle.id, last.id);
+  recording.changes.length = 0;
+
+  await deleteRoadmapDependencies(
+    { ...teacher(course), input: { dependencyIds: [first, second, third, foreign] } },
+    recording.port,
+  );
+
+  expect(recording.changes).toHaveLength(1);
+  expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([
+    expect.objectContaining({ dependencyId: first, previous: true, current: false }),
+    expect.objectContaining({ dependencyId: third, previous: true, current: false }),
+  ]);
+  expect(
+    recording
+      .facts()
+      .filter((fact) => fact.kind === 'node-access' && fact.recipientId === course.classmateId)
+      .map((fact) => fact.kind === 'node-access' && fact.nodeId)
+      .sort(),
+  ).toEqual([middle.id, last.id].sort());
+  expect(await prisma.dependency.count({ where: { id: { in: [first, third] } } })).toBe(0);
+  expect(await prisma.dependency.count({ where: { id: foreign } })).toBe(1);
 });
 
 test('a Roadmap-wide change reports the Node access read after it; a Completion reports none', async ({
