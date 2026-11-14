@@ -102,7 +102,10 @@ export type PracticeRoadmap = {
   mutateNode(nodeId: string, update: (node: AnyRoadmapNode) => NodeDraft): void;
   mutateResource(resourceId: string, update: (resource: Resource) => Resource | null): void;
   appendResource(nodeId: string, resource: Resource): void;
-  confirm(change: ChangeWithImpact, previewVersion?: string): void;
+  confirm(
+    change: ChangeWithImpact,
+    previewVersion?: string,
+  ): { readonly blockedNodeIds: readonly string[] };
   requireAvailableNodeType(nodeTypeId: string): void;
   decideNodeType(change: NodeTypeChange): void;
   settleEach<Item>(items: readonly Item[], apply: (item: Item) => void): void;
@@ -209,6 +212,7 @@ export function createInMemoryRoadmapSessionPersistence(
         ...practice.roadmap,
         dependencies: practice.roadmap.dependencies.filter(({ id }) => !removed.has(id)),
       };
+      return { blockedNodeIds: plan.consequences.blockedNodeIds };
     },
 
     requireAvailableNodeType(nodeTypeId) {

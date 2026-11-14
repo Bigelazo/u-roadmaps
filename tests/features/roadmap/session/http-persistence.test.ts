@@ -144,9 +144,17 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'create a Dependency with its preview version': {
+  'create a Dependency with its preview version and return it with the Nodes it blocks': {
     command: { kind: 'create-dependency', ...dependency },
     previewVersion: 'dependency-version',
+    response: {
+      dependency: { id: 'dependency-9', ...dependency },
+      nodes: [{ id: 'node-2', title: 'Derivadas' }],
+    },
+    resolves: {
+      dependency: { id: 'dependency-9', ...dependency },
+      teacherBlockedNodeIds: ['node-2'],
+    },
     requests: [
       [
         '/dependencies',

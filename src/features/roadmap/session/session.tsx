@@ -11,7 +11,10 @@ import {
   type ReactNode,
 } from 'react';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
-import { canvasCommandCatalog } from '@/features/roadmap/canvas/commands/commands';
+import {
+  canvasCommandCatalog,
+  type AnyCommandEntry,
+} from '@/features/roadmap/canvas/commands/commands';
 import {
   useCanvasCommands,
   type CanvasCommands,
@@ -42,6 +45,29 @@ function messageFor(cause: unknown, fallback: string) {
 }
 
 const refreshFailure = 'No se pudo actualizar el roadmap.';
+const OWN_ECHO_WINDOW_MS = 2000;
+
+type OwnEcho = { executing: number; heard: number; missed: boolean; expectedUntil: number };
+
+function settleOwnCommand(echo: OwnEcho, counted: boolean) {
+  if (!counted) return false;
+  echo.executing -= 1;
+  if (echo.executing > 0) return false;
+  const { missed } = echo;
+  echo.missed = false;
+  return missed;
+}
+
+function absorbsOwnEcho(echo: OwnEcho) {
+  echo.heard += 1;
+  if (echo.executing > 0) {
+    echo.missed = true;
+    return true;
+  }
+  if (Date.now() > echo.expectedUntil) return false;
+  echo.expectedUntil = 0;
+  return true;
+}
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
 
@@ -120,6 +146,7 @@ function useInjectedSession(
   const activeKeyRef = useRef(key);
   const requestVersionRef = useRef(0);
   const canvasPreviewVersionRef = useRef(0);
+  const ownEchoRef = useRef<OwnEcho>({ executing: 0, heard: 0, missed: false, expectedUntil: 0 });
   const courseCode = input.courseOffering.identifier.courseCode;
   const year = input.courseOffering.identifier.year;
   const semester = input.courseOffering.identifier.semester;
@@ -208,7 +235,8 @@ function useInjectedSession(
         changedOffering.semester !== semester
       )
         return;
-      if (experienceKind === 'teaching' || changedOffering.accessLost) recover();
+      if (changedOffering.accessLost) recover();
+      else if (experienceKind === 'teaching' && !absorbsOwnEcho(ownEchoRef.current)) recover();
     });
     const stopRecovery = subscribeToRoadmapRecovery(() => {
       if (experienceKind === 'teaching') recover();
@@ -330,22 +358,42 @@ function useInjectedSession(
   const execute = useCallback<CanvasCommandSession['execute']>(
     async (command, previewVersion) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
+      const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
+      const { changesCanvasPreview } = entry;
+      const echo = ownEchoRef.current;
+      const heard = echo.heard;
+      if (!changesCanvasPreview) echo.executing += 1;
       let result: ExecutionResult | void;
       try {
         result = await persistence.execute(command, previewVersion);
       } catch (cause) {
+        const missed = settleOwnCommand(echo, !changesCanvasPreview);
         await reportFailure(cause, requestKey);
+        if (missed && activeKeyRef.current === requestKey) void refresh().catch(() => false);
         return { applied: false };
       }
-      const { changesCanvasPreview } = canvasCommandCatalog[command.kind];
-      try {
-        if (!changesCanvasPreview) await refresh();
-        if (activeKeyRef.current === requestKey) setError(null);
-      } catch (cause) {
-        if (activeKeyRef.current === requestKey) {
-          setError({ message: messageFor(cause, refreshFailure), key: requestKey });
-        }
+      if (!changesCanvasPreview) {
+        settleOwnCommand(echo, true);
+        if (echo.heard === heard) echo.expectedUntil = Date.now() + OWN_ECHO_WINDOW_MS;
       }
+      const refreshed = () =>
+        refresh().then(
+          () => {
+            if (activeKeyRef.current === requestKey) setError(null);
+          },
+          (cause: unknown) => {
+            if (activeKeyRef.current === requestKey) {
+              setError({ message: messageFor(cause, refreshFailure), key: requestKey });
+            }
+          },
+        );
+      const update = entry.shownBeforeRefresh?.(command, result ?? {});
+      if (changesCanvasPreview) {
+        if (activeKeyRef.current === requestKey) setError(null);
+      } else if (update && activeKeyRef.current === requestKey) {
+        setRoadmap((current) => (current ? update(current) : current));
+        void refreshed();
+      } else await refreshed();
       const applied = activeKeyRef.current === requestKey;
       if (applied && changesCanvasPreview) await loadCanvasPreview();
       return { applied, ...result };
