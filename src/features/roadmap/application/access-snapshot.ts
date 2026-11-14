@@ -1,6 +1,9 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
-import { participantNodeAccess, toParticipant } from '@/features/roadmap/domain/participant-view';
+import {
+  participantAccessibleNodeIds,
+  toParticipant,
+} from '@/features/roadmap/domain/participant-view';
 
 export type AccessSnapshot = Readonly<{
   nodes: readonly {
@@ -20,7 +23,7 @@ type AccessSnapshotParticipant = Readonly<{
   isActive: boolean;
 }>;
 
-function projectAccessSnapshot({
+export function projectAccessSnapshot({
   nodes,
   dependencies,
   participants,
@@ -38,14 +41,12 @@ function projectAccessSnapshot({
     completionIdsByUser.set(completion.userId, ids);
   }
 
+  const accessibleNodeIds = participantAccessibleNodeIds({ nodes, dependencies });
   const accessibleByUser = new Map<string, ReadonlySet<string>>();
   const activeParticipants = participants.filter(({ isActive }) => isActive);
   for (const { userId, role } of activeParticipants) {
     const participant = toParticipant(role, completionIdsByUser.get(userId) ?? new Set());
-    accessibleByUser.set(
-      userId,
-      participantNodeAccess({ participant, nodes, dependencies }).accessibleNodeIds,
-    );
+    accessibleByUser.set(userId, accessibleNodeIds(participant));
   }
 
   return {
