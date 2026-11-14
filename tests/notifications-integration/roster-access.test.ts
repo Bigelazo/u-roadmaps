@@ -3,7 +3,7 @@ import { prisma, type Prisma } from '@/shared/server/db';
 import { recordRoadmapNotices } from '@/features/notifications/server';
 import type { RoadmapChangePort } from '@/features/roadmap/server';
 import { test, type IntegrationCourse } from './fixtures';
-import { enrollStudents, pendingNotices, teacherEdits } from './roadmap';
+import { addNode, enrollStudents, pendingNotices, teacherEdits } from './roadmap';
 
 function countedQueries(transaction: Prisma.TransactionClient, count: () => void) {
   const counted =
@@ -104,4 +104,20 @@ test('recording measures each retry separately and delivers only the committed a
   expect(retried.attempts).toEqual(Array(retried.attempts.length).fill(baseline.attempts[0]));
   expect(retried.delivered).toEqual([retried.attempts.length]);
   expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
+});
+
+test('a blocking Dependency records the Node access of the whole roster at once', async ({
+  course,
+  otherCourse,
+}) => {
+  await enrollStudents(otherCourse, 40);
+  const blocking = async (port: RoadmapChangePort, blocked: IntegrationCourse) => {
+    const prerequisite = await addNode(blocked, 'Diagnóstico');
+    const target = await addNode(blocked, 'Listas');
+    return teacherEdits(blocked, port).connect(prerequisite.id, target.id);
+  };
+  const small = await recordingQueries((port) => blocking(port, course));
+  const large = await recordingQueries((port) => blocking(port, otherCourse));
+  expect(small.attempts).toHaveLength(1);
+  expect(large.attempts).toEqual(small.attempts);
 });

@@ -120,6 +120,7 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   previousContext?(fact: F): TargetContext;
   knowers(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
   audience(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
+  factRecipients?(fact: F): readonly string[];
   currentAtEdit?(fact: F): Readonly<{ recipientIds: readonly string[]; value: string }>;
   current(
     target: NoticeTargetRef,
