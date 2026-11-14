@@ -948,7 +948,7 @@ describe('canvas commands', () => {
     });
   });
 
-  test('retries only the Dependency deletions that failed, counting only the deleted ones', async () => {
+  test('deletes the selected Dependencies together or keeps them all', async () => {
     const adapter = createInMemoryRoadmapSessionPersistence({
       ...roadmap,
       dependencies: [
@@ -957,47 +957,60 @@ describe('canvas commands', () => {
       ],
     });
     let failOnce = true;
+    const deletions: (readonly string[])[] = [];
     const persistence = intercepting(
       adapter,
       'delete-dependencies',
-      async ({ dependencyIds: [dependencyId] }, forward) => {
-        if (dependencyId === 'limits-integrals' && failOnce) {
+      async ({ dependencyIds }, forward) => {
+        deletions.push(dependencyIds);
+        if (failOnce) {
           failOnce = false;
-          throw new Error('No se pudo eliminar la dependencia.');
+          throw new Error('La dependencia entra en conflicto con otra modificación.');
         }
         return forward();
       },
     );
     const canvas = await openCanvas(persistence);
     const dependencyIds = async () => (await persistence.load()).dependencies.map(({ id }) => id);
+    const request = {
+      kind: 'delete-dependencies',
+      dependencyIds: ['limits-derivatives', 'limits-integrals'],
+    } as const;
+
+    await act(() => canvas.commands().request(request));
+    await canvas.confirm('delete-dependencies');
+
+    expect(canvas.commands().pending).toMatchObject({
+      kind: 'delete-dependencies',
+      request,
+      phase: 'awaiting',
+    });
+    expect(canvas.session().error).toBe('La dependencia entra en conflicto con otra modificación.');
+    expect(await dependencyIds()).toEqual(['limits-derivatives', 'limits-integrals']);
+    expect(successToasts()).toEqual([]);
+
+    await canvas.confirm('delete-dependencies');
+
+    expect(deletions).toEqual([request.dependencyIds, request.dependencyIds]);
+    expect(canvas.commands().pending).toBeNull();
+    expect(await dependencyIds()).toEqual([]);
+    expect(successToasts()).toEqual(['Dependencias eliminadas exitosamente.']);
+  });
+
+  test('ignores selected Dependencies that no longer exist', async () => {
+    const canvas = await openCanvas(createInMemoryRoadmapSessionPersistence(roadmap));
 
     await act(() =>
       canvas.commands().request({
         kind: 'delete-dependencies',
-        dependencyIds: ['limits-derivatives', 'limits-integrals'],
+        dependencyIds: ['limits-derivatives', 'already-deleted'],
       }),
     );
-    expect(await canvas.awaiting()).toMatchObject({ kind: 'delete-dependencies', impact: null });
-
-    await canvas.confirm('delete-dependencies');
-
-    expect(canvas.commands().pending).toEqual({
-      kind: 'delete-dependencies',
-      request: { kind: 'delete-dependencies', dependencyIds: ['limits-integrals'] },
-      impact: null,
-      phase: 'awaiting',
-    });
-    expect(await dependencyIds()).toEqual(['limits-integrals']);
-    expect(successToasts()).toEqual(['Dependencia eliminada exitosamente.']);
-
     await canvas.confirm('delete-dependencies');
 
     expect(canvas.commands().pending).toBeNull();
-    expect(await dependencyIds()).toEqual([]);
-    expect(successToasts()).toEqual([
-      'Dependencia eliminada exitosamente.',
-      'Dependencia eliminada exitosamente.',
-    ]);
+    expect((await canvas.persistence.load()).dependencies).toEqual([]);
+    expect(successToasts()).toEqual(['Dependencias eliminadas exitosamente.']);
   });
 
   describe('Confirmed action toasts', () => {

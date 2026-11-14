@@ -6,6 +6,7 @@ import { ApplicationError } from '@/shared/errors/types';
 const {
   createRoadmapDependency,
   deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   previewRoadmapDependency,
   after,
   afterTasks,
@@ -13,6 +14,7 @@ const {
 } = vi.hoisted(() => ({
   createRoadmapDependency: vi.fn(),
   deleteRoadmapDependency: vi.fn(),
+  deleteRoadmapDependencies: vi.fn(),
   previewRoadmapDependency: vi.fn(),
   after: vi.fn((task: () => void | Promise<void>) => {
     afterTasks.push(task);
@@ -37,10 +39,14 @@ vi.mock('@/app/_adapters/auth', () => ({
 vi.mock('@/features/roadmap/server', () => ({
   createRoadmapDependency,
   deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   previewRoadmapDependency,
 }));
 
-import { POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/route';
+import {
+  DELETE as DELETE_MANY,
+  POST,
+} from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/route';
 import { DELETE } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/[dependencyId]/route';
 
 const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
@@ -139,5 +145,26 @@ test('DELETE returns an empty 204 response', async () => {
     expect.any(Object),
   );
   expect(after).not.toHaveBeenCalled();
+  expect(sequence).toEqual(['mutation-committed']);
+});
+
+test('DELETE on the collection deletes the listed Dependencies with an empty 204 response', async () => {
+  deleteRoadmapDependencies.mockImplementation(committed({}));
+
+  const response = await DELETE_MANY(
+    new Request('http://localhost/dependencies', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dependencyIds: ['first-id', 'second-id'] }),
+    }),
+    context as never,
+  );
+
+  expect(response.status).toBe(204);
+  expect(await response.text()).toBe('');
+  expect(deleteRoadmapDependencies).toHaveBeenCalledWith(
+    { userId: 'teacher-id', identifier, input: { dependencyIds: ['first-id', 'second-id'] } },
+    expect.any(Object),
+  );
   expect(sequence).toEqual(['mutation-committed']);
 });

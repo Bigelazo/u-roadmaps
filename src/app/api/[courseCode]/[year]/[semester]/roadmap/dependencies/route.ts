@@ -1,7 +1,11 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
-import { createRoadmapDependency, previewRoadmapDependency } from '@/features/roadmap/server';
+import {
+  createRoadmapDependency,
+  deleteRoadmapDependencies,
+  previewRoadmapDependency,
+} from '@/features/roadmap/server';
 
 function dependencyPreviewQuery(request: Request) {
   const query = new URL(request.url).searchParams;
@@ -35,6 +39,17 @@ export const POST = courseRoute(
     };
     const result = await createRoadmapDependency(input, roadmapChangePort);
     return NextResponse.json(result, { status: 201 });
+  },
+  { body: true },
+);
+
+export const DELETE = courseRoute(
+  async ({ identifier, user, body }) => {
+    await deleteRoadmapDependencies(
+      { userId: user.id, identifier, input: body },
+      roadmapChangePort,
+    );
+    return new NextResponse(null, { status: 204 });
   },
   { body: true },
 );

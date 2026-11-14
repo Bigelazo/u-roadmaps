@@ -8,6 +8,7 @@ import { noticesPort } from '@/app/_adapters/notice-change-port';
 import {
   createRoadmapDependency,
   deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   previewRoadmapDependency,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
@@ -17,10 +18,12 @@ import { enrollStudents } from './roadmap';
 const LAYERS = 10;
 const NODES_PER_LAYER = 10;
 const ROUNDS = 5;
+const BATCH = 5;
 
 type Scenario = Readonly<{
   sourceNodeId: string;
   targetNodeId: string;
+  batchTargetNodeIds: readonly string[];
   studentIds: readonly string[];
 }>;
 
@@ -77,7 +80,12 @@ async function layeredRoadmap(course: IntegrationCourse, students: number): Prom
       return [...completed, ...partial].map((roadmapNodeId) => ({ userId, roadmapNodeId }));
     }),
   });
-  return { sourceNodeId, targetNodeId: layers[1][0], studentIds };
+  return {
+    sourceNodeId,
+    targetNodeId: layers[1][0],
+    batchTargetNodeIds: layers[1].slice(0, BATCH),
+    studentIds,
+  };
 }
 
 function countingQueries() {
@@ -169,6 +177,76 @@ describe.skipIf(!process.env.DEPENDENCY_EDIT_BENCHMARK)('dependency edit benchma
           deleteMs: Math.round(median(rounds.remove)),
           deleteQueries: median(rounds.removeQueries),
           accessFacts: median(accessFacts),
+          rounds,
+        })}\n`,
+      );
+    },
+  );
+
+  test.for([20, 200])(
+    'deletes five blocking Dependencies with %i students',
+    { timeout: 600_000 },
+    async (students, { course }) => {
+      const scenario = await layeredRoadmap(course, students);
+      const scheduled: (() => Promise<void>)[] = [];
+      const port = noticesPort((task) => {
+        scheduled.push(task);
+      });
+      const editor = teacher(course);
+      const connectAll = async () => {
+        const ids: string[] = [];
+        for (const targetNodeId of scenario.batchTargetNodeIds) {
+          const request = {
+            ...editor,
+            input: { sourceNodeId: scenario.sourceNodeId, targetNodeId },
+          };
+          const { version } = await previewRoadmapDependency(request);
+          ids.push(
+            (await createRoadmapDependency({ ...request, previewVersion: version }, port))
+              .dependency.id,
+          );
+        }
+        await Promise.all(scheduled.splice(0).map((task) => task()));
+        return ids;
+      };
+      const counter = countingQueries();
+      const rounds = {
+        each: [] as number[],
+        eachQueries: [] as number[],
+        together: [] as number[],
+        togetherQueries: [] as number[],
+      };
+      try {
+        for (let round = 0; round < ROUNDS; round += 1) {
+          const separate = await connectAll();
+          const each = await measured(counter, () =>
+            Promise.all(separate.map((id) => deleteRoadmapDependency({ ...editor, id }, port))),
+          );
+          rounds.each.push(each.ms);
+          rounds.eachQueries.push(each.queries);
+          await Promise.all(scheduled.splice(0).map((task) => task()));
+          const joined = await connectAll();
+          const together = await measured(counter, () =>
+            deleteRoadmapDependencies({ ...editor, input: { dependencyIds: joined } }, port),
+          );
+          rounds.together.push(together.ms);
+          rounds.togetherQueries.push(together.queries);
+          await Promise.all(scheduled.splice(0).map((task) => task()));
+        }
+      } finally {
+        counter.restore();
+      }
+      expect(
+        await prisma.dependency.count({ where: { sourceNodeId: scenario.sourceNodeId } }),
+      ).toBe(0);
+      await appendFile(
+        process.env.DEPENDENCY_EDIT_BENCHMARK!,
+        `${JSON.stringify({
+          students: scenario.studentIds.length,
+          deleteEachMs: Math.round(median(rounds.each)),
+          deleteEachQueries: median(rounds.eachQueries),
+          deleteTogetherMs: Math.round(median(rounds.together)),
+          deleteTogetherQueries: median(rounds.togetherQueries),
           rounds,
         })}\n`,
       );
