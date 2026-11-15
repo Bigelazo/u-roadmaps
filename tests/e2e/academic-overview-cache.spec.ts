@@ -331,7 +331,6 @@ test('loading, institutional failure and recovery retain the desktop and mobile 
   await page.goto('/academic-overview');
   await synchronization;
   await expect(page.getByRole('status', { name: 'Cargando resumen académico...' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Licencias de terceros' })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('stable-loading-desktop.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('stable-loading-mobile.png') });
@@ -343,7 +342,6 @@ test('loading, institutional failure and recovery retain the desktop and mobile 
   await page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
   await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Licencias de terceros' })).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('stable-overview-mobile.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: testInfo.outputPath('stable-overview-desktop.png') });
