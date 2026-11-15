@@ -4,6 +4,7 @@ import { expect, test, vi } from 'vitest';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import type { ComponentProps } from 'react';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import { markdownText, writeMarkdown } from '../../../support/markdown-editor';
 
 const nodeTypes: RoadmapDto['nodeTypes'] = [
   { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
@@ -98,7 +99,7 @@ test('keeps the draft and explains a failed creation inside the dialog', async (
   const { user } = await openCreator(onSubmit);
 
   await user.type(screen.getByRole('textbox', { name: 'Título' }), 'Límites');
-  await user.type(screen.getByRole('textbox', { name: 'Contenido (opcional)' }), 'Repaso');
+  writeMarkdown(screen.getByRole('textbox', { name: 'Contenido (opcional)' }), 'Repaso');
   await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
 
   expect((await screen.findByRole('alert')).textContent).toBe(
@@ -108,9 +109,9 @@ test('keeps the draft and explains a failed creation inside the dialog', async (
   expect((screen.getByRole('textbox', { name: 'Título' }) as HTMLTextAreaElement).value).toBe(
     'Límites',
   );
-  expect(
-    (screen.getByRole('textbox', { name: 'Contenido (opcional)' }) as HTMLTextAreaElement).value,
-  ).toBe('Repaso');
+  expect(markdownText(screen.getByRole('textbox', { name: 'Contenido (opcional)' }))).toBe(
+    'Repaso',
+  );
   expect((screen.getByRole('button', { name: 'Crear nodo' }) as HTMLButtonElement).disabled).toBe(
     false,
   );

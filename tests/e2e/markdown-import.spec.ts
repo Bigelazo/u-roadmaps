@@ -37,10 +37,10 @@ test('Markdown drops require confirmation and update the Node draft before savin
     name: '¿Reemplazar el texto con el archivo Markdown?',
   });
   await expect(confirmation).toContainText('guia.md');
-  await expect(description).toHaveValue('Borrador sin guardar');
+  await expect(description).toHaveText('Borrador sin guardar');
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expect(confirmation).toBeHidden();
-  await expect(description).toHaveValue('Borrador sin guardar');
+  await expect(description).toHaveText('Borrador sin guardar');
 
   await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
   const fullscreen = page.getByRole('dialog', { name: 'Editar nodo', exact: true });
@@ -49,8 +49,8 @@ test('Markdown drops require confirmation and update the Node draft before savin
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
   await expect(confirmation).toBeHidden();
-  await expect(fullscreenDescription).toHaveValue(content);
-  await expect(fullscreen.locator('.markdown-editor .token-title')).toHaveText('# Guía de estudio');
+  await expect(fullscreenDescription).toContainText('Descripción con ñ y acentos.');
+  await expect(fullscreen.locator('.markdown-editor .cm-md-h1')).toContainText('Guía de estudio');
 
   const beforeSave = await api.get(course.apiPath());
   expect((await beforeSave.json()).nodes).toEqual(
@@ -59,7 +59,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
     ]),
   );
   await fullscreen.getByRole('button', { name: 'Cerrar pantalla completa' }).click();
-  await expect(description).toHaveValue(content);
+  await expect(description).toContainText('Descripción con ñ y acentos.');
   const saved = page.waitForResponse(
     (response) =>
       response.request().method() === 'PATCH' && response.url().includes(`/nodes/${nodeId}`),
@@ -130,7 +130,7 @@ test('a Markdown file dragged into the window turns the description into a drop 
   await pdf.dispose();
 });
 
-test('a long Markdown table scrolls with the side panel, not inside the description', async ({
+test('a long description scrolls inside its box and never widens the side panel', async ({
   page,
   course,
   teacherApi: api,
@@ -155,21 +155,24 @@ test('a long Markdown table scrolls with the side panel, not inside the descript
   await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
 
   const input = page.locator('#edit-node-description');
-  await expect(input).toHaveValue(description);
+  await expect(input.getByRole('columnheader', { name: 'Parámetro' })).toBeVisible();
   const layout = await input.evaluate((element) => {
-    const highlight = element.parentElement?.querySelector('pre');
+    const frame = element.closest<HTMLElement>('.markdown-editor');
     const panel = element.closest<HTMLElement>('[data-slot="sidebar-content"]');
-    if (!highlight || !panel) throw new Error('Missing description layers or side panel');
+    if (!frame || !panel) throw new Error('Missing description frame or side panel');
     return {
-      inputOverflow: element.scrollHeight - element.clientHeight,
-      highlightOverflow: highlight.scrollWidth - highlight.clientWidth,
+      frameHeight: frame.clientHeight,
+      frameOverflow: frame.scrollHeight - frame.clientHeight,
+      frameHorizontalOverflow: frame.scrollWidth - frame.clientWidth,
+      viewportHeight: window.innerHeight,
       panelOverflow: panel.scrollHeight - panel.clientHeight,
       panelHorizontalOverflow: panel.scrollWidth - panel.clientWidth,
       panelScrollbar: getComputedStyle(panel).scrollbarWidth,
     };
   });
-  expect(layout.inputOverflow).toBe(0);
-  expect(layout.highlightOverflow).toBe(0);
+  expect(layout.frameOverflow).toBeGreaterThan(0);
+  expect(layout.frameHeight).toBeLessThanOrEqual(layout.viewportHeight / 2);
+  expect(layout.frameHorizontalOverflow).toBe(0);
   expect(layout.panelHorizontalOverflow).toBe(0);
   expect(layout.panelOverflow).toBeGreaterThan(0);
   expect(layout.panelScrollbar).not.toBe('none');
@@ -201,9 +204,9 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
     name: '¿Reemplazar el texto con el archivo Markdown?',
   });
   await expect(confirmation).toContainText('guia.md');
-  await expect(description).toHaveValue('Borrador previo');
+  await expect(description).toHaveText('Borrador previo');
   await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
-  await expect(description).toHaveValue(content);
+  await expect(description).toContainText('Guía de creación');
   await transfer.dispose();
 
   const created = page.waitForResponse(
@@ -221,7 +224,7 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
 
   await page.locator('.react-flow__node').filter({ hasText: 'Nodo con Markdown' }).click();
   const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
-  await expect(editor.getByLabel(/^Contenido/)).toHaveValue(content);
+  await expect(editor.getByLabel(/^Contenido/)).toContainText('Guía de creación');
 });
 
 test('teaching staff create a Node without a description', async ({ page, course, apiAs }) => {

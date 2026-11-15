@@ -380,7 +380,7 @@ export function NodeDetailsEditor() {
         <NodeResources />
         <NodeStatus />
         <NodeDangerZone />
-        <section className="border-t border-border pt-5 pb-6">
+        <section className="border-t border-border pt-5 pb-6 [--markdown-editor-max-height:min(28rem,50dvh)]">
           <NodeDescriptionField {...field} />
         </section>
       </div>

@@ -26,63 +26,12 @@ body:has([data-viewport-page]) [data-global-navigation] {
   scroll-padding-block: 0.5rem;
   scrollbar-width: thin;
   scrollbar-color: var(--steel) transparent;
-  font-family: var(--font-mono, monospace);
   font-size: 0.875rem;
-  line-height: 1.5;
   tab-size: 4;
 }
 
 .markdown-editor-surface {
   position: relative;
-}
-
-.markdown-editor pre {
-  min-height: var(--markdown-editor-min-height, 8rem);
-  margin: 0;
-  padding: 0.5rem 0.625rem;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  font: inherit;
-}
-
-.markdown-editor .markdown-editor-input {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-  overflow: hidden;
-  resize: none;
-  field-sizing: fixed;
-  font: inherit;
-  tab-size: inherit;
-  color: inherit;
-  caret-color: var(--foreground);
-  -webkit-text-fill-color: transparent;
-}
-
-.markdown-editor .markdown-editor-input::placeholder {
-  -webkit-text-fill-color: var(--muted-foreground);
-}
-
-.markdown-editor :is(.token-title, .token-bold, .token-url, .token-url-reference) {
-  color: var(--primary);
-}
-
-.markdown-editor :is(.token-italic, .token-code, .token-code-snippet, .token-code-block) {
-  color: var(--progress-deep);
-}
-
-.markdown-editor :is(.token-punctuation, .token-list, .token-blockquote) {
-  color: var(--muted-foreground);
-}
-
-@media (forced-colors: active) {
-  .markdown-editor pre {
-    visibility: hidden;
-  }
-
-  .markdown-editor .markdown-editor-input {
-    -webkit-text-fill-color: CanvasText;
-  }
 }
 
 @layer components {
@@ -144,6 +93,32 @@ body:has([data-viewport-page]) [data-global-navigation] {
 
   .node-description hr {
     @apply border-border;
+  }
+
+  .node-description table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+
+  .node-description :is(th, td) {
+    @apply border border-border px-3 py-1.5 align-top;
+  }
+
+  .node-description th {
+    @apply bg-muted font-semibold text-foreground;
+  }
+
+  .node-description .contains-task-list {
+    list-style-type: none;
+    padding-left: 0.25rem;
+  }
+
+  .node-description .task-list-item input {
+    margin-right: 0.5rem;
+    accent-color: var(--primary);
+    vertical-align: middle;
   }
 
   .node-description img {

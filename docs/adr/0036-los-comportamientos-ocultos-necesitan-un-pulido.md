@@ -48,7 +48,7 @@ Descubrimos por casualidad que el lienzo permite eliminar varias Dependencias a 
 
 ## Archivos que se sueltan
 
-- Soltar un único `.md` o `.markdown` sobre la descripción reemplaza el texto tras confirmar; otros archivos muestran un error (`src/features/roadmap/editor/MarkdownEditor.tsx:36-41,116-172`).
+- Soltar un único `.md` o `.markdown` sobre la descripción reemplaza el texto tras confirmar; otros archivos muestran un error (`src/features/roadmap/editor/MarkdownEditor.tsx:42-64,108-122,197-213`).
 - Soltar varios archivos en los recursos conserva solo el primero, sin aviso; el servidor rechaza archivos vacíos o de más de 25 MB (`src/features/roadmap/editor/ResourceComposer.tsx:76-99`).
 
 ## Procesos automáticos y efectos silenciosos

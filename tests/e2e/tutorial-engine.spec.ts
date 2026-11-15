@@ -80,7 +80,7 @@ test('the tour keeps its exit, dialogs and feedback usable around the steps', as
   await fullscreen.getByRole('textbox').fill('Contenido en pantalla completa');
   await fullscreen.getByRole('button', { name: 'Cerrar pantalla completa' }).click();
   await expect(fullscreen).toHaveCount(0);
-  await expect(dialog.getByRole('textbox', { name: /Contenido/ })).toHaveValue(
+  await expect(dialog.getByRole('textbox', { name: /Contenido/ })).toHaveText(
     'Contenido en pantalla completa',
   );
   for (const button of ['Cancelar', 'Crear nodo'])
