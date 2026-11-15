@@ -82,6 +82,11 @@ test('dependencies avoid a third Node throughout dragging, persist after reload,
   const sourceBox = (await page.locator(`.react-flow__node[data-id="${source}"]`).boundingBox())!;
   const x = origin.x + origin.width / 2,
     y = origin.y + origin.height / 2;
+  const placements: unknown[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && request.url().endsWith(offering.apiPath('/placement')))
+      placements.push(request.postDataJSON());
+  });
   await page.mouse.move(x, y);
   await page.mouse.down();
   for (let i = 1; i <= 12; i++) {
@@ -91,10 +96,21 @@ test('dependencies avoid a third Node throughout dragging, persist after reload,
   }
   const saved = page.waitForResponse(
     (response) =>
-      response.request().method() === 'PATCH' && response.url().endsWith(`/nodes/${obstacle}`),
+      response.request().method() === 'PATCH' &&
+      response.url().endsWith(offering.apiPath('/placement')),
   );
   await page.mouse.up();
-  expect((await saved).status()).toBe(200);
+  const placement = await saved;
+  expect(placement.status()).toBe(204);
+  expect(placements).toHaveLength(1);
+  expect(placements[0]).toMatchObject({
+    positions: expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: obstacle,
+        position: { x: expect.any(Number), y: expect.any(Number) },
+      }),
+    ]),
+  });
   await expect(edge).not.toHaveAttribute('d', before!);
   expect(await collisions(page, source, target)).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('routing-desktop.png') });

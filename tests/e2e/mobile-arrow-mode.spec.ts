@@ -4,6 +4,17 @@ import { authenticateAs, ok } from './helpers';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+type PlacementRequest = { positions: { nodeId: string; position: { x: number; y: number } }[] };
+
+function recordPlacementRequests(page: Page, path: string) {
+  const placements: PlacementRequest[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && request.url().endsWith(path))
+      placements.push(request.postDataJSON());
+  });
+  return placements;
+}
+
 type Point = { x: number; y: number };
 
 async function center(locator: Locator): Promise<Point> {
@@ -338,11 +349,7 @@ test('native touch pans from a Node without saving and deliberately moves it per
   const viewport = page.locator('.react-flow__viewport');
   const position = () => node.evaluate((element) => element.style.transform);
   const original = await position();
-  const patches: string[] = [];
-  page.on('request', (request) => {
-    if (request.method() === 'PATCH' && request.url().endsWith(`/nodes/${course.nodes.first}`))
-      patches.push(request.postData() ?? '');
-  });
+  const placements = recordPlacementRequests(page, course.apiPath('/placement'));
   const client = await page.context().newCDPSession(page);
   async function frameNode() {
     await centerOverview(page);
@@ -376,7 +383,7 @@ test('native touch pans from a Node without saving and deliberately moves it per
     await page.reload();
     await expect(node).toBeVisible();
     await expect.poll(position).toBe(original);
-    expect(patches).toEqual([]);
+    expect(placements).toEqual([]);
     await frameNode();
     await page.getByRole('button', { name: 'Mover nodos', exact: true }).tap();
     await expect(page.getByText('Arrastra un nodo para moverlo')).toBeVisible();
@@ -385,10 +392,10 @@ test('native touch pans from a Node without saving and deliberately moves it per
     const saved = page.waitForResponse(
       (response) =>
         response.request().method() === 'PATCH' &&
-        response.url().endsWith(`/nodes/${course.nodes.first}`),
+        response.url().endsWith(course.apiPath('/placement')),
     );
     await dragNode();
-    expect((await saved).ok()).toBe(true);
+    expect((await saved).status()).toBe(204);
     await expect.poll(position).not.toBe(original);
     const moved = await position();
     expect(await viewport.evaluate((element) => element.style.transform)).toBe(stationaryViewport);
@@ -400,7 +407,15 @@ test('native touch pans from a Node without saving and deliberately moves it per
     await page.reload();
     await expect(node).toBeVisible();
     await expect.poll(position).toBe(moved);
-    expect(patches).toHaveLength(1);
+    expect(placements).toHaveLength(1);
+    expect(placements[0]).toMatchObject({
+      positions: expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: course.nodes.first,
+          position: { x: expect.any(Number), y: expect.any(Number) },
+        }),
+      ]),
+    });
     await frameNode();
     await armArrowMode(page, client, node);
     await page.getByRole('button', { name: 'Cancelar modo flecha', exact: true }).tap();
@@ -423,16 +438,17 @@ for (const hasTouch of [true, false]) {
       await settleViewport(page);
       const original = await node.evaluate((element) => element.style.transform);
       const start = await center(node.locator('p'));
+      const placements = recordPlacementRequests(page, course.apiPath('/placement'));
       const saved = page.waitForResponse(
         (response) =>
           response.request().method() === 'PATCH' &&
-          response.url().endsWith(`/nodes/${course.nodes.first}`),
+          response.url().endsWith(course.apiPath('/placement')),
       );
       await page.mouse.move(start.x, start.y);
       await page.mouse.down();
       await page.mouse.move(start.x + 50, start.y + 60, { steps: 6 });
       await page.mouse.up();
-      expect((await saved).ok()).toBe(true);
+      expect((await saved).status()).toBe(204);
       await expect
         .poll(() => node.evaluate((element) => element.style.transform))
         .not.toBe(original);
@@ -440,6 +456,15 @@ for (const hasTouch of [true, false]) {
       await page.reload();
       await expect(node).toBeVisible();
       await expect.poll(() => node.evaluate((element) => element.style.transform)).toBe(moved);
+      expect(placements).toHaveLength(1);
+      expect(placements[0]).toMatchObject({
+        positions: expect.arrayContaining([
+          expect.objectContaining({
+            nodeId: course.nodes.first,
+            position: { x: expect.any(Number), y: expect.any(Number) },
+          }),
+        ]),
+      });
       await page.screenshot({
         path: testInfo.outputPath(`mouse-editing-touch-${hasTouch}-1440.png`),
       });
