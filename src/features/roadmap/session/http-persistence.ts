@@ -1,12 +1,11 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { roadmapUrl } from '@/features/roadmap/client';
-import type { ChangeImpactCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
-  canvasCommandCatalog,
-  type AnyCommandEntry,
-  type CommandEntry,
+  httpCommands,
+  type AnyHttpCommand,
+  type ChangeImpactHttpCommand,
   type RouteRequest,
-} from '@/features/roadmap/canvas/commands/commands';
+} from '@/features/roadmap/session/http-commands';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
@@ -91,13 +90,12 @@ export function createHttpRoadmapCanvasSessionPersistence(
       ).json(),
 
     async readChangeImpact(command) {
-      const { changeImpact }: CommandEntry<ChangeImpactCommand, unknown> =
-        canvasCommandCatalog[command.kind];
+      const { changeImpact }: ChangeImpactHttpCommand = httpCommands[command.kind];
       return (await request({ path: changeImpact.path(command) }, changeImpact.failure)).json();
     },
 
     async execute(command, previewVersion) {
-      const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
+      const entry: AnyHttpCommand = httpCommands[command.kind];
       const options = { previewHeader: entry.previewHeader, previewVersion };
       const sent = await Promise.allSettled(
         [entry.requests(command)].flat().map((item) => request(item, entry.failure, options)),

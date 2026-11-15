@@ -71,3 +71,27 @@ export type ChangeImpactCommand = CanvasCommandOf<keyof PlannedChangeImpactOf>;
 
 export type ReadChangeImpactOf<Kind extends keyof PlannedChangeImpactOf> =
   PlannedChangeImpactOf[Kind];
+
+export type ScheduledUnlock = {
+  readonly nodeId: string;
+  readonly unlockAt: string | null;
+  readonly includeDependents?: boolean;
+};
+
+export const teacherBlockScheduledUnlock = (
+  nodeId: string,
+  operation: TeacherBlockOperation,
+  { unlockAt }: TeacherBlockSchedule,
+): ScheduledUnlock => ({
+  nodeId,
+  unlockAt,
+  includeDependents: operation === 'BRANCH_UNLOCK',
+});
+
+export const chosenAutomaticLayout = ({
+  layouts,
+  direction = 'TB',
+}: {
+  readonly layouts: AutomaticLayouts;
+  readonly direction?: RoadmapLayoutDirection;
+}) => layouts[direction];

@@ -11,13 +11,14 @@ import {
   decideScheduledUnlock,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
-import type {
-  AutomaticLayouts,
-  CanvasCommand,
-  CanvasCommandKind,
-  CanvasCommandOf,
-  RoadmapNodePlacement,
-  TeacherBlockSchedule,
+import {
+  chosenAutomaticLayout,
+  teacherBlockScheduledUnlock,
+  type CanvasCommand,
+  type CanvasCommandKind,
+  type CanvasCommandOf,
+  type RoadmapNodePlacement,
+  type ScheduledUnlock,
 } from '@/features/roadmap/canvas/commands/canvas-command';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import { nodesDisplacedByNewNode } from '@/features/roadmap/graph/node-collisions';
@@ -42,7 +43,6 @@ import { formatCalendarDay } from '@/shared/calendar-day-format';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import type {
   AnyRoadmapDto,
-  RoadmapDependency,
   RoadmapNode,
   TeacherBlockOperation,
   TeacherBlockOperationImpact,
@@ -55,12 +55,6 @@ type TeacherBlockChangeImpact = {
 type ImpactRead<Kind> = Kind extends keyof PlannedChangeImpactOf
   ? PlannedChangeImpactOf[Kind]
   : never;
-
-export type RouteRequest = {
-  readonly method?: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  readonly path: string;
-  readonly body?: object;
-};
 
 type CommandSession<Command extends { kind: string }> = {
   readChangeImpact(command: Command): Promise<ImpactRead<Command['kind']> | null>;
@@ -104,10 +98,6 @@ type ConfirmedAction<Command extends { kind: string }, Impact> = {
 };
 
 export type CommandEntry<Command extends { kind: string }, Impact> = {
-  requests(command: Command): RouteRequest | readonly RouteRequest[];
-  readonly previewHeader?: string;
-  readonly failure: string;
-  result?(responses: readonly Response[]): Promise<ExecutionResult>;
   practice(
     roadmap: PracticeRoadmap,
     command: Command,
@@ -118,9 +108,7 @@ export type CommandEntry<Command extends { kind: string }, Impact> = {
   success?(command: Command, outcome: CommandOutcome, impact?: Impact | null): string;
   report?(command: Command, outcome: CommandOutcome): PracticeCanvasAction | null;
   readonly confirmedAction?: ConfirmedAction<Command, Impact>;
-} & (Command['kind'] extends keyof PlannedChangeImpactOf
-  ? { readonly changeImpact: { path(command: Command): string; readonly failure: string } }
-  : unknown);
+};
 
 export type RoadmapUpdate = <Roadmap extends AnyRoadmapDto>(roadmap: Roadmap) => Roadmap;
 
@@ -163,29 +151,9 @@ const teacherBlockSuccess: Readonly<Record<TeacherBlockOperation, string>> = {
 
 const completionSuccess = () => 'Nodo completado.';
 
-type ScheduledUnlockRequest = {
-  readonly nodeId: string;
-  readonly unlockAt: string | null;
-  readonly includeDependents?: boolean;
-};
-
-const scheduledUnlockRequest = ({
-  nodeId,
-  unlockAt,
-  includeDependents,
-}: ScheduledUnlockRequest): RouteRequest => ({
-  path: `/nodes/${nodeId}/teacher-block/schedule`,
-  ...(unlockAt
-    ? {
-        method: 'PUT',
-        body: includeDependents ? { unlockAt, includeDependents } : { unlockAt },
-      }
-    : { method: 'DELETE' }),
-});
-
 const scheduleUnlockInPractice = (
   practice: PracticeRoadmap,
-  { nodeId, unlockAt, includeDependents }: ScheduledUnlockRequest,
+  { nodeId, unlockAt, includeDependents }: ScheduledUnlock,
 ): ExecutionResult => {
   const nodes = practice.roadmap.nodes.filter(
     (node): node is RoadmapNode => 'isTeacherBlocked' in node,
@@ -217,16 +185,6 @@ const scheduleUnlockInPractice = (
   );
   return { scheduledUnlock: { title: node.title, prerequisites: prerequisiteIds.length } };
 };
-
-const scheduledUnlock = (
-  nodeId: string,
-  operation: TeacherBlockOperation,
-  { unlockAt }: TeacherBlockSchedule,
-): ScheduledUnlockRequest => ({
-  nodeId,
-  unlockAt,
-  includeDependents: operation === 'BRANCH_UNLOCK',
-});
 
 const scheduledMoment = (unlockAt: string) => {
   const { day, time } = chileWallClock(new Date(unlockAt));
@@ -275,13 +233,6 @@ const teacherBlockScheduleSuccess = (
 };
 
 const nodeMoves = {
-  requests: ({ positions }: { positions: readonly RoadmapNodePlacement[] }): RouteRequest[] =>
-    positions.map(({ nodeId, position }) => ({
-      method: 'PATCH',
-      path: `/nodes/${nodeId}`,
-      body: { positionX: position.x, positionY: position.y },
-    })),
-  failure: 'No se pudo guardar la posición.',
   practice: (
     practice: PracticeRoadmap,
     { positions }: { positions: readonly RoadmapNodePlacement[] },
@@ -295,14 +246,6 @@ const nodeMoves = {
     ),
 };
 
-const chosenLayout = ({
-  layouts,
-  direction = 'TB',
-}: {
-  layouts: AutomaticLayouts;
-  direction?: RoadmapLayoutDirection;
-}) => layouts[direction];
-
 const layoutDirectionByChoice: Partial<
   Readonly<Record<CanvasConfirmationChoice, RoadmapLayoutDirection>>
 > = {
@@ -311,14 +254,7 @@ const layoutDirectionByChoice: Partial<
 };
 
 const visibility = (isVisible: boolean) => ({
-  requests: ({ nodeId }: { nodeId: string }): RouteRequest => ({
-    method: 'PATCH',
-    path: `/nodes/${nodeId}`,
-    body: { isVisible },
-  }),
-  previewHeader: 'x-node-visibility-preview',
-  failure: 'No se pudo cambiar la visibilidad.',
-  report: ({ nodeId }: { nodeId: string }): PracticeCanvasAction => ({
+  report: ({ nodeId }: { readonly nodeId: string }): PracticeCanvasAction => ({
     type: 'changeVisibility',
     nodeId,
     isVisible,
@@ -341,10 +277,6 @@ const setVisibility = (practice: PracticeRoadmap, nodeId: string, isVisible: boo
 export const canvasCommandCatalog = {
   'hide-node': command<'hide-node'>({
     ...visibility(false),
-    changeImpact: {
-      path: ({ nodeId }) => `/nodes/${nodeId}?operation=HIDE`,
-      failure: 'No se pudo calcular el impacto de ocultar el nodo.',
-    },
     practice: (practice, command, previewVersion) => {
       practice.confirm(command, previewVersion);
       setVisibility(practice, command.nodeId, false);
@@ -367,13 +299,6 @@ export const canvasCommandCatalog = {
     success: () => 'Nodo visible para estudiantes.',
   }),
   'delete-node': command<'delete-node'>({
-    requests: ({ nodeId }) => ({ method: 'DELETE', path: `/nodes/${nodeId}` }),
-    previewHeader: 'x-node-delete-preview',
-    failure: 'No se pudo eliminar el nodo.',
-    changeImpact: {
-      path: ({ nodeId }) => `/nodes/${nodeId}?operation=DELETE`,
-      failure: 'No se pudo calcular el impacto de eliminar el nodo.',
-    },
     practice: (practice, command, previewVersion) => {
       practice.confirm(command, previewVersion);
       practice.updateNodes((nodes) => nodes.filter(({ id }) => id !== command.nodeId));
@@ -388,24 +313,11 @@ export const canvasCommandCatalog = {
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   }),
   'change-teacher-block': command<'change-teacher-block', TeacherBlockChangeImpact>({
-    requests: ({ nodeId, operation, schedule }) =>
-      schedule
-        ? scheduledUnlockRequest(scheduledUnlock(nodeId, operation, schedule))
-        : {
-            method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
-            path: `/nodes/${nodeId}/teacher-block`,
-          },
-    previewHeader: 'x-teacher-block-preview',
-    failure: 'No se pudo cambiar el bloqueo docente.',
-    changeImpact: {
-      path: ({ nodeId, operation }) => `/nodes/${nodeId}/teacher-block?operation=${operation}`,
-      failure: 'No se pudo calcular el impacto del bloqueo docente.',
-    },
     practice: (practice, command, previewVersion) =>
       command.schedule
         ? void scheduleUnlockInPractice(
             practice,
-            scheduledUnlock(command.nodeId, command.operation, command.schedule),
+            teacherBlockScheduledUnlock(command.nodeId, command.operation, command.schedule),
           )
         : void practice.confirm(command, previewVersion),
     confirmedAction: {
@@ -464,12 +376,6 @@ export const canvasCommandCatalog = {
           },
   }),
   'schedule-teacher-unlock': command<'schedule-teacher-unlock'>({
-    requests: scheduledUnlockRequest,
-    failure: 'No se pudo programar el desbloqueo.',
-    result: async ([response]) => {
-      const { title, scheduledPrerequisiteIds } = await response.json();
-      return { scheduledUnlock: { title, prerequisites: scheduledPrerequisiteIds.length } };
-    },
     practice: scheduleUnlockInPractice,
     success: ({ unlockAt }, { scheduledUnlock }) =>
       !unlockAt
@@ -482,23 +388,6 @@ export const canvasCommandCatalog = {
           }),
   }),
   'create-dependency': command<'create-dependency'>({
-    requests: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) => ({
-      method: 'POST',
-      path: '/dependencies',
-      body: { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
-    }),
-    previewHeader: 'x-dependency-preview',
-    failure: 'No se pudo crear la dependencia.',
-    changeImpact: {
-      path: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) =>
-        `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
-      failure: 'No se pudo calcular el impacto de la dependencia.',
-    },
-    result: async ([response]) => {
-      const { dependency, nodes }: { dependency: RoadmapDependency; nodes: { id: string }[] } =
-        await response.json();
-      return { dependency, teacherBlockedNodeIds: nodes.map(({ id }) => id) };
-    },
     practice: (practice, command, previewVersion) => {
       const { blockedNodeIds } = practice.confirm(command, previewVersion);
       const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = command;
@@ -550,12 +439,6 @@ export const canvasCommandCatalog = {
     }),
   }),
   'delete-dependencies': command<'delete-dependencies'>({
-    requests: ({ dependencyIds }) => ({
-      method: 'DELETE',
-      path: '/dependencies',
-      body: { dependencyIds },
-    }),
-    failure: 'No se pudo eliminar la dependencia.',
     practice: (practice, { dependencyIds }) => {
       const removed = new Set(dependencyIds);
       practice.roadmap = {
@@ -581,10 +464,8 @@ export const canvasCommandCatalog = {
   }),
   'move-nodes': command<'move-nodes'>(nodeMoves),
   'apply-automatic-layout': command<'apply-automatic-layout'>({
-    requests: (layout) => nodeMoves.requests({ positions: chosenLayout(layout) }),
-    failure: nodeMoves.failure,
     practice: (practice, layout) =>
-      nodeMoves.practice(practice, { positions: chosenLayout(layout) }),
+      nodeMoves.practice(practice, { positions: chosenAutomaticLayout(layout) }),
     confirmedAction: {
       apply: async (session, command, _, choice) =>
         (
@@ -598,21 +479,6 @@ export const canvasCommandCatalog = {
     success: () => 'Nodos ordenados exitosamente.',
   }),
   'add-node': command<'add-node'>({
-    requests: ({ node, position, displaced }) => [
-      {
-        method: 'POST',
-        path: '/nodes',
-        body: {
-          ...node,
-          description: node.description || null,
-          positionX: position.x,
-          positionY: position.y,
-        },
-      },
-      ...nodeMoves.requests({ positions: displaced }),
-    ],
-    failure: 'No se pudo crear el nodo.',
-    result: async ([response]) => ({ createdNodeId: (await response.json()).node.id }),
     practice: (practice, { node, position: requested }) => {
       practice.requireAvailableNodeType(node.nodeTypeId);
       const id = crypto.randomUUID();
@@ -648,12 +514,6 @@ export const canvasCommandCatalog = {
       createdNodeId ? { type: 'addNode', nodeId: createdNodeId } : null,
   }),
   'update-node': command<'update-node'>({
-    requests: ({ nodeId, value }) => ({
-      method: 'PATCH',
-      path: `/nodes/${nodeId}`,
-      body: { ...value, description: value.description || null },
-    }),
-    failure: 'No se pudo guardar el nodo.',
     practice: (practice, { nodeId, value }) => {
       practice.requireAvailableNodeType(value.nodeTypeId);
       practice.mutateNode(nodeId, (node) => ({
@@ -666,12 +526,6 @@ export const canvasCommandCatalog = {
     success: () => 'Cambios guardados exitosamente.',
   }),
   'add-resource': command<'add-resource'>({
-    requests: ({ nodeId, resource }) => ({
-      method: 'POST',
-      path: `/nodes/${nodeId}/resources`,
-      body: resource,
-    }),
-    failure: 'No se pudo agregar el recurso.',
     practice: (practice, { nodeId, resource }) => {
       const error = linkResourceOnlyError(resource.type);
       if (error) throw new Error(error);
@@ -686,12 +540,6 @@ export const canvasCommandCatalog = {
     success: () => 'Enlace guardado exitosamente.',
   }),
   'upload-resource': command<'upload-resource'>({
-    requests: ({ nodeId, file }) => {
-      const body = new FormData();
-      body.append('file', file);
-      return { method: 'POST', path: `/nodes/${nodeId}/resources`, body };
-    },
-    failure: 'No se pudo subir el archivo.',
     practice: (practice, { nodeId, file }) =>
       practice.appendResource(nodeId, {
         id: crypto.randomUUID(),
@@ -705,20 +553,6 @@ export const canvasCommandCatalog = {
     success: () => 'Recurso guardado exitosamente.',
   }),
   'update-resource': command<'update-resource'>({
-    requests: ({ resourceId, resource, file }) => {
-      const path = `/resources/${resourceId}`;
-      if (!file)
-        return {
-          method: 'PATCH',
-          path,
-          body: resource.type === 'FILE' ? { title: resource.title } : resource,
-        };
-      const body = new FormData();
-      body.append('title', resource.title);
-      body.append('file', file);
-      return { method: 'PATCH', path, body };
-    },
-    failure: 'No se pudo guardar el recurso.',
     practice: (practice, { resourceId, resource, file }) =>
       practice.mutateResource(resourceId, (current) => {
         if (file) {
@@ -745,14 +579,10 @@ export const canvasCommandCatalog = {
       resource.type === 'LINK' ? 'Enlace guardado exitosamente.' : 'Recurso guardado exitosamente.',
   }),
   'delete-resource': command<'delete-resource'>({
-    requests: ({ resourceId }) => ({ method: 'DELETE', path: `/resources/${resourceId}` }),
-    failure: 'No se pudo eliminar el recurso.',
     practice: (practice, { resourceId }) => practice.mutateResource(resourceId, () => null),
     success: () => 'Recurso eliminado exitosamente.',
   }),
   'add-node-type': command<'add-node-type'>({
-    requests: ({ nodeType }) => ({ method: 'POST', path: '/node-types', body: nodeType }),
-    failure: 'No se pudo crear el tipo de nodo.',
     practice: (practice, { nodeType }) => {
       practice.decideNodeType({ kind: 'create', name: nodeType.name });
       practice.roadmap = {
@@ -766,12 +596,6 @@ export const canvasCommandCatalog = {
     success: () => 'Tipo de nodo creado exitosamente.',
   }),
   'update-node-type': command<'update-node-type'>({
-    requests: ({ nodeTypeId, nodeType }) => ({
-      method: 'PATCH',
-      path: `/node-types/${nodeTypeId}`,
-      body: nodeType,
-    }),
-    failure: 'No se pudo guardar el tipo de nodo.',
     practice: (practice, { nodeTypeId, nodeType }) => {
       practice.decideNodeType({ kind: 'update', nodeTypeId, name: nodeType.name });
       practice.roadmap = {
@@ -784,8 +608,6 @@ export const canvasCommandCatalog = {
     success: () => 'Tipo de nodo guardado exitosamente.',
   }),
   'delete-node-type': command<'delete-node-type'>({
-    requests: ({ nodeTypeId }) => ({ method: 'DELETE', path: `/node-types/${nodeTypeId}` }),
-    failure: 'No se pudo eliminar el tipo de nodo.',
     practice: (practice, { nodeTypeId }) => {
       practice.decideNodeType({ kind: 'delete', nodeTypeId });
       practice.roadmap = {
@@ -803,22 +625,16 @@ export const canvasCommandCatalog = {
     success: () => 'Tipo de nodo eliminado exitosamente.',
   }),
   'complete-node': command<'complete-node'>({
-    requests: ({ nodeId }) => ({ method: 'POST', path: `/nodes/${nodeId}/completion` }),
-    failure: 'No se pudo completar el nodo.',
     practice: (practice, { nodeId }) => practice.complete(nodeId),
     success: completionSuccess,
   }),
   'complete-canvas-preview-node': command<'complete-canvas-preview-node'>({
-    requests: ({ nodeId }) => ({ method: 'POST', path: `/simulation/nodes/${nodeId}/completion` }),
-    failure: 'No se pudo completar el nodo en la previsualización.',
     practice: (practice, { nodeId }) => practice.completeCanvasPreview(nodeId),
     changesCanvasPreview: true,
     success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeCanvasPreviewNode', nodeId }),
   }),
   'reset-canvas-preview': command<'reset-canvas-preview'>({
-    requests: () => ({ method: 'DELETE', path: '/simulation' }),
-    failure: 'No se pudo reiniciar el progreso de previsualización.',
     practice: (practice) => practice.resetCanvasPreview(),
     changesCanvasPreview: true,
     confirmedAction: {
