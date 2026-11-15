@@ -1857,3 +1857,55 @@ describe('Dependency edits on the canvas', () => {
     expect(canvas.session().error).toBe('La dependencia entra en conflicto con otra modificación.');
   });
 });
+
+test('a rejected movement reloads the latest persisted positions and retains the save error', async () => {
+  const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+  const canvas = await openCanvas(
+    intercepting(adapter, 'move-nodes', async () => {
+      await adapter.execute({
+        kind: 'move-nodes',
+        positions: [{ nodeId: 'limits', position: { x: 200, y: 320 } }],
+      });
+      throw new Error('No se pudo guardar la posición.');
+    }),
+  );
+  await act(() =>
+    canvas.commands().request({
+      kind: 'move-nodes',
+      positions: [{ nodeId: 'limits', position: { x: 40, y: 80 } }],
+    }),
+  );
+  expect(canvas.session().roadmap?.nodes).toContainEqual(
+    expect.objectContaining({
+      id: 'limits',
+      positionX: 200,
+      positionY: 320,
+    }),
+  );
+  expect(canvas.session().error).toBe('No se pudo guardar la posición.');
+});
+
+test('a failed authoritative placement reload reports an unsynchronized canvas', async () => {
+  const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+  let refuseLoads = false;
+  const canvas = await openCanvas({
+    ...adapter,
+    async load() {
+      if (refuseLoads) throw new Error('Offline');
+      return adapter.load();
+    },
+    async execute() {
+      refuseLoads = true;
+      throw new Error('No se pudo guardar la posición.');
+    },
+  });
+  await act(() =>
+    canvas.commands().request({
+      kind: 'move-nodes',
+      positions: [{ nodeId: 'limits', position: { x: 40, y: 80 } }],
+    }),
+  );
+  expect(canvas.session().error).toBe(
+    'No se pudo guardar la posición. No se pudo sincronizar el canvas con el roadmap guardado.',
+  );
+});

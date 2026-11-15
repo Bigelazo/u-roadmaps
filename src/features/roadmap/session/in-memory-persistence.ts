@@ -26,6 +26,7 @@ import type {
 import {
   canvasCommandCatalog,
   type AnyCommandEntry,
+  type RoadmapNodePlacement,
 } from '@/features/roadmap/canvas/commands/commands';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
@@ -108,7 +109,7 @@ export type PracticeRoadmap = {
   ): { readonly blockedNodeIds: readonly string[] };
   requireAvailableNodeType(nodeTypeId: string): void;
   decideNodeType(change: NodeTypeChange): void;
-  settleEach<Item>(items: readonly Item[], apply: (item: Item) => void): void;
+  placeNodes(positions: readonly RoadmapNodePlacement[]): void;
 };
 
 export function createInMemoryRoadmapSessionPersistence(
@@ -227,16 +228,26 @@ export function createInMemoryRoadmapSessionPersistence(
       if (decision.kind === 'REJECTED') throw new Error(decision.message);
     },
 
-    settleEach(items, apply) {
-      const failures: unknown[] = [];
-      for (const item of items) {
-        try {
-          apply(item);
-        } catch (cause) {
-          failures.push(cause);
-        }
+    placeNodes(positions) {
+      if (practice.roadmap.roadmap.closedAt)
+        throw new Error('Este roadmap está cerrado y es de sólo lectura.');
+      const nodeIds = new Set(practice.roadmap.nodes.map(({ id }) => id));
+      const targets = new Map<string, RoadmapNodePlacement['position']>();
+      for (const { nodeId, position } of positions) {
+        if (typeof nodeId !== 'string' || !nodeId.trim() || targets.has(nodeId))
+          throw new Error('Cada nodo debe tener una identidad válida y única.');
+        if (!Number.isFinite(position.x) || !Number.isFinite(position.y))
+          throw new Error('La posición debe contener números finitos.');
+        if (!nodeIds.has(nodeId)) throw new Error('El nodo no existe en este roadmap.');
+        targets.set(nodeId, position);
       }
-      if (failures.length > 0) throw failures[0];
+      if (!targets.size) return;
+      practice.updateNodes((nodes) =>
+        nodes.map((node) => {
+          const position = targets.get(node.id);
+          return position ? { ...node, positionX: position.x, positionY: position.y } : node;
+        }),
+      );
     },
   };
 

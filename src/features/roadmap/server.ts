@@ -65,3 +65,4 @@ export {
 } from './application/tutorial-invitation';
 export { isFirstVisitInvitationDue } from './application/first-visit-invitation';
 export { isPracticeExperience, isTutorialInvitation } from './types';
+export { saveRoadmapNodePositions } from './application/placement';
