@@ -14,8 +14,8 @@ import type {
 import type {
   CanvasCommand,
   CanvasCommandOf,
-  ConfirmationInput,
-} from '@/features/roadmap/canvas/commands/commands';
+} from '@/features/roadmap/canvas/commands/canvas-command';
+import type { ConfirmationInput } from '@/features/roadmap/canvas/commands/commands';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { RoadmapClosedError } from '@/features/roadmap/session/access-lost';

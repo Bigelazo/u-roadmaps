@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type {
   CanvasCommand,
   ChangeImpactCommand,
-} from '@/features/roadmap/canvas/commands/commands';
+} from '@/features/roadmap/canvas/commands/canvas-command';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
 

@@ -290,7 +290,7 @@ import {
   type RoadmapGraphProps,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
-import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/canvas-command';
 
 const roadmap: RoadmapDto = {
   roadmap: { id: 'roadmap-1' },

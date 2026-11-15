@@ -10,20 +10,19 @@ import {
   chileWallClock,
   decideScheduledUnlock,
 } from '@/features/roadmap/domain/scheduled-unlock';
+import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import type {
-  NodeEditorGuardReason,
-  NodeUpdate,
-  ResourceInput,
-} from '@/features/roadmap/editor/types';
+  AutomaticLayouts,
+  CanvasCommand,
+  CanvasCommandKind,
+  CanvasCommandOf,
+  RoadmapNodePlacement,
+  TeacherBlockSchedule,
+} from '@/features/roadmap/canvas/commands/canvas-command';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import { nodesDisplacedByNewNode } from '@/features/roadmap/graph/node-collisions';
 import type { PracticeRoadmap } from '@/features/roadmap/session/in-memory-persistence';
-import type {
-  ExecutionResult,
-  NewRoadmapNode,
-  PracticeCanvasAction,
-  RoadmapNodeTypeInput,
-} from '@/features/roadmap/session/types';
+import type { ExecutionResult, PracticeCanvasAction } from '@/features/roadmap/session/types';
 import {
   affectedNodes,
   canvasConfirmationChoices,
@@ -44,33 +43,14 @@ import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import type {
   AnyRoadmapDto,
   RoadmapDependency,
-  RoadmapDependencyRequest,
   RoadmapNode,
   TeacherBlockOperation,
   TeacherBlockOperationImpact,
 } from '@/features/roadmap/types';
 
-export type RoadmapNodePosition = {
-  readonly x: number;
-  readonly y: number;
-};
-
-export type RoadmapNodePlacement = {
-  readonly nodeId: string;
-  readonly position: RoadmapNodePosition;
-};
-
-export type NewNodePlacement = {
-  readonly position: RoadmapNodePosition;
-  readonly displaced: readonly RoadmapNodePlacement[];
-};
-
 type TeacherBlockChangeImpact = {
   readonly [Operation in TeacherBlockOperation]?: TeacherBlockOperationImpact;
 };
-
-export type ReadChangeImpactOf<Kind extends keyof PlannedChangeImpactOf> =
-  PlannedChangeImpactOf[Kind];
 
 type ImpactRead<Kind> = Kind extends keyof PlannedChangeImpactOf
   ? PlannedChangeImpactOf[Kind]
@@ -144,8 +124,8 @@ export type CommandEntry<Command extends { kind: string }, Impact> = {
 
 export type RoadmapUpdate = <Roadmap extends AnyRoadmapDto>(roadmap: Roadmap) => Roadmap;
 
-const command = <Command extends { kind: string }, Impact = ImpactRead<Command['kind']>>(
-  entry: CommandEntry<Command, Impact>,
+const command = <Kind extends CanvasCommandKind, Impact = ImpactRead<Kind>>(
+  entry: CommandEntry<CanvasCommandOf<Kind>, Impact>,
 ) => entry;
 
 const readChangeImpact = <Command extends { kind: string }>(
@@ -238,10 +218,6 @@ const scheduleUnlockInPractice = (
   return { scheduledUnlock: { title: node.title, prerequisites: prerequisiteIds.length } };
 };
 
-type TeacherBlockSchedule = {
-  readonly unlockAt: string;
-};
-
 const scheduledUnlock = (
   nodeId: string,
   operation: TeacherBlockOperation,
@@ -319,8 +295,6 @@ const nodeMoves = {
     ),
 };
 
-type AutomaticLayouts = Readonly<Record<RoadmapLayoutDirection, readonly RoadmapNodePlacement[]>>;
-
 const chosenLayout = ({
   layouts,
   direction = 'TB',
@@ -365,7 +339,7 @@ const setVisibility = (practice: PracticeRoadmap, nodeId: string, isVisible: boo
   practice.mutateNode(nodeId, (node) => ('isVisible' in node ? { ...node, isVisible } : node));
 
 export const canvasCommandCatalog = {
-  'hide-node': command<{ kind: 'hide-node'; nodeId: string }>({
+  'hide-node': command<'hide-node'>({
     ...visibility(false),
     changeImpact: {
       path: ({ nodeId }) => `/nodes/${nodeId}?operation=HIDE`,
@@ -383,7 +357,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Nodo ocultado exitosamente.',
   }),
-  'show-node': command<{ kind: 'show-node'; nodeId: string }>({
+  'show-node': command<'show-node'>({
     ...visibility(true),
     practice: (practice, { nodeId }) => setVisibility(practice, nodeId, true),
     confirmedAction: {
@@ -392,7 +366,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Nodo visible para estudiantes.',
   }),
-  'delete-node': command<{ kind: 'delete-node'; nodeId: string }>({
+  'delete-node': command<'delete-node'>({
     requests: ({ nodeId }) => ({ method: 'DELETE', path: `/nodes/${nodeId}` }),
     previewHeader: 'x-node-delete-preview',
     failure: 'No se pudo eliminar el nodo.',
@@ -413,15 +387,7 @@ export const canvasCommandCatalog = {
     success: () => 'Nodo eliminado exitosamente.',
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   }),
-  'change-teacher-block': command<
-    {
-      kind: 'change-teacher-block';
-      nodeId: string;
-      operation: TeacherBlockOperation;
-      schedule?: TeacherBlockSchedule;
-    },
-    TeacherBlockChangeImpact
-  >({
+  'change-teacher-block': command<'change-teacher-block', TeacherBlockChangeImpact>({
     requests: ({ nodeId, operation, schedule }) =>
       schedule
         ? scheduledUnlockRequest(scheduledUnlock(nodeId, operation, schedule))
@@ -497,12 +463,7 @@ export const canvasCommandCatalog = {
             operation: chosenTeacherBlockOperation(operation, choice),
           },
   }),
-  'schedule-teacher-unlock': command<{
-    kind: 'schedule-teacher-unlock';
-    nodeId: string;
-    unlockAt: string | null;
-    includeDependents?: boolean;
-  }>({
+  'schedule-teacher-unlock': command<'schedule-teacher-unlock'>({
     requests: scheduledUnlockRequest,
     failure: 'No se pudo programar el desbloqueo.',
     result: async ([response]) => {
@@ -520,7 +481,7 @@ export const canvasCommandCatalog = {
             companion: 'prerrequisito',
           }),
   }),
-  'create-dependency': command<{ kind: 'create-dependency' } & RoadmapDependencyRequest>({
+  'create-dependency': command<'create-dependency'>({
     requests: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) => ({
       method: 'POST',
       path: '/dependencies',
@@ -588,10 +549,7 @@ export const canvasCommandCatalog = {
       targetNodeId,
     }),
   }),
-  'delete-dependencies': command<{
-    kind: 'delete-dependencies';
-    dependencyIds: readonly string[];
-  }>({
+  'delete-dependencies': command<'delete-dependencies'>({
     requests: ({ dependencyIds }) => ({
       method: 'DELETE',
       path: '/dependencies',
@@ -621,14 +579,8 @@ export const canvasCommandCatalog = {
         ? 'Dependencia eliminada exitosamente.'
         : 'Dependencias eliminadas exitosamente.',
   }),
-  'move-nodes': command<{ kind: 'move-nodes'; positions: readonly RoadmapNodePlacement[] }>(
-    nodeMoves,
-  ),
-  'apply-automatic-layout': command<{
-    kind: 'apply-automatic-layout';
-    layouts: AutomaticLayouts;
-    direction?: RoadmapLayoutDirection;
-  }>({
+  'move-nodes': command<'move-nodes'>(nodeMoves),
+  'apply-automatic-layout': command<'apply-automatic-layout'>({
     requests: (layout) => nodeMoves.requests({ positions: chosenLayout(layout) }),
     failure: nodeMoves.failure,
     practice: (practice, layout) =>
@@ -645,7 +597,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Nodos ordenados exitosamente.',
   }),
-  'add-node': command<{ kind: 'add-node'; node: NewRoadmapNode } & NewNodePlacement>({
+  'add-node': command<'add-node'>({
     requests: ({ node, position, displaced }) => [
       {
         method: 'POST',
@@ -695,7 +647,7 @@ export const canvasCommandCatalog = {
     report: (_, { createdNodeId }) =>
       createdNodeId ? { type: 'addNode', nodeId: createdNodeId } : null,
   }),
-  'update-node': command<{ kind: 'update-node'; nodeId: string; value: NodeUpdate }>({
+  'update-node': command<'update-node'>({
     requests: ({ nodeId, value }) => ({
       method: 'PATCH',
       path: `/nodes/${nodeId}`,
@@ -713,7 +665,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Cambios guardados exitosamente.',
   }),
-  'add-resource': command<{ kind: 'add-resource'; nodeId: string; resource: ResourceInput }>({
+  'add-resource': command<'add-resource'>({
     requests: ({ nodeId, resource }) => ({
       method: 'POST',
       path: `/nodes/${nodeId}/resources`,
@@ -733,7 +685,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Enlace guardado exitosamente.',
   }),
-  'upload-resource': command<{ kind: 'upload-resource'; nodeId: string; file: File }>({
+  'upload-resource': command<'upload-resource'>({
     requests: ({ nodeId, file }) => {
       const body = new FormData();
       body.append('file', file);
@@ -752,12 +704,7 @@ export const canvasCommandCatalog = {
       }),
     success: () => 'Recurso guardado exitosamente.',
   }),
-  'update-resource': command<{
-    kind: 'update-resource';
-    resourceId: string;
-    resource: ResourceInput;
-    file?: File;
-  }>({
+  'update-resource': command<'update-resource'>({
     requests: ({ resourceId, resource, file }) => {
       const path = `/resources/${resourceId}`;
       if (!file)
@@ -797,13 +744,13 @@ export const canvasCommandCatalog = {
     success: ({ resource }) =>
       resource.type === 'LINK' ? 'Enlace guardado exitosamente.' : 'Recurso guardado exitosamente.',
   }),
-  'delete-resource': command<{ kind: 'delete-resource'; resourceId: string }>({
+  'delete-resource': command<'delete-resource'>({
     requests: ({ resourceId }) => ({ method: 'DELETE', path: `/resources/${resourceId}` }),
     failure: 'No se pudo eliminar el recurso.',
     practice: (practice, { resourceId }) => practice.mutateResource(resourceId, () => null),
     success: () => 'Recurso eliminado exitosamente.',
   }),
-  'add-node-type': command<{ kind: 'add-node-type'; nodeType: RoadmapNodeTypeInput }>({
+  'add-node-type': command<'add-node-type'>({
     requests: ({ nodeType }) => ({ method: 'POST', path: '/node-types', body: nodeType }),
     failure: 'No se pudo crear el tipo de nodo.',
     practice: (practice, { nodeType }) => {
@@ -818,11 +765,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Tipo de nodo creado exitosamente.',
   }),
-  'update-node-type': command<{
-    kind: 'update-node-type';
-    nodeTypeId: string;
-    nodeType: RoadmapNodeTypeInput;
-  }>({
+  'update-node-type': command<'update-node-type'>({
     requests: ({ nodeTypeId, nodeType }) => ({
       method: 'PATCH',
       path: `/node-types/${nodeTypeId}`,
@@ -840,7 +783,7 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Tipo de nodo guardado exitosamente.',
   }),
-  'delete-node-type': command<{ kind: 'delete-node-type'; nodeTypeId: string }>({
+  'delete-node-type': command<'delete-node-type'>({
     requests: ({ nodeTypeId }) => ({ method: 'DELETE', path: `/node-types/${nodeTypeId}` }),
     failure: 'No se pudo eliminar el tipo de nodo.',
     practice: (practice, { nodeTypeId }) => {
@@ -859,16 +802,13 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Tipo de nodo eliminado exitosamente.',
   }),
-  'complete-node': command<{ kind: 'complete-node'; nodeId: string }>({
+  'complete-node': command<'complete-node'>({
     requests: ({ nodeId }) => ({ method: 'POST', path: `/nodes/${nodeId}/completion` }),
     failure: 'No se pudo completar el nodo.',
     practice: (practice, { nodeId }) => practice.complete(nodeId),
     success: completionSuccess,
   }),
-  'complete-canvas-preview-node': command<{
-    kind: 'complete-canvas-preview-node';
-    nodeId: string;
-  }>({
+  'complete-canvas-preview-node': command<'complete-canvas-preview-node'>({
     requests: ({ nodeId }) => ({ method: 'POST', path: `/simulation/nodes/${nodeId}/completion` }),
     failure: 'No se pudo completar el nodo en la previsualización.',
     practice: (practice, { nodeId }) => practice.completeCanvasPreview(nodeId),
@@ -876,7 +816,7 @@ export const canvasCommandCatalog = {
     success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeCanvasPreviewNode', nodeId }),
   }),
-  'reset-canvas-preview': command<{ kind: 'reset-canvas-preview' }>({
+  'reset-canvas-preview': command<'reset-canvas-preview'>({
     requests: () => ({ method: 'DELETE', path: '/simulation' }),
     failure: 'No se pudo reiniciar el progreso de previsualización.',
     practice: (practice) => practice.resetCanvasPreview(),
@@ -889,24 +829,14 @@ export const canvasCommandCatalog = {
   }),
 };
 
-type CanvasCommandKind = keyof typeof canvasCommandCatalog;
-
-type EntryTypes = {
-  [Kind in CanvasCommandKind]: (typeof canvasCommandCatalog)[Kind] extends CommandEntry<
-    infer Command,
+type ChangeImpactOf<Kind extends CanvasCommandKind> = {
+  [Each in Kind]: (typeof canvasCommandCatalog)[Each] extends CommandEntry<
+    CanvasCommandOf<Each>,
     infer Impact
   >
-    ? { command: Readonly<Command>; impact: Impact }
+    ? Impact
     : never;
-};
-
-export type CanvasCommandOf<Kind extends CanvasCommandKind> = EntryTypes[Kind]['command'];
-
-export type CanvasCommand = CanvasCommandOf<CanvasCommandKind>;
-
-export type ChangeImpactCommand = CanvasCommandOf<keyof PlannedChangeImpactOf>;
-
-type ChangeImpactOf<Kind extends CanvasCommandKind> = EntryTypes[Kind]['impact'];
+}[Kind];
 
 export type AnyCommandEntry = CommandEntry<CanvasCommand, ChangeImpactOf<CanvasCommandKind> | null>;
 

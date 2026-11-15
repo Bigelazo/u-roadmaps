@@ -1,9 +1,9 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { roadmapUrl } from '@/features/roadmap/client';
+import type { ChangeImpactCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   canvasCommandCatalog,
   type AnyCommandEntry,
-  type ChangeImpactCommand,
   type CommandEntry,
   type RouteRequest,
 } from '@/features/roadmap/canvas/commands/commands';

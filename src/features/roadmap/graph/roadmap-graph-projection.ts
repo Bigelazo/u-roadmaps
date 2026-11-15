@@ -1,4 +1,4 @@
-import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/canvas-command';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
 
@@ -6,7 +6,7 @@ export type {
   NewNodePlacement,
   RoadmapNodePlacement,
   RoadmapNodePosition,
-} from '@/features/roadmap/canvas/commands/commands';
+} from '@/features/roadmap/canvas/commands/canvas-command';
 
 export type RoadmapViewport = {
   readonly x: number;

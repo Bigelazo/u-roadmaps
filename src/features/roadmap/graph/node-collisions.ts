@@ -1,4 +1,4 @@
-import type { RoadmapNodePlacement } from '@/features/roadmap/canvas/commands/commands';
+import type { RoadmapNodePlacement } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   roadmapGridSize,
   roadmapNodeClearance,

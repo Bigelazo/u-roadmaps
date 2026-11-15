@@ -2,7 +2,7 @@ import type {
   ChangeImpactCommand,
   CanvasCommand,
   ReadChangeImpactOf,
-} from '@/features/roadmap/canvas/commands/commands';
+} from '@/features/roadmap/canvas/commands/canvas-command';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import type {
   AnyRoadmapDto,

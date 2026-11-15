@@ -2,7 +2,7 @@ import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import {
   createInMemoryRoadmapSessionPersistence,
