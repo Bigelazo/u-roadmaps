@@ -445,7 +445,6 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       allowInteraction: true,
       title: 'Tipos de nodo',
       prepare: async () => {
-        await waitForElement(() => (nodeCreationDialog() ? null : document.body));
         openCreationMenu();
         await waitForElement(() => floatingMenuItem(NODE_TYPES_MENU_ITEM_LABEL));
         const nodeTypesAction = floatingMenuItem(NODE_TYPES_MENU_ITEM_LABEL);

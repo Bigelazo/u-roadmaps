@@ -179,3 +179,23 @@ test.describe('landscape tutorial exit', () => {
     await expect(page).toHaveURL(/\/academic-overview$/);
   });
 });
+
+test('leaving during the opening transition gives the canvas back on every attempt', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const popover = page.locator('.driver-popover');
+  const editor = page.locator('#roadmap-editor-panel');
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await page.goto('/practice-roadmap/teaching');
+    await expect(popover).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page
+      .getByRole('alertdialog', { name: '¿Salir del tutorial?' })
+      .getByRole('button', { name: 'Salir' })
+      .click();
+    await expect(popover).toHaveCount(0);
+    await page.locator('.react-flow__node[data-id="practice-node-a"] p').click({ timeout: 2_000 });
+    await expect(editor).toBeVisible();
+  }
+});

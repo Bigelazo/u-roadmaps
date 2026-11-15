@@ -23,7 +23,7 @@ for (const { option, experience } of choices) {
     ).toHaveCount(1);
     await icon.click();
 
-    const choice = page.getByRole('dialog', { name: '¿Cómo deseas realizar el tutorial?' });
+    const choice = page.getByRole('dialog', { name: '¿Deseas realizar el tutorial?' });
     await expect(choice.getByRole('button', { name: 'Docente' })).toBeVisible();
     await expect(choice.getByRole('button', { name: 'Estudiante' })).toBeVisible();
     await choice.getByRole('button', { name: option }).click();

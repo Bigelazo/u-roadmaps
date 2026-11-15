@@ -1,5 +1,6 @@
 'use client';
 
+import { ClockCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import {
@@ -30,10 +31,15 @@ export function TutorialChoiceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>¿Cómo deseas realizar el tutorial?</DialogTitle>
+          <DialogTitle>¿Deseas realizar el tutorial?</DialogTitle>
           <DialogDescription>
-            Aprende los conceptos básicos de la plataforma en un Roadmap de prueba.
+            Aprende los conceptos básicos de la plataforma en un Roadmap de prueba. Disponible para
+            ambos roles.
           </DialogDescription>
+          <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <ClockCheck aria-hidden="true" className="size-4 text-primary" />
+            Tiempo estimado: 1-3 min.
+          </p>
         </DialogHeader>
         <DialogFooter>
           {declinable ? (

@@ -14,7 +14,7 @@ for (const { option, experience } of [
     });
     await page.goto('/');
     await page.getByRole('button', { name: 'Probar tutorial' }).click();
-    const choice = page.getByRole('dialog', { name: '¿Cómo deseas realizar el tutorial?' });
+    const choice = page.getByRole('dialog', { name: '¿Deseas realizar el tutorial?' });
     await expect(choice).toContainText(
       'Aprende los conceptos básicos de la plataforma en un Roadmap de prueba.',
     );

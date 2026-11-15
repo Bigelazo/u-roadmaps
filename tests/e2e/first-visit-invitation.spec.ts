@@ -7,7 +7,7 @@ const forgetInvitation = (userId: string) =>
   sql(`UPDATE "User" SET "tutorialInvitationShownAt" = NULL WHERE "id" = ${literal(userId)};`);
 
 const invitation = (page: Page) =>
-  page.getByRole('dialog', { name: '¿Cómo deseas realizar el tutorial?' });
+  page.getByRole('dialog', { name: '¿Deseas realizar el tutorial?' });
 
 test('a first Academic overview visit invites once, also in a fresh browser context', async ({
   page,
