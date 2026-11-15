@@ -261,6 +261,36 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   ]);
 });
 
+test('a Roadmap-wide change reports the Node access read after it; a Completion reports none', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const target = await addNode(course);
+  await teacherEdits(course, recording.port).connect(course.change.nodeId, target.id);
+  const [created] = recording.changes;
+  expect(created.access?.participants).toEqual(
+    [
+      { userId: course.teacherId, role: 'TEACHER' },
+      { userId: course.studentId, role: 'STUDENT' },
+      { userId: course.classmateId, role: 'STUDENT' },
+      { userId: course.colleagueId, role: 'TEACHER' },
+    ].sort((a, b) => a.userId.localeCompare(b.userId)),
+  );
+  expect(created.access?.accessibleByUser.get(course.studentId)).toEqual(
+    new Set([course.change.nodeId]),
+  );
+  expect(created.access?.accessibleByUser.get(course.teacherId)).toEqual(
+    new Set([course.change.nodeId, target.id]),
+  );
+  recording.changes.length = 0;
+  await completeNode(
+    { userId: course.studentId, identifier: course.identifier, nodeId: course.change.nodeId },
+    recording.port,
+  );
+  expect(recording.changes).toHaveLength(1);
+  expect(recording.changes[0]).not.toHaveProperty('access');
+});
+
 test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
   'Teacher block and %s report access changes',
   async (operation, { course }) => {

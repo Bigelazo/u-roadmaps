@@ -136,8 +136,17 @@ export async function changeRoadmap<Result>(
     readAccessSnapshot(transaction, roadmapId, access === 'actor' ? actorId : undefined);
   const before = access === 'none' ? null : await snapshot();
   const { result, facts } = await change(roadmap);
-  const accessFacts = before ? accessChanges(before, await snapshot()) : [];
-  const reported = [...facts, ...accessFacts];
-  if (reported.length) await report({ actorId, identifier, roadmapId, facts: reported });
+  const after = before ? await snapshot() : null;
+  const reported = [...facts, ...(before && after ? accessChanges(before, after) : [])];
+  if (reported.length)
+    await report({
+      actorId,
+      identifier,
+      roadmapId,
+      facts: reported,
+      ...(access === 'roadmap' && after
+        ? { access: { participants: after.participants, accessibleByUser: after.accessibleByUser } }
+        : {}),
+    });
   return result;
 }

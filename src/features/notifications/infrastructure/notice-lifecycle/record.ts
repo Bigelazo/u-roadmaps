@@ -48,7 +48,13 @@ export async function recordNoticeTargets(
   readAccess?: ParticipantAccessReader,
   readRoadmapAccess?: RoadmapAccessReader,
 ): Promise<NoticeDelivery | undefined> {
-  const roadmap = roadmapView(transaction, changes.roadmapId, readAccess, readRoadmapAccess);
+  const { access } = changes;
+  const roadmap = roadmapView(
+    transaction,
+    changes.roadmapId,
+    readAccess,
+    access ? async () => access : readRoadmapAccess,
+  );
   await lockOwnChanges(transaction, changes);
   const recorded: { order: number; target?: RecordedTarget; own?: OwnTarget }[] = [];
   const fromFacts: FactRecipientTarget[] = [];
