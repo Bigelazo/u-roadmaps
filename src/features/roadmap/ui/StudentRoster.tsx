@@ -82,7 +82,11 @@ export function StudentRoster({
           </thead>
           <tbody className="divide-y divide-fog">
             {matches.map((member) => (
-              <tr aria-label={member.name} className="hover:bg-cloud/60" key={member.key}>
+              <tr
+                aria-label={member.name}
+                className="hover:bg-cloud/60 dark:hover:bg-muted/55"
+                key={member.key}
+              >
                 <th className="px-4 py-3 text-left align-middle font-medium sm:px-5" scope="row">
                   <span className="break-words">{member.name}</span>
                   {member.institutionalPosition === 'OBSERVER' ||

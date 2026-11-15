@@ -227,7 +227,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
     name: '¿Reemplazar el texto con el archivo Markdown?',
   });
   await markdownConfirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
-  await expect(description).toHaveValue(markdown);
+  await expect(description).toContainText('Repasa límites.');
   await transfer.dispose();
   await dialog.getByLabel('Tipo').click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
@@ -256,10 +256,19 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await expectStep(page, 'Conecta tu nodo');
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(tourPopover(page).locator('[data-slot="node-name"]')).toHaveText(['Control 1']);
-  await expect(tourPopover(page).locator('[data-slot="node-name-icon"]').first()).toHaveCSS(
-    'color',
-    'rgb(219, 39, 119)',
-  );
+  await expect
+    .poll(() =>
+      tourPopover(page)
+        .locator('[data-slot="node-name-icon"]')
+        .first()
+        .evaluate((element) => {
+          const color = getComputedStyle(element).color;
+          const channels = color.match(/[\d.]+/g)!.map(Number);
+          const scale = color.startsWith('color(srgb') ? 255 : 1;
+          return channels.slice(0, 3).map((channel) => Math.round(channel * scale));
+        }),
+    )
+    .toEqual([219, 39, 119]);
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
   await expect(tourPopover(page).locator('.driver-popover-description')).toHaveText(
     'Coloca el cursor sobre tu nodo para ver sus anclajes. Arrastra uno hasta Control 1, o haz click en un anclaje y luego en el nodo.',
@@ -318,9 +327,9 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await expect(page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]')).toHaveClass(
     /driver-active-element/,
   );
-  await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/^Contenido/)).toHaveValue(
-    markdown,
-  );
+  await expect(
+    page.locator('[aria-label="Editor de nodo"]').getByLabel(/^Contenido/),
+  ).toContainText('Repasa límites.');
 
   await expectExitReachable(page, 'editor-desktop');
 

@@ -272,3 +272,10 @@
 .u-roadmaps-tour[data-tutorial-placement='over'] .driver-popover-arrow {
   display: none !important;
 }
+
+[data-theme='dark'] .driver-popover.u-roadmaps-tour {
+  border-color: var(--input);
+  box-shadow:
+    0 2px 4px -1px rgb(0 0 0 / 30%),
+    0 4px 6px -1px rgb(0 0 0 / 40%);
+}

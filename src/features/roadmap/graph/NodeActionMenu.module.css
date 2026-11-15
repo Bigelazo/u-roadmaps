@@ -159,3 +159,10 @@
 :global(.react-flow__node:focus-within) .overview {
   visibility: visible;
 }
+
+:global([data-theme='dark']) .actionButton,
+:global([data-theme='dark']) .triggerVisual {
+  box-shadow:
+    0 4px 3px rgb(0 0 0 / 10%),
+    0 2px 2px rgb(0 0 0 / 6%);
+}

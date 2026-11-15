@@ -1,3 +1,4 @@
+import { nodeTypePaint } from '@/shared/node-type';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import { NodeName } from '@/features/roadmap/ui/NodeName';
@@ -14,5 +15,5 @@ test('names a Node with its type icon in the type color and without quotes', () 
   expect(parsed.textContent).toBe('Vectores');
   const icon = parsed.querySelector('svg');
   expect(icon?.getAttribute('aria-hidden')).toBe('true');
-  expect(icon?.getAttribute('style')).toBe('color:#2563eb');
+  expect(icon?.getAttribute('style')).toBe(`color:${nodeTypePaint('#2563eb')}`);
 });

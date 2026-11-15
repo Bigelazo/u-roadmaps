@@ -199,3 +199,21 @@ button.trigger:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+:global([data-theme='dark']) .layer {
+  --speed-dial-shadow: 0 4px 3px rgb(0 0 0 / 10%), 0 2px 2px rgb(0 0 0 / 6%);
+  --speed-dial-shadow-hover: 0 6px 5px rgb(0 0 0 / 14%), 0 3px 3px rgb(0 0 0 / 8%);
+  --speed-dial-halo: 0 0 0 0 transparent;
+}
+
+:global([data-theme='dark']) .actionLabel {
+  background: var(--popover);
+  color: var(--foreground);
+  box-shadow:
+    0 2px 4px -1px rgb(0 0 0 / 30%),
+    0 4px 6px -1px rgb(0 0 0 / 40%);
+}
+
+:global([data-theme='dark']) .actionLabel::after {
+  background: var(--popover);
+}

@@ -86,7 +86,7 @@ export default async function Home() {
         aria-labelledby="landing-title"
         className="mx-auto max-w-[1440px] px-4 pt-6 sm:px-6 md:pt-10"
       >
-        <div className="rounded-xl bg-ink px-6 py-10 text-primary-foreground sm:px-10 md:py-12 xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center xl:gap-10 xl:px-12">
+        <div className="rounded-xl bg-brand-surface px-6 py-10 text-brand-surface-foreground sm:px-10 md:py-12 xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center xl:gap-10 xl:px-12">
           <div className="max-w-xl">
             <h1
               id="landing-title"
@@ -94,17 +94,17 @@ export default async function Home() {
             >
               Cada curso, una ruta clara.
             </h1>
-            <p className="mt-6 text-lg leading-[1.55] text-pretty text-primary-foreground/85">
+            <p className="mt-6 text-lg leading-[1.55] text-pretty text-brand-surface-foreground/85">
               Explora contenidos, requisitos y recursos en una ruta que muestra tu avance.
             </p>
             <InstitutionalLoginForm tone="dark" className="mt-8" />
-            <p className="mt-4 text-sm leading-normal text-primary-soft">
+            <p className="mt-4 text-sm leading-normal text-brand-surface-muted">
               Usa tu cuenta U-Pasaporte. Tus cursos se cargan desde{' '}
               <span className="whitespace-nowrap">U-Campus</span>.
             </p>
             <div className="mt-6">
               <LandingTutorialButton />
-              <p className="mt-2 text-sm leading-normal text-primary-soft">
+              <p className="mt-2 text-sm leading-normal text-brand-surface-muted">
                 Sin iniciar sesión. Practica como docente o estudiante; nada se guarda.
               </p>
             </div>

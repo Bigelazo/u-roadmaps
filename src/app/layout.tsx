@@ -1,6 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import AuthenticationAlert from '@/app/_components/AuthenticationAlert';
 import { DevelopmentBar, developmentPersonas } from '@/development';
 import GlobalNavigation from '@/app/_components/GlobalNavigation';
@@ -15,6 +15,7 @@ import { NotificationsProvider } from '@/features/notifications';
 import { AcademicCacheIdentity } from '@/features/academic-overview';
 import { Toaster } from '@/shared/ui/toast';
 import { NavigationHistory } from '@/shared/client/navigation/navigation-history';
+import { parseThemePreference, themeCookieName } from '@/shared/theme-preference';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
 const poppins = Poppins({
@@ -30,7 +31,12 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [session, requestHeaders] = await Promise.all([getApplicationSession(), headers()]);
+  const [session, requestHeaders, requestCookies] = await Promise.all([
+    getApplicationSession(),
+    headers(),
+    cookies(),
+  ]);
+  const theme = parseThemePreference(requestCookies.get(themeCookieName)?.value);
   const user = await resolveSessionUser(session);
   const framed = isFramedRequest(requestHeaders);
   const inboxIdentity = user ? getInboxIdentity(user.id) : null;
@@ -42,7 +48,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     : null;
 
   return (
-    <html lang="es" className={cn('font-sans', plusJakartaSans.variable, poppins.variable)}>
+    <html
+      lang="es"
+      data-theme={theme}
+      className={cn('font-sans', plusJakartaSans.variable, poppins.variable)}
+    >
       <body>
         <NotificationsProvider identity={inboxIdentity} inbox={inbox}>
           <AcademicCacheIdentity userId={user?.id ?? null} />
@@ -52,6 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               isAuthenticated={Boolean(user)}
               userName={user?.name ?? null}
               inboxIdentity={inboxIdentity}
+              theme={theme}
               developmentTools={
                 developmentEnvironmentEnabled() ? (
                   <DevelopmentBar personas={developmentPersonas} />

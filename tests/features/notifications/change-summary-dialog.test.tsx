@@ -1,3 +1,4 @@
+import { nodeTypePaint } from '@/shared/node-type';
 import { render, screen, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { ChangeSummaryDialog } from '@/features/notifications/components/ChangeSummaryDialog';
@@ -51,9 +52,9 @@ test('names every Node in the Change summary with its type icon and no quotes', 
       .map((item) => item.textContent),
   ).toEqual(['Nodo eliminado.', 'Fuerzas ahora requiere Vectores.']);
   expect(nodeNames(dialog)).toEqual([
-    { title: 'Control 1', color: 'rgb(180, 35, 24)' },
-    { title: 'Fuerzas', color: 'rgb(2, 74, 216)' },
-    { title: 'Vectores', color: 'rgb(2, 74, 216)' },
+    { title: 'Control 1', color: nodeTypePaint('#B42318') },
+    { title: 'Fuerzas', color: nodeTypePaint('#024AD8') },
+    { title: 'Vectores', color: nodeTypePaint('#024AD8') },
   ]);
   expect(dialog.textContent).not.toMatch(/["“”«»]/);
 });

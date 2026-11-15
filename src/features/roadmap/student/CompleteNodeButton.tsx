@@ -56,7 +56,7 @@ export function CompleteNodeButton({
       <TooltipTrigger
         render={
           <Button
-            className="bg-emerald-600 text-white hover:bg-emerald-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-emerald-600"
+            className="bg-emerald-600 text-white hover:bg-emerald-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-emerald-600 dark:bg-progress-deep dark:text-primary-foreground dark:hover:bg-progress-deep/80 dark:aria-disabled:hover:bg-progress-deep"
             disabled={isLocked || isReadOnly}
             aria-disabled={isGated || undefined}
             onClick={() => (isGated ? showHint() : onComplete())}

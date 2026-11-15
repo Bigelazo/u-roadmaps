@@ -35,7 +35,7 @@ export function ResourceMetadata({
       ) : null}
       {showsSize ? <span>{formatFileSize(resource.fileSize!)}</span> : null}
       {isReviewed ? (
-        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-progress">
           <CircleCheck aria-hidden="true" className="size-3.5" />
           <span className="sr-only">Ya lo revisaste</span>
         </span>
