@@ -503,6 +503,8 @@ export const deleteRoadmapNodeType = roadmapCommand({
   },
 });
 
+const dependencyConflictMessage = 'La dependencia entra en conflicto con otra modificación.';
+
 function parseDependency({ input }: { input: JsonObject }) {
   return {
     sourceNodeId: requireUuid(input.sourceNodeId, 'sourceNodeId'),
@@ -523,7 +525,7 @@ export const createRoadmapDependency = roadmapCommand({
     previewVersion,
   }),
   access: 'roadmap',
-  conflictMessage: 'La dependencia entra en conflicto con otra modificación.',
+  conflictMessage: dependencyConflictMessage,
   run: async ({ tx, roadmap, input: { dependency: input, previewVersion } }) => {
     const { snapshot, impact } = await persistConfirmedChange(
       tx,
@@ -546,18 +548,35 @@ export const previewRoadmapDependency = async ({
   return readChangeImpact(participant, dependencyChange(parseDependency({ input })));
 };
 
+const dependencyEnds = {
+  sourceNode: { select: { title: true, isVisible: true } },
+  targetNode: { select: { title: true, isVisible: true } },
+} as const;
+
+function removedDependencyFact(
+  dependency: Prisma.DependencyGetPayload<{ include: typeof dependencyEnds }>,
+): RoadmapChangeFact {
+  return {
+    kind: 'dependency',
+    dependencyId: dependency.id,
+    sourceNodeId: dependency.sourceNodeId,
+    targetNodeId: dependency.targetNodeId,
+    previous: true,
+    current: false,
+    sourceNode: dependency.sourceNode,
+    targetNode: dependency.targetNode,
+  };
+}
+
 export const deleteRoadmapDependency = roadmapCommand({
   capability: 'edit',
   parse: ({ id }: { id: string }) => requireUuid(id, 'dependencyId'),
   access: 'roadmap',
-  conflictMessage: 'La dependencia entra en conflicto con otra modificación.',
+  conflictMessage: dependencyConflictMessage,
   run: async ({ tx, roadmap, input: dependencyId }) => {
     const dependency = await tx.dependency.findFirst({
       where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
-      include: {
-        sourceNode: { select: { title: true, isVisible: true } },
-        targetNode: { select: { title: true, isVisible: true } },
-      },
+      include: dependencyEnds,
     });
     if (!dependency)
       throw new ApplicationError(
@@ -566,21 +585,36 @@ export const deleteRoadmapDependency = roadmapCommand({
         'La dependencia no existe en este roadmap.',
       );
     await tx.dependency.delete({ where: { id: dependency.id } });
-    return {
-      result: {},
-      facts: [
-        {
-          kind: 'dependency',
-          dependencyId: dependency.id,
-          sourceNodeId: dependency.sourceNodeId,
-          targetNodeId: dependency.targetNodeId,
-          previous: true,
-          current: false,
-          sourceNode: dependency.sourceNode,
-          targetNode: dependency.targetNode,
-        },
-      ],
-    };
+    return { result: {}, facts: [removedDependencyFact(dependency)] };
+  },
+});
+
+function parseDependencyIds({ input }: { input: JsonObject }) {
+  const { dependencyIds } = input;
+  if (!Array.isArray(dependencyIds) || dependencyIds.length === 0)
+    throw new ApplicationError(
+      400,
+      'INVALID_REQUEST',
+      'dependencyIds debe ser una lista de UUID válidos.',
+    );
+  return [...new Set(dependencyIds.map((id) => requireUuid(id, 'dependencyIds')))];
+}
+
+export const deleteRoadmapDependencies = roadmapCommand({
+  capability: 'edit',
+  parse: parseDependencyIds,
+  access: 'roadmap',
+  conflictMessage: dependencyConflictMessage,
+  run: async ({ tx, roadmap, input: dependencyIds }) => {
+    const found = await tx.dependency.findMany({
+      where: { id: { in: dependencyIds }, sourceNode: { roadmapId: roadmap.id } },
+      include: dependencyEnds,
+    });
+    const byId = new Map(found.map((dependency) => [dependency.id, dependency]));
+    const dependencies = dependencyIds.flatMap((id) => byId.get(id) ?? []);
+    if (dependencies.length)
+      await tx.dependency.deleteMany({ where: { id: { in: dependencies.map(({ id }) => id) } } });
+    return { result: {}, facts: dependencies.map(removedDependencyFact) };
   },
 });
 

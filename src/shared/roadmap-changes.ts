@@ -68,9 +68,15 @@ export type RoadmapChangeFact =
     }
   | { kind: 'participation-role'; recipientId: string; previous: 'STUDENT'; current: 'TEACHER' };
 
+export type RoadmapAccess = Readonly<{
+  participants: readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[];
+  accessibleByUser: ReadonlyMap<string, ReadonlySet<string>>;
+}>;
+
 export type RoadmapChanges = Readonly<{
   actorId: string;
   roadmapId: string;
   identifier: Readonly<CourseOfferingIdentifier>;
   facts: readonly RoadmapChangeFact[];
+  access?: RoadmapAccess;
 }>;

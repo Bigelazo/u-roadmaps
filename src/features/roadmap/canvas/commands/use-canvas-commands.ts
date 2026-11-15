@@ -119,14 +119,13 @@ export function useCanvasCommands({
 
     function announceApplied(
       command: CanvasCommand,
-      outcome: CommandOutcome<CanvasCommand>,
+      outcome: CommandOutcome,
       impact?: ChangeImpact,
       announce = true,
     ) {
       const entry = entryOf(command);
       const message = announce ? entry.success?.(command, outcome, impact) : undefined;
       if (message) notify.success(message);
-      if (outcome.remaining) return;
       const action = entry.report?.(command, outcome);
       if (action) report?.(action);
       onCommandApplied(command, outcome.createdNodeId);
@@ -157,10 +156,9 @@ export function useCanvasCommands({
         input,
       );
       if (result) {
-        const remaining = result === true ? undefined : result.retry;
-        if (!remaining) setPending(null);
-        announceApplied(opened.request, { choice, input, remaining }, impact);
-        return remaining ? open({ ...opened, request: remaining }) : true;
+        setPending(null);
+        announceApplied(opened.request, { choice, input }, impact);
+        return true;
       }
       const latest = (await readImpact(opened)) ?? impact;
       setPending(

@@ -26,14 +26,19 @@ export async function readParticipantAccess(
     }),
   ]);
   const completedNodeIds = new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId));
+  const nodesByRoadmap = Map.groupBy(nodes, (node) => node.roadmapId);
+  const roadmapOfNode = new Map(nodes.map(({ id, roadmapId }) => [id, roadmapId]));
+  const dependenciesByRoadmap = Map.groupBy(dependencies, ({ sourceNodeId }) =>
+    roadmapOfNode.get(sourceNodeId),
+  );
   const access = new Map<string, ReadonlySet<string>>();
   for (const { role, courseOffering } of participations) {
     const roadmapId = courseOffering.roadmap?.id;
     if (!roadmapId) continue;
     const view = participantNodeAccess({
       participant: toParticipant(role, completedNodeIds),
-      nodes: nodes.filter((node) => node.roadmapId === roadmapId),
-      dependencies,
+      nodes: nodesByRoadmap.get(roadmapId) ?? [],
+      dependencies: dependenciesByRoadmap.get(roadmapId) ?? [],
     });
     access.set(roadmapId, view.accessibleNodeIds);
   }

@@ -3,6 +3,10 @@ import { expect } from 'vitest';
 import { test, type IntegrationCourse } from '../../../notifications-integration/fixtures';
 import { recordingChangePort } from '../support/recording-change-port';
 import { prisma } from '@/shared/server/db';
+import {
+  integrationClient,
+  integrationDatabaseUrl,
+} from '../../../notifications-integration/database';
 import { synchronizeAcademicHistory, synchronizeCourseOffering } from '@/features/roadmap/server';
 import { requireRoadmapCreationAccess } from '@/features/roadmap/application/participation';
 import {
@@ -236,6 +240,49 @@ test('promotion from STUDENT to TEACHER reports the role change and clears simul
     await prisma.simulatedCompletion.count({ where: { participationId: course.participationId } }),
   ).toBe(0);
 });
+
+async function roadmapSignals(course: IntegrationCourse, run: () => Promise<unknown>) {
+  const { courseOfferingId } = (await storedActive(course.studentId, course))!;
+  const client = integrationClient(integrationDatabaseUrl());
+  let signals = 0;
+  client.on('notification', ({ payload }) => {
+    if (
+      (JSON.parse(payload ?? '{}') as { courseOfferingId?: string }).courseOfferingId ===
+      courseOfferingId
+    )
+      signals += 1;
+  });
+  await client.connect();
+  try {
+    await client.query('LISTEN u_roadmaps_changes');
+    await run();
+    await client.query('SELECT 1');
+    return signals;
+  } finally {
+    await client.end();
+  }
+}
+
+test.for(['complete', 'partial'] as const)(
+  'a %s history that repeats the stored Participation writes and signals nothing',
+  async (status, { course }) => {
+    const history: AcademicHistory = {
+      status,
+      courses: [reported({ ...course.identifier, institutionalPosition: 'STUDENT' })],
+    };
+    await synchronize(course.studentId, course, history);
+    const stored = await storedActive(course.studentId, course);
+    const recording = recordingChangePort();
+    let result: Awaited<ReturnType<typeof synchronize>> | undefined;
+    const signals = await roadmapSignals(course, async () => {
+      result = await synchronize(course.studentId, course, history, recording.port);
+    });
+    expect(signals).toBe(0);
+    expect(recording.changes).toEqual([]);
+    expect(result?.participation).toEqual(stored);
+    expect(await storedActive(course.studentId, course)).toEqual(stored);
+  },
+);
 
 const createRoadmap = (userId: string, course: IntegrationCourse, history: AcademicHistory) =>
   requireRoadmapCreationAccess(

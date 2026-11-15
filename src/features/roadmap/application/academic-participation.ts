@@ -78,6 +78,26 @@ function readActiveParticipation(
 
 type Materialization = 'replace' | 'promote';
 
+type StoredParticipation = Readonly<{
+  role: string;
+  institutionalPosition: InstitutionalCoursePosition | null;
+  isActive: boolean;
+}>;
+
+function keepsStoredParticipation(
+  stored: StoredParticipation | null | undefined,
+  materialization: Materialization,
+  institutionalPosition: InstitutionalCoursePosition,
+) {
+  if (!stored?.isActive) return false;
+  if (materialization === 'promote')
+    return !outranks(institutionalPosition, stored.institutionalPosition);
+  return (
+    stored.institutionalPosition === institutionalPosition &&
+    stored.role === positionCapabilities(institutionalPosition).role
+  );
+}
+
 async function materializeParticipation(
   user: AcademicUser,
   { identifier, ...access }: CourseAccess,
@@ -87,6 +107,10 @@ async function materializeParticipation(
   const institutionalPosition = effectivePosition(access.positions);
   if (!institutionalPosition) return null;
   const { role } = positionCapabilities(institutionalPosition);
+  const stored = await prisma.participation.findFirst({
+    where: { userId: user.id, courseOffering: identifier },
+  });
+  if (keepsStoredParticipation(stored, materialization, institutionalPosition)) return stored;
   return roadmapChangeTransaction(
     changePort,
     async (transaction, report) => {
@@ -114,11 +138,7 @@ async function materializeParticipation(
       SELECT id, role, "institutionalPosition", "isActive" FROM "Participation"
         WHERE "userId" = ${user.id}::uuid
         AND "courseOfferingId" = ${courseOffering.id}::uuid FOR UPDATE`;
-      if (
-        materialization === 'promote' &&
-        previous?.isActive &&
-        !outranks(institutionalPosition, previous.institutionalPosition)
-      )
+      if (keepsStoredParticipation(previous, materialization, institutionalPosition))
         return transaction.participation.findUniqueOrThrow({ where: { id: previous.id } });
       const participation = await transaction.participation.upsert({
         where: {

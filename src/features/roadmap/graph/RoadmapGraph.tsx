@@ -102,6 +102,7 @@ import {
 } from '@/shared/client/tutorial/tutorial-support';
 import { cn } from 'cn';
 import { useRoadmapNodeSizing } from './use-roadmap-node-sizing';
+import { reconcileFlow } from './flow-reconciliation';
 import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
@@ -330,17 +331,6 @@ function selectFlowNode(
   return {
     ...flow,
     nodes: flow.nodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
-  };
-}
-
-function keepMeasuredNodes(
-  flow: ReturnType<typeof mapProjectionToFlow>,
-  current: ReturnType<typeof mapProjectionToFlow>,
-) {
-  const measuredById = new Map(current.nodes.map((node) => [node.id, node.measured]));
-  return {
-    ...flow,
-    nodes: flow.nodes.map((node) => ({ ...node, measured: measuredById.get(node.id) })),
   };
 }
 
@@ -979,11 +969,12 @@ function useRoadmapGraphController({
   ) {
     setAppliedInput({ projectedFlow, selectedNodeId });
     setFlow((current) =>
-      selectFlowNode(
-        appliedInput.projectedFlow !== projectedFlow
-          ? keepMeasuredNodes(projectedFlow, current)
-          : current,
-        selectedNodeId,
+      reconcileFlow(
+        selectFlowNode(
+          appliedInput.projectedFlow !== projectedFlow ? projectedFlow : current,
+          selectedNodeId,
+        ),
+        current,
       ),
     );
   }
