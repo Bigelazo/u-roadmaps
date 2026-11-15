@@ -105,16 +105,16 @@ test('a pending Roadmap availability notice absorbs title changes', async ({ cou
   ]);
 });
 
-test('the Inbox and the Change summary describe a title notice in the same words', async ({
-  course,
-}) => {
+test('the Change summary names the previous title under the renamed Node', async ({ course }) => {
   await enterRoadmap(course.studentId, course.roadmapId);
   await teacherEdits(course).rename(course.change.nodeId, 'Recursión');
   const [notice] = await pendingNotices(course.studentId, course.roadmapId);
   expect(notice.body).toBe('«Recursividad» pasó a llamarse «Recursión».');
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
   expect(summary?.courseCode).toBe(course.identifier.courseCode);
-  expect(summaryInInboxWords(summary)).toEqual([{ title: 'Recursión', items: [notice.body] }]);
+  expect(summaryInInboxWords(summary)).toEqual([
+    { title: 'Recursión', items: ['Antes se llamaba «Recursividad».'] },
+  ]);
 });
 
 test('counts, the Node change mark and the Grouped roadmap notice count title targets', async ({

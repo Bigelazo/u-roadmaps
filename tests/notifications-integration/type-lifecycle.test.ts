@@ -132,7 +132,7 @@ test('the Change summary lists a type change under «Ruta y clasificación» wit
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
   expect(summary?.courseCode).toBe(course.identifier.courseCode);
   expect(summaryInInboxWords(summary)).toEqual([
-    { title: 'Recursión', items: ['«Recursividad» pasó a llamarse «Recursión».'] },
+    { title: 'Recursión', items: ['Antes se llamaba «Recursividad».'] },
     {
       title: 'Ruta y clasificación',
       items: ['«Recursión» pasó de tipo «Tema» a tipo «Taller».'],

@@ -42,7 +42,7 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
     subject: currentValue,
     body: `«${knownValue}» pasó a llamarse «${currentValue}».`,
     summaryGroup: 'node',
-    summaryParts: [nodePart(knownValue), ' pasó a llamarse ', nodePart(currentValue), '.'],
+    summaryParts: ['Antes se llamaba ', nodePart(knownValue), '.'],
   }),
   apiData: ({ knownValue, currentValue }) => ({
     nodeTitle: currentValue,
