@@ -684,8 +684,8 @@ test.each([
     const id = label === 'Bloquear nodo' || label === 'Desbloquear' ? 'access' : 'visibility';
     const currentIcon = within(trigger).getByTestId(`node-action-${id}-current-icon`);
     const previewIcon = within(trigger).getByTestId(`node-action-${id}-preview-icon`);
-    expect(currentIcon.innerHTML).toContain(`lucide-${current}"`);
-    expect(previewIcon.innerHTML).toContain(`lucide-${preview}"`);
+    expect(currentIcon.innerHTML).toMatch(new RegExp(`lucide-${current}[" ]`));
+    expect(previewIcon.innerHTML).toMatch(new RegExp(`lucide-${preview}[" ]`));
 
     await waitFor(() => expect(getComputedStyle(currentIcon).opacity).toBe('1'));
     expect(getComputedStyle(previewIcon).opacity).toBe('0');

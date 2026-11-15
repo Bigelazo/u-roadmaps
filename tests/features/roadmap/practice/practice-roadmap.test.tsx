@@ -34,7 +34,7 @@ it('explains "Gestionar tipos de nodo" in its own step right after "Crea un nodo
         : nodeTypes.description}
     </>,
   );
-  expect(screen.getByText('Tipos de nodo')).toBeTruthy();
+  expect(screen.getByText('Tipos').parentElement?.textContent).toBe('Tipos de nodo');
   expect(screen.getByText(/te permite crear tus propios tipos personalizados/)).toBeTruthy();
   expect(nodeTypes.advanceWhen).toBeUndefined();
   const creationDescription = steps[creation].description;
