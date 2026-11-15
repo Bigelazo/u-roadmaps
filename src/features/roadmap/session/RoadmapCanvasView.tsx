@@ -53,8 +53,8 @@ import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types
 import { blockedPrerequisiteNodeIds } from '@/features/roadmap/domain/scheduled-unlock';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
-import { Spinner } from '@/shared/ui/spinner';
+import { Empty, EmptyHeader, EmptyMedia } from '@/shared/ui/empty';
+import { RoadmapCanvasLoading } from './RoadmapCanvasLoading';
 import { notify } from '@/shared/ui/notify';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
@@ -79,32 +79,6 @@ const NodeEditor = dynamic(
 );
 
 type Props = { input: RoadmapCanvasSessionInput };
-
-function RoadmapCanvasLoading({ isCanvasPreview = false }: { isCanvasPreview?: boolean }) {
-  const title = isCanvasPreview ? 'Cargando simulación...' : 'Cargando roadmap...';
-
-  return (
-    <section
-      data-page-width="full"
-      aria-busy="true"
-      className="roadmap-canvas-loading flex min-h-0 w-full flex-1 bg-background"
-    >
-      <Empty role="status" aria-label={title} className="rounded-none">
-        <EmptyHeader>
-          <EmptyMedia>
-            <Spinner role="img" aria-hidden="true" className="size-8 motion-reduce:animate-none" />
-          </EmptyMedia>
-          <EmptyTitle>{title}</EmptyTitle>
-          <EmptyDescription>
-            {isCanvasPreview
-              ? 'Preparando la vista de estudiante.'
-              : 'Preparando los nodos y sus conexiones.'}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    </section>
-  );
-}
 
 function useStateToast(
   tone: 'error' | 'neutral',

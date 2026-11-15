@@ -295,16 +295,57 @@ export type UCampus = Readonly<{
   getPersonNames(ruts: readonly string[]): Promise<Map<string, string>>;
 }>;
 
-export function createMufasaUCampus(): UCampus {
+export const ACADEMIC_HISTORY_TTL_MS = 24 * 60 * 60_000;
+export const ACADEMIC_HISTORY_LIMIT = 1000;
+
+type SharedAcademicHistory = { expiresAt: number; history: Promise<AcademicHistory> };
+const processHistories = globalThis as typeof globalThis & {
+  ucampusAcademicHistories?: Map<string, SharedAcademicHistory>;
+};
+
+function sharedAcademicHistories() {
+  return (processHistories.ucampusAcademicHistories ??= new Map<string, SharedAcademicHistory>());
+}
+
+function requestAcademicHistory(rut: string) {
+  return getMufasaAcademicHistory(rut).catch((): AcademicHistory => ({ status: 'unavailable' }));
+}
+
+function sharedAcademicHistory(rut: string): Promise<AcademicHistory> {
+  const histories = sharedAcademicHistories();
+  const now = Date.now();
+  const shared = histories.get(rut);
+  if (shared && shared.expiresAt > now) return shared.history;
+  histories.delete(rut);
+  const entry: SharedAcademicHistory = {
+    expiresAt: now + ACADEMIC_HISTORY_TTL_MS,
+    history: requestAcademicHistory(rut),
+  };
+  histories.set(rut, entry);
+  for (const oldest of histories.keys()) {
+    if (histories.size <= ACADEMIC_HISTORY_LIMIT) break;
+    histories.delete(oldest);
+  }
+  void entry.history.then((history) => {
+    if (history.status !== 'complete' && histories.get(rut) === entry) histories.delete(rut);
+  });
+  return entry.history;
+}
+
+export function forgetAcademicHistory(rut: string | null) {
+  if (rut) sharedAcademicHistories().delete(rut);
+}
+
+export function createMufasaUCampus({
+  sharedAcademicHistory: shared = false,
+}: { sharedAcademicHistory?: boolean } = {}): UCampus {
   const histories = new Map<string, Promise<AcademicHistory>>();
   return {
     getAcademicHistory(rut) {
       if (!rut) return getMufasaAcademicHistory(rut);
       let history = histories.get(rut);
       if (!history) {
-        history = getMufasaAcademicHistory(rut).catch((): AcademicHistory => ({
-          status: 'unavailable',
-        }));
+        history = shared ? sharedAcademicHistory(rut) : requestAcademicHistory(rut);
         histories.set(rut, history);
       }
       return history;
