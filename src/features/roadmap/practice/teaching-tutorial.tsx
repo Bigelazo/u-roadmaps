@@ -28,6 +28,7 @@ import {
   coarsePointerQuery,
   compactCanvasLayoutQuery,
 } from '@/features/roadmap/ui/compact-canvas-layout';
+import { pinSpeedDialLabel } from '@/shared/ui/speed-dial-label';
 import { practiceNodeIds } from './practice-roadmap';
 import {
   canvas,
@@ -166,13 +167,20 @@ function closeNodeCreationDialog() {
   cancel?.click();
 }
 
+function isInsideNodeCreator(target: Element) {
+  const creator = nodeCreator();
+  if (!creator) return false;
+  if (creator.contains(target)) return true;
+  const creatorPortal = creator.closest('[data-base-ui-portal]');
+  return Boolean(creatorPortal?.contains(target) && target.closest('[role="dialog"]'));
+}
+
 function createNodeOnly() {
   const release = restrictInteraction(
     (target) =>
       !target.closest(visibilityField) &&
-      Boolean(
-        nodeCreator()?.contains(target) || target.closest('[role="alertdialog"], [role="listbox"]'),
-      ),
+      (isInsideNodeCreator(target) ||
+        Boolean(target.closest('[role="alertdialog"], [role="listbox"]'))),
     inertSelectors([visibilityField, `${creationButton}[aria-expanded="true"]`]),
   );
   return () => {
@@ -209,8 +217,13 @@ function connectionArea(sourceId: string | null, targetId: string) {
     nodeId ? document.querySelector(nodeSelector(nodeId)) : null,
   );
   if (!nodes[0] || !nodes[1]) return null;
-  const bounds = nodes.map((node) => node!.getBoundingClientRect());
-  const margin = 24;
+  const bounds = [
+    ...nodes.map((node) => node!.getBoundingClientRect()),
+    ...[...nodes[0].querySelectorAll('[data-node-connector]')].map((connector) =>
+      connector.getBoundingClientRect(),
+    ),
+  ];
+  const margin = 12;
   const left = Math.min(...bounds.map((rect) => rect.left)) - margin;
   const top = Math.min(...bounds.map((rect) => rect.top)) - margin;
   const area =
@@ -417,7 +430,6 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         return 'A continuación, presiona el botón flotante.';
       },
       side: 'left',
-      popoverOffset: 32,
       onEnter: () => {
         void revealNodes(...Object.values(practiceNodeIds));
         return createNodeOnly();
@@ -435,6 +447,8 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       prepare: async () => {
         openCreationMenu();
         await waitForElement(() => floatingMenuItem(NODE_TYPES_MENU_ITEM_LABEL));
+        const nodeTypesAction = floatingMenuItem(NODE_TYPES_MENU_ITEM_LABEL);
+        if (nodeTypesAction) pinSpeedDialLabel(nodeTypesAction);
       },
       onEnter: exploreNodeTypes,
       description: () => (
@@ -460,9 +474,8 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
           </>
         ) : (
           <>
-            Pasa sobre tu nodo para ver sus flechas. Arrastra una hasta {control}, o haz clic en una
-            flecha y luego en {control}. La dirección importa: {control} pasará a depender de tu
-            nodo.
+            Coloca el cursor sobre tu nodo para ver sus anclajes. Arrastra uno hasta {control}, o
+            haz click en un anclaje y luego en el nodo.
           </>
         );
       },
@@ -493,7 +506,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         <>
           Aquí puedes cambiar múltiples propiedades del nodo, como su título, tipo, contenido,
           recursos, <TutorialAction icon={LockKeyhole}>bloquear</TutorialAction>,{' '}
-          <TutorialAction icon={EyeOff}>ocultar</TutorialAction>, etc. Por ahora, solo recórrelo.
+          <TutorialAction icon={EyeOff}>ocultar</TutorialAction>, etc.
         </>
       ),
       side: 'left',
@@ -511,10 +524,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         <>
           Elige <TutorialAction icon={LockKeyhole}>Bloquear nodo</TutorialAction>.
         </>,
-        <>
-          Selecciona <TutorialAction icon={LockKeyhole}>Bloquear nodo</TutorialAction>. Debido a que
-          este nodo posee otros dependientes a él, estos también serán bloqueados.
-        </>,
+        <>Debido a que este nodo posee otros dependientes a él, estos también serán bloqueados.</>,
       ),
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
@@ -614,8 +624,8 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         <>
           Tus nodos pueden tener recursos, como archivos o enlaces. Se agregan con{' '}
           <TutorialAction icon={FilePlusCorner}>Agregar recurso</TutorialAction> en el menú{' '}
-          <TutorialAction icon={Settings}>Acciones del nodo</TutorialAction>, o desde el panel de
-          edición.
+          <TutorialAction icon={Settings}>Acciones del nodo</TutorialAction>, o desde el panel
+          lateral de edición.
         </>
       ),
     },

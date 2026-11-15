@@ -31,6 +31,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'jsdom',
+          setupFiles: ['tests/support/text-range-geometry.ts'],
           include: ['tests/**/*.test.{ts,tsx}'],
           exclude: [
             'tests/notifications-integration/**',

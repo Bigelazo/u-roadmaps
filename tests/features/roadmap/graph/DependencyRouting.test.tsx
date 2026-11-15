@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { Profiler, StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import {
@@ -82,6 +82,27 @@ const canvas = () => (
     <Edge />
   </DependencyRouting>
 );
+
+test('routes after engine loading without an intermediate handle-only commit', async () => {
+  let finish!: (module: object) => void;
+  mocks.load.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+  const commits = vi.fn();
+  const { unmount } = render(
+    <Profiler id="routing" onRender={commits}>
+      {canvas()}
+    </Profiler>,
+  );
+  commits.mockClear();
+
+  await act(async () => finish({}));
+
+  expect(screen.getByTestId('route').textContent).toBe('M0,0L100,0');
+  expect(commits).toHaveBeenCalledTimes(2);
+  expect(mocks.route).toHaveBeenCalledTimes(1);
+  expect(mocks.dispose).not.toHaveBeenCalled();
+  unmount();
+  expect(mocks.dispose).toHaveBeenCalledTimes(1);
+});
 
 test('renders the canvas while the engine loads, survives Strict Mode cleanup and reroutes a moved obstacle but not selection', async () => {
   const view = (current: RoadmapFlowNode[]) => (

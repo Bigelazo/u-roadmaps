@@ -1,3 +1,4 @@
+import { nodeTypePaint } from '@/shared/node-type';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import {
@@ -60,7 +61,7 @@ function NodeTypeLabel({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
       <NodeTypeIcon
         icon={type.icon}
         className="size-4"
-        style={{ color: type.color }}
+        style={{ color: nodeTypePaint(type.color) }}
         aria-hidden="true"
       />
       <span className="truncate">{type.name}</span>

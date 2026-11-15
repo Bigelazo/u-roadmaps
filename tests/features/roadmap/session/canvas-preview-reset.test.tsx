@@ -8,6 +8,7 @@ import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/sess
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
+import { markdownText } from '../../../support/markdown-editor';
 import { findToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
@@ -208,9 +209,9 @@ test.each([false, true])(
     await user.click(screen.getByRole('button', { name: 'Derivadas' }));
     const editor = await screen.findByLabelText('Panel de edición del roadmap');
     expect(await within(editor).findByRole('heading', { name: 'Recursos (1)' })).toBeTruthy();
-    expect(
-      (within(editor).getByRole('textbox', { name: /^Contenido/ }) as HTMLTextAreaElement).value,
-    ).toBe(dependent.description);
+    expect(markdownText(within(editor).getByRole('textbox', { name: /^Contenido/ }))).toBe(
+      dependent.description,
+    );
     expect(
       within(editor)
         .getByRole('link', { name: 'Abrir enlace Guía exclusiva de derivadas' })

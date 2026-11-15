@@ -4,7 +4,6 @@ import {
   type AcademicTermKey,
   compareEditionsNewestFirst,
   compareRecordedStaff,
-  editionLabel,
   isWithinVersionHorizon,
   versionHistoryHorizon,
 } from '../domain/version-history';
@@ -20,6 +19,7 @@ import type {
 } from '../types';
 import { readStoredFile } from '../infrastructure/resources/lifecycle';
 import { versionApiUrl } from '@/shared/version-history-url';
+import { termLabel } from '@/shared/course-offering';
 import { requireUuid } from '@/shared/validation';
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
@@ -30,11 +30,11 @@ const recordedVersionSelect = {
   sourceRoadmapId: true,
   sourceYear: true,
   sourceSemester: true,
-  creator: { select: { id: true, name: true } },
+  creator: { select: { id: true, name: true, rut: true } },
   closureTeachingStaff: {
     select: {
       institutionalPosition: true,
-      user: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, rut: true } },
     },
   },
 } as const;
@@ -80,23 +80,43 @@ function recordedSource(roadmap: {
     : null;
 }
 
-function recordedAuthorship(roadmap: {
-  creator: { id: string; name: string } | null;
+type RecordedPerson = { id: string; name: string; rut: string | null };
+type RecordedAuthorship = {
+  creator: RecordedPerson | null;
   sourceYear: number | null;
   sourceSemester: number | null;
   closureTeachingStaff: {
     institutionalPosition: InstitutionalCoursePosition | null;
-    user: { id: string; name: string };
+    user: RecordedPerson;
   }[];
-}) {
+};
+type RosterNames = ReadonlyMap<string, string>;
+
+function readRosterNames(actor: RoadmapActor, roadmaps: readonly RecordedAuthorship[]) {
+  const ruts = roadmaps.flatMap(({ creator, closureTeachingStaff }) =>
+    [creator, ...closureTeachingStaff.map(({ user }) => user)].flatMap((person) =>
+      person?.rut ? [person.rut] : [],
+    ),
+  );
+  return actor.ucampus.getPersonNames([...new Set(ruts)]);
+}
+
+function rosterPerson({ id, name, rut }: RecordedPerson, names: RosterNames) {
+  return { id, name: (rut ? names.get(rut) : null) ?? name };
+}
+
+function recordedAuthorship(roadmap: RecordedAuthorship, names: RosterNames) {
   const source = recordedSource(roadmap);
   return {
-    creator: roadmap.creator,
+    creator: roadmap.creator ? rosterPerson(roadmap.creator, names) : null,
     teachingStaff: roadmap.closureTeachingStaff
-      .map(({ user, institutionalPosition }) => ({ ...user, institutionalPosition }))
+      .map(({ user, institutionalPosition }) => ({
+        ...rosterPerson(user, names),
+        institutionalPosition,
+      }))
       .sort(compareRecordedStaff),
     origin: source
-      ? { kind: 'COPY' as const, ...source, edition: editionLabel(source) }
+      ? { kind: 'COPY' as const, ...source, edition: termLabel(source) }
       : { kind: 'EMPTY' as const },
   };
 }
@@ -109,15 +129,30 @@ export async function readRoadmapVersionHistory(actor: RoadmapActor, courseCode:
         ? [{ year, semester, closedAt: roadmap.closedAt, roadmap }]
         : [],
     )
-    .sort(compareEditionsNewestFirst)
-    .map(({ year, semester, closedAt, roadmap }) => ({
+    .sort(compareEditionsNewestFirst);
+  const names = await readRosterNames(
+    actor,
+    versions.map(({ roadmap }) => roadmap),
+  );
+  const [latestOffering] = course.courseOfferings
+    .filter(({ participants }) =>
+      participants.some(({ role, isActive }) => role === 'TEACHER' && isActive),
+    )
+    .sort((a, b) => b.year - a.year || b.semester - a.semester);
+  return {
+    course: { code: course.code, name: course.name },
+    horizon,
+    latestOffering: latestOffering
+      ? { year: latestOffering.year, semester: latestOffering.semester }
+      : null,
+    versions: versions.map(({ year, semester, closedAt, roadmap }) => ({
       year,
       semester,
-      edition: editionLabel({ year, semester }),
+      edition: termLabel({ year, semester }),
       closedAt: closedAt.toISOString(),
-      ...recordedAuthorship(roadmap),
-    }));
-  return { course: { code: course.code, name: course.name }, horizon, versions };
+      ...recordedAuthorship(roadmap, names),
+    })),
+  };
 }
 
 export type RoadmapVersionHistory = Awaited<ReturnType<typeof readRoadmapVersionHistory>>;
@@ -144,7 +179,7 @@ export async function readRoadmapVersion(
   identifier: CourseOfferingIdentifier,
 ) {
   const { course, horizon, offering, roadmap } = await requireVisibleVersion(actor, identifier);
-  const [nodes, dependencies, nodeTypes] = await Promise.all([
+  const [nodes, dependencies, nodeTypes, names] = await Promise.all([
     prisma.roadmapNode.findMany({
       where: { roadmapId: roadmap.id },
       orderBy: { title: 'asc' },
@@ -162,6 +197,7 @@ export async function readRoadmapVersion(
       },
     }),
     getAvailableTypes(roadmap.id),
+    readRosterNames(actor, [roadmap]),
   ]);
   const term = { year: offering.year, semester: offering.semester };
   const ancestry: AcademicTermKey[] = [term];
@@ -190,7 +226,7 @@ export async function readRoadmapVersion(
   if (removedSource) ancestry.unshift(removedSource);
   const lineage = ancestry
     .filter((ancestor) => isWithinVersionHorizon(ancestor, horizon))
-    .map((ancestor) => ({ ...ancestor, edition: editionLabel(ancestor) }));
+    .map((ancestor) => ({ ...ancestor, edition: termLabel(ancestor) }));
   const roadmapDto = {
     roadmap: { id: roadmap.id, closedAt: roadmap.closedAt.toISOString() },
     nodeTypes: nodeTypes as NodeType[],
@@ -214,9 +250,9 @@ export async function readRoadmapVersion(
     horizon,
     version: {
       ...term,
-      edition: editionLabel(term),
+      edition: termLabel(term),
       closedAt: roadmap.closedAt.toISOString(),
-      ...recordedAuthorship(roadmap),
+      ...recordedAuthorship(roadmap, names),
       lineage,
     },
   };

@@ -7,7 +7,7 @@ import { Spinner } from '@/shared/ui/spinner';
 import { cn } from 'cn';
 
 const tones = {
-  dark: 'border-primary-bright bg-primary text-primary-foreground hover:bg-primary-deep',
+  dark: 'border-primary-bright bg-primary text-primary-foreground hover:bg-primary-deep dark:border-transparent dark:bg-brand-surface-foreground dark:text-brand-surface dark:hover:bg-brand-surface-foreground/90',
   light: 'bg-primary text-primary-foreground hover:bg-primary-deep',
   outline: '',
 } as const;

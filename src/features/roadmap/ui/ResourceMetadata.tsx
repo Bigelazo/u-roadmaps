@@ -3,7 +3,7 @@ import { cn } from 'cn';
 import type { Resource } from '@/features/roadmap/types';
 import { formatFileSize } from '@/shared/file-size-format';
 
-export function accessCountLabel(count: number) {
+function accessCountLabel(count: number) {
   return count === 1 ? '1 acceso' : `${count} accesos`;
 }
 
@@ -35,7 +35,7 @@ export function ResourceMetadata({
       ) : null}
       {showsSize ? <span>{formatFileSize(resource.fileSize!)}</span> : null}
       {isReviewed ? (
-        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-progress">
           <CircleCheck aria-hidden="true" className="size-3.5" />
           <span className="sr-only">Ya lo revisaste</span>
         </span>

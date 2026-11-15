@@ -145,7 +145,12 @@ Los specs migrados importan `test` y `expect` desde
   sus triggers, funciones y secuencias se eliminan por el mismo ciclo de fixtures.
 - `createUser()`: un Usuario propio sin Participaciones, para comprobar aislamiento.
 - `createTerm(semester?)`: un Período académico sintético propio en los años
-  reservados 1000–1999, inicialmente abierto. Pasar sus `year` y `semester` a
+  reservados 1000–1999, inicialmente abierto. El rango se reparte en tramos
+  disjuntos por `testInfo.parallelIndex`, que no se repite entre workers
+  simultáneos y se conserva al reemplazar un worker tras un fallo; cada período
+  toma el primer año de su tramo sin `AcademicTerm` ni Cursos, así que los años
+  liberados se reutilizan y los restos de un worker interrumpido se saltan.
+  Pasar sus `year` y `semester` a
   `createCourse`; `term.setFreezeDate(día)` publica una fecha de prueba y
   `term.setFreezeDate(null)` elimina el calendario para probar el respaldo.
 - `waitForClosure(curso)`: espera el cierre registrado sin pausas fijas. El

@@ -1,3 +1,4 @@
+import { nodeTypePaint } from '@/shared/node-type';
 import { Check, Plus, Save } from 'lucide-react';
 import type { Ref } from 'react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
@@ -36,6 +37,7 @@ function IconPicker({
   reservedIcons = [],
 }: Pick<Props, 'value' | 'onChange' | 'reservedIcons'>) {
   const selectedIcon = value.icon ? nodeTypeIcons.find(({ id }) => id === value.icon) : undefined;
+  const reservedIconIds = new Set(reservedIcons);
 
   return (
     <PopoverSwatchPicker
@@ -56,7 +58,7 @@ function IconPicker({
       sections={teachingIconCatalog.map((category) => ({
         label: category.label,
         swatches: category.icons
-          .filter(([icon]) => !reservedIcons.includes(icon))
+          .filter(([icon]) => !reservedIconIds.has(icon))
           .map(([icon, label]) => ({
             value: icon,
             label,
@@ -99,10 +101,13 @@ function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
           swatches: nodeTypeColorPalette.map(({ value: color, label }) => ({
             value: color as NodeTypeColor,
             label,
-            style: { backgroundColor: color },
+            style: { backgroundColor: nodeTypePaint(color) },
             content:
               value.color === color ? (
-                <Check className="rounded-full bg-white text-ink" aria-hidden="true" />
+                <Check
+                  className="rounded-full bg-white text-[#12213a] dark:bg-foreground dark:text-background"
+                  aria-hidden="true"
+                />
               ) : null,
           })),
         },
@@ -128,11 +133,6 @@ export function NodeTypeForm({
   const canSubmit = Boolean(
     value.name.trim() && value.icon && value.color && !nameError && hasChanges,
   );
-  const missingFields = [
-    !value.name.trim() && 'un nombre',
-    !value.icon && 'un icono',
-    !value.color && 'un color',
-  ].filter(Boolean);
 
   return (
     <TooltipProvider delay={600} timeout={0}>
@@ -173,40 +173,8 @@ export function NodeTypeForm({
             </FieldGroup>
           </FieldGroup>
         </fieldset>
-        <figure
-          className="flex flex-col gap-2 rounded-lg bg-cloud p-4"
-          aria-label="Vista previa del tipo de nodo"
-        >
-          <figcaption className="text-sm text-muted-foreground">Así se verá en el mapa</figcaption>
-          <div
-            className="flex min-h-16 min-w-0 items-center gap-2.5 rounded-lg border-2 px-4 py-3"
-            style={{
-              borderColor: value.color ?? 'var(--border)',
-              backgroundColor: value.color
-                ? `color-mix(in srgb, ${value.color} 3%, var(--card))`
-                : 'var(--card)',
-            }}
-          >
-            <NodeTypeIcon
-              icon={value.icon ?? 'Shapes'}
-              size={20}
-              color={value.color ?? 'var(--muted-foreground)'}
-              className="shrink-0"
-              aria-hidden="true"
-            />
-            <span className="min-w-0 font-medium wrap-anywhere">Título del nodo</span>
-          </div>
-          <p className="min-w-0 text-sm font-medium wrap-anywhere">
-            {value.name.trim() || 'Nombre del tipo'}
-          </p>
-        </figure>
-        <FieldDescription id="node-type-requirements">
-          {missingFields.length > 0
-            ? `Elige ${missingFields.length > 1 ? `${missingFields.slice(0, -1).join(', ')} y ${missingFields.at(-1)}` : missingFields[0]} para crear el tipo.`
-            : isEditing && !hasChanges
-              ? 'No hay cambios por guardar.'
-              : 'Nombre, icono y color son obligatorios.'}
-        </FieldDescription>
+        <NodeTypePreview value={value} />
+        <NodeTypeRequirements value={value} isEditing={isEditing} hasChanges={hasChanges} />
         <div className="flex flex-wrap gap-2">
           <Button
             type="submit"
@@ -237,5 +205,58 @@ export function NodeTypeForm({
         </div>
       </form>
     </TooltipProvider>
+  );
+}
+
+function NodeTypePreview({ value }: Pick<Props, 'value'>) {
+  return (
+    <figure
+      className="flex flex-col gap-2 rounded-lg bg-cloud p-4"
+      aria-label="Vista previa del tipo de nodo"
+    >
+      <figcaption className="text-sm text-muted-foreground">Así se verá en el mapa</figcaption>
+      <div
+        className="flex min-h-16 min-w-0 items-center gap-2.5 rounded-lg border-2 px-4 py-3"
+        style={{
+          borderColor: value.color ? nodeTypePaint(value.color) : 'var(--border)',
+          backgroundColor: value.color
+            ? `color-mix(in srgb, ${nodeTypePaint(value.color)} 3%, var(--card))`
+            : 'var(--card)',
+        }}
+      >
+        <NodeTypeIcon
+          icon={value.icon ?? 'Shapes'}
+          size={20}
+          color={value.color ? nodeTypePaint(value.color) : 'var(--muted-foreground)'}
+          className="shrink-0"
+          aria-hidden="true"
+        />
+        <span className="min-w-0 font-medium wrap-anywhere">Título del nodo</span>
+      </div>
+      <p className="min-w-0 text-sm font-medium wrap-anywhere">
+        {value.name.trim() || 'Nombre del tipo'}
+      </p>
+    </figure>
+  );
+}
+
+function NodeTypeRequirements({
+  value,
+  isEditing,
+  hasChanges,
+}: Pick<Props, 'value' | 'isEditing' | 'hasChanges'>) {
+  const missingFields = [
+    !value.name.trim() && 'un nombre',
+    !value.icon && 'un icono',
+    !value.color && 'un color',
+  ].filter(Boolean);
+  return (
+    <FieldDescription id="node-type-requirements">
+      {missingFields.length > 0
+        ? `Elige ${missingFields.length > 1 ? `${missingFields.slice(0, -1).join(', ')} y ${missingFields.at(-1)}` : missingFields[0]} para crear el tipo.`
+        : isEditing && !hasChanges
+          ? 'No hay cambios por guardar.'
+          : 'Nombre, icono y color son obligatorios.'}
+    </FieldDescription>
   );
 }

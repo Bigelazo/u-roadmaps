@@ -227,7 +227,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
     name: '¿Reemplazar el texto con el archivo Markdown?',
   });
   await markdownConfirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
-  await expect(description).toHaveValue(markdown);
+  await expect(description).toContainText('Repasa límites.');
   await transfer.dispose();
   await dialog.getByLabel('Tipo').click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
@@ -255,18 +255,23 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await closeNodeTypes.click();
   await expectStep(page, 'Conecta tu nodo');
   await expect(page.getByRole('menu')).toHaveCount(0);
-  await expect(tourPopover(page).locator('[data-slot="node-name"]')).toHaveText([
-    'Control 1',
-    'Control 1',
-    'Control 1',
-  ]);
-  await expect(tourPopover(page).locator('[data-slot="node-name-icon"]').first()).toHaveCSS(
-    'color',
-    'rgb(219, 39, 119)',
-  );
+  await expect(tourPopover(page).locator('[data-slot="node-name"]')).toHaveText(['Control 1']);
+  await expect
+    .poll(() =>
+      tourPopover(page)
+        .locator('[data-slot="node-name-icon"]')
+        .first()
+        .evaluate((element) => {
+          const color = getComputedStyle(element).color;
+          const channels = color.match(/[\d.]+/g)!.map(Number);
+          const scale = color.startsWith('color(srgb') ? 255 : 1;
+          return channels.slice(0, 3).map((channel) => Math.round(channel * scale));
+        }),
+    )
+    .toEqual([219, 39, 119]);
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
-  await expect(tourPopover(page).locator('.driver-popover-description')).toContainText(
-    'La dirección importa',
+  await expect(tourPopover(page).locator('.driver-popover-description')).toHaveText(
+    'Coloca el cursor sobre tu nodo para ver sus anclajes. Arrastra uno hasta Control 1, o haz click en un anclaje y luego en el nodo.',
   );
   await practiceNode(page, 'Control 1').getByTestId('roadmap-card').click();
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
@@ -322,9 +327,9 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await expect(page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]')).toHaveClass(
     /driver-active-element/,
   );
-  await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/^Contenido/)).toHaveValue(
-    markdown,
-  );
+  await expect(
+    page.locator('[aria-label="Editor de nodo"]').getByLabel(/^Contenido/),
+  ).toContainText('Repasa límites.');
 
   await expectExitReachable(page, 'editor-desktop');
 
@@ -394,7 +399,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await expect(tourPopover(page).locator('.driver-popover-description')).toHaveText(
-    'Selecciona Bloquear nodo. Debido a que este nodo posee otros dependientes a él, estos también serán bloqueados.',
+    'Debido a que este nodo posee otros dependientes a él, estos también serán bloqueados.',
   );
   await expect(confirmation).toContainText(
     'Los estudiantes no podrán acceder a él hasta que lo desbloquees.',
@@ -467,7 +472,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
 
   await expect(practiceNode(page, 'Nodo de práctica')).toHaveClass(/driver-active-element/);
   await expect(stepDescription(page)).toHaveText(
-    'Tus nodos pueden tener recursos, como archivos o enlaces. Se agregan con Agregar recurso en el menú Acciones del nodo, o desde el panel de edición.',
+    'Tus nodos pueden tener recursos, como archivos o enlaces. Se agregan con Agregar recurso en el menú Acciones del nodo, o desde el panel lateral de edición.',
   );
   await page.screenshot({ path: 'test-results/tutorial-resources.png' });
   await next(page, 'Elimina tu nodo');

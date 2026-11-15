@@ -1,5 +1,7 @@
 'use client';
 
+import { resourceActionLabel } from '@/features/roadmap/ui/resource-action-label';
+
 import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { Eye, Pencil, X } from 'lucide-react';
 import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
@@ -19,17 +21,13 @@ import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-import {
-  ResourceActionIcon,
-  ResourceIcon,
-  resourceActionLabel,
-} from '@/features/roadmap/ui/ResourceIcon';
+import { ResourceActionIcon, ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 
 type ContentProps = {
   node: RoadmapNode | StudentRoadmapNode;
   status: StudentNodeStatus;
   onClose: () => void;
-  onComplete: (node: RoadmapNode | StudentRoadmapNode) => void;
+  onComplete?: (node: RoadmapNode | StudentRoadmapNode) => void;
   onResourceAccess?: (resource: Resource) => void;
   isReadOnly?: boolean;
   isModal?: boolean;
@@ -89,12 +87,14 @@ function StudentNodeDetailContent({
         isSidebar={isSidebar}
         actions={
           <>
-            <CompleteNodeButton
-              status={status}
-              isReadOnly={isReadOnly}
-              hasUnreviewedResources={resources.some((resource) => !isReviewed(resource))}
-              onComplete={() => onComplete(node)}
-            />
+            {onComplete ? (
+              <CompleteNodeButton
+                status={status}
+                isReadOnly={isReadOnly}
+                hasUnreviewedResources={resources.some((resource) => !isReviewed(resource))}
+                onComplete={() => onComplete(node)}
+              />
+            ) : null}
             {!blocked && !isModal ? (
               <NodeFullscreenDialog
                 key={node.id}

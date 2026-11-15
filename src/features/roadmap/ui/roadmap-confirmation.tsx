@@ -1,3 +1,4 @@
+import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/scheduled-unlock-hint';
 import type { ReactNode } from 'react';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
@@ -9,7 +10,6 @@ import type {
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import { NodeName } from '@/features/roadmap/ui/NodeName';
 import {
-  scheduledUnlockPrerequisiteHint,
   UnlockScheduleField,
   type UnlockScheduleDraft,
 } from '@/features/roadmap/ui/UnlockScheduleField';
@@ -92,9 +92,8 @@ function roadmapNodeName(
 }
 
 export const roadmapAutoLayoutConfirmation = {
-  title: '¿Ordenar los nodos automáticamente?',
-  description:
-    'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
+  title: '¿Ordenar los nodos?',
+  description: 'Todos los nodos cambiarán de posición.',
   intent: 'warning',
   actions: [
     { id: canvasConfirmationChoices.autoLayoutVertical, label: 'Vertical', emphasis: 'primary' },

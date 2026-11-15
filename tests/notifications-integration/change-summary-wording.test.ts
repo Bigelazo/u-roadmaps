@@ -11,9 +11,7 @@ import {
 
 const tema = { name: 'Tema', icon: 'BookOpen', color: '#024AD8' };
 
-test('the Change summary uses the Inbox words for title, access, new and deleted Node notices', async ({
-  course,
-}) => {
+test('Node summary items leave out the Node, which titles the group', async ({ course }) => {
   const deleted = await addNode(course, 'Colas');
   await enterRoadmap(course.studentId, course.roadmapId);
   const edits = teacherEdits(course);
@@ -32,11 +30,8 @@ test('the Change summary uses the Inbox words for title, access, new and deleted
   expect(summary?.courseCode).toBe(course.identifier.courseCode);
   expect(summaryInInboxWords(summary)).toEqual([
     { title: 'Colas', items: ['Nodo eliminado.'] },
-    { title: 'Pilas', items: ['Nuevo Nodo «Pilas».'] },
-    {
-      title: 'Recursión',
-      items: ['«Recursión» fue bloqueado.', '«Recursividad» pasó a llamarse «Recursión».'],
-    },
+    { title: 'Pilas', items: ['Nuevo Nodo.'] },
+    { title: 'Recursión', items: ['Fue bloqueado.', 'Antes se llamaba «Recursividad».'] },
   ]);
 });
 
@@ -59,14 +54,7 @@ test('the Change summary names every Node with its type, including a deleted Nod
     {
       title: 'Recursión',
       node: { title: 'Recursión', nodeType: unidad },
-      items: [
-        [
-          { node: { title: 'Recursividad', nodeType: unidad } },
-          ' pasó a llamarse ',
-          { node: { title: 'Recursión', nodeType: unidad } },
-          '.',
-        ],
-      ],
+      items: [['Antes se llamaba ', { node: { title: 'Recursividad', nodeType: unidad } }, '.']],
     },
   ]);
 });
@@ -84,7 +72,7 @@ test('a blocked new Node reads «(bloqueado)» in the Inbox and the Change summa
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
   expect(summaryInInboxWords(summary)).toContainEqual({
     title: 'Pilas',
-    items: ['Nuevo Nodo «Pilas» (bloqueado).'],
+    items: ['Nuevo Nodo (bloqueado).'],
   });
 });
 

@@ -1,3 +1,4 @@
+import { nodeTypePaint } from '@/shared/node-type';
 import { type ComponentProps } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -293,7 +294,7 @@ test('uses the selected-node header and keeps completion next to the close actio
 
   expect(screen.getByText('Nodo seleccionado')).toBeTruthy();
   expect(screen.getByTestId('student-node-type-icon').getAttribute('style')).toContain(
-    'rgb(2, 74, 216)',
+    nodeTypePaint('#024AD8'),
   );
   const actions = screen.getByRole('group', { name: 'Acciones del nodo' });
   expect(

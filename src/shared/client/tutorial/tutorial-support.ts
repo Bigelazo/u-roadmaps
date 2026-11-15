@@ -10,7 +10,6 @@ export type TutorialStep<Action = never> = Readonly<{
   title: string;
   description: string | (() => ReactNode);
   side?: 'top' | 'right' | 'bottom' | 'left';
-  popoverOffset?: number;
   allowInteraction?: boolean;
   focusZoom?: number;
   onEnter?: () => (() => void) | void;
@@ -102,14 +101,33 @@ export async function revealTutorialTarget(elements: readonly Element[], focusZo
   await Promise.all(movements.map((movement) => movement.catch(() => undefined)));
 }
 
+function nextFrame() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function isAnimating(target: Element) {
+  for (let element: Element | null = target; element; element = element.parentElement) {
+    const running = element
+      .getAnimations?.()
+      .some(
+        (animation) =>
+          animation.playState === 'running' &&
+          animation.effect?.getTiming().iterations !== Infinity,
+      );
+    if (running) return true;
+  }
+  return false;
+}
+
 export async function waitForStableElement(element: TutorialStep['element'], timeoutMs = 800) {
   const start = performance.now();
   let previous = '';
   while (performance.now() - start < timeoutMs) {
-    const rect = resolveElement(element)?.getBoundingClientRect();
+    const target = resolveElement(element);
+    const rect = target?.getBoundingClientRect();
     const current = rect ? `${rect.left},${rect.top},${rect.width},${rect.height}` : '';
-    if (current && current === previous) return;
+    if (target && current === previous && !isAnimating(target)) return;
     previous = current;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await nextFrame();
   }
 }

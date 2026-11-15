@@ -94,7 +94,9 @@ test('the connector creates a saved Dependency by dropping on the target title',
   await expect(card).toHaveAttribute('data-connection-hovered', 'true');
   await expect(port).toHaveCSS('cursor', 'pointer');
   expect(
-    await port.evaluate((element) => getComputedStyle(element, '::before').backgroundColor),
+    await port
+      .locator('.roadmap-node-port-visual')
+      .evaluate((element) => getComputedStyle(element, '::before').backgroundColor),
     'The connector disc stays opaque so grid and edge lines never cross it',
   ).not.toMatch(/\/|rgba|transparent/);
   await expect(page.getByText('Arrastrar dependencia')).toBeVisible();

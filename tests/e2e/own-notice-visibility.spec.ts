@@ -137,7 +137,7 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
     {
       title: 'Título pendiente',
       node: summaryNode,
-      items: [[{ node: summaryNode }, ' fue ocultado del Roadmap.']],
+      items: ['Fue ocultado del Roadmap.'],
     },
   ]);
   expect(await notices()).toHaveLength(0);
@@ -147,7 +147,7 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
     {
       title: 'Título pendiente',
       node: summaryNode,
-      items: [[{ node: summaryNode }, ' volvió a mostrarse en el Roadmap.']],
+      items: ['Volvió a mostrarse en el Roadmap.'],
     },
   ]);
 });

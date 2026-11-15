@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { FileText } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
-import { MarkdownEditor } from './MarkdownEditor';
 import { inputClassName, NodeTypeSelect } from './primitives';
+
+const MarkdownEditor = dynamic(() =>
+  import('./MarkdownEditor').then(({ MarkdownEditor }) => MarkdownEditor),
+);
 
 type NodeContent = { title: string; description: string; nodeTypeId: string };
 
@@ -68,7 +72,10 @@ export function NodeDescriptionField({
   action,
 }: FieldProps & { placeholder?: string; action?: ReactNode }) {
   const label = (
-    <FieldLabel htmlFor={`${idPrefix}-description`}>
+    <FieldLabel
+      id={`${idPrefix}-description-label`}
+      onClick={() => document.getElementById(`${idPrefix}-description`)?.focus()}
+    >
       Contenido <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
     </FieldLabel>
   );
@@ -85,6 +92,7 @@ export function NodeDescriptionField({
       )}
       <MarkdownEditor
         id={`${idPrefix}-description`}
+        aria-labelledby={`${idPrefix}-description-label`}
         aria-describedby={`${idPrefix}-description-help`}
         placeholder={placeholder}
         value={value.description}

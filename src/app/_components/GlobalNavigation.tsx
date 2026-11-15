@@ -1,14 +1,17 @@
 import Link from 'next/link';
 import { Network } from 'lucide-react';
 import SessionButton from './SessionButton';
+import { ThemeToggle } from './ThemeToggle';
 import { NotificationsInbox } from '@/features/notifications';
 import type { InboxIdentity } from '@/features/notifications/server';
 import type { ReactNode } from 'react';
+import { defaultTheme, type Theme } from '@/shared/theme-preference';
 
 type GlobalNavigationProps = Readonly<{
   isAuthenticated: boolean;
   userName: string | null;
   inboxIdentity?: InboxIdentity | null;
+  theme?: Theme;
   developmentTools?: ReactNode;
 }>;
 
@@ -22,6 +25,7 @@ export default function GlobalNavigation({
   isAuthenticated,
   userName,
   inboxIdentity,
+  theme = defaultTheme,
   developmentTools,
 }: GlobalNavigationProps) {
   return (
@@ -52,6 +56,7 @@ export default function GlobalNavigation({
               {navbarUserName(userName)}
             </span>
           ) : null}
+          <ThemeToggle initialTheme={theme} />
           <SessionButton isAuthenticated={isAuthenticated} />
         </div>
       </div>

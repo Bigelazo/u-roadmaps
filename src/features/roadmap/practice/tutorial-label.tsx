@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { NodeName } from '@/features/roadmap/ui/NodeName';
+import { IconLabel } from '@/shared/ui/icon-label';
 import { practiceNodeTypes } from './practice-roadmap';
 
 export function TutorialNode({ title, type = 'Contenido' }: { title: string; type?: string }) {
@@ -10,7 +11,7 @@ export function TutorialNode({ title, type = 'Contenido' }: { title: string; typ
 const actionIconColors = {
   default: 'var(--primary-deep)',
   destructive: 'var(--destructive)',
-  success: 'var(--color-emerald-600)',
+  success: 'var(--tutorial-success, var(--color-emerald-600))',
 } as const;
 
 export function TutorialAction({
@@ -24,12 +25,16 @@ export function TutorialAction({
 }) {
   return (
     <span className="font-medium text-foreground">
-      <Icon
-        aria-hidden="true"
-        className="mr-1 inline-block size-[1em] align-[-0.125em]"
-        style={{ color: actionIconColors[intent] }}
+      <IconLabel
+        icon={
+          <Icon
+            aria-hidden="true"
+            className="mr-1 inline-block size-[1em] align-[-0.125em]"
+            style={{ color: actionIconColors[intent] }}
+          />
+        }
+        text={children}
       />
-      {children}
     </span>
   );
 }

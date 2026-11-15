@@ -100,28 +100,47 @@ function notificationDate(notification: OwnInboxNotice) {
   return notificationDateFormatter.format(new Date(occurredAt));
 }
 
-function NotificationRow({
-  notification,
+type CourseNotices = Readonly<{ roadmapId: string; notices: readonly OwnInboxNotice[] }>;
+
+function groupByCourse(notifications: readonly OwnInboxNotice[]): CourseNotices[] {
+  const courses = new Map<string, OwnInboxNotice[]>();
+  for (const notification of notifications) {
+    const notices = courses.get(notification.roadmapId);
+    if (notices) notices.push(notification);
+    else courses.set(notification.roadmapId, [notification]);
+  }
+  return [...courses].map(([roadmapId, notices]) => ({ roadmapId, notices }));
+}
+
+function CourseNotificationRow({
+  course,
   onSelect,
 }: {
-  notification: OwnInboxNotice;
+  course: CourseNotices;
   onSelect: (notification: OwnInboxNotice) => void;
 }) {
+  const [latest] = course.notices;
   return (
-    <li>
-      <div className="border-b">
-        <button
-          className="flex min-h-16 w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          onClick={() => onSelect(notification)}
-          type="button"
-        >
-          <span className="font-semibold">
-            {notification.courseName ?? notification.subject ?? 'Aviso de U-Roadmaps'}
-          </span>
-          <span className="text-sm text-muted-foreground">{notification.body}</span>
-          <time className="text-xs text-muted-foreground">{notificationDate(notification)}</time>
-        </button>
-      </div>
+    <li className="border-b">
+      <button
+        className="flex w-full flex-col items-start gap-2 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        onClick={() => onSelect(latest)}
+        type="button"
+      >
+        <span className="font-semibold">
+          {latest.courseName ?? latest.subject ?? 'Aviso de U-Roadmaps'}
+        </span>
+        <span className="flex w-full flex-col gap-2">
+          {course.notices.map((notification) => (
+            <span className="flex flex-col gap-0.5" key={notification.id}>
+              <span className="text-sm text-muted-foreground">{notification.body}</span>
+              <time className="text-xs text-muted-foreground">
+                {notificationDate(notification)}
+              </time>
+            </span>
+          ))}
+        </span>
+      </button>
     </li>
   );
 }
@@ -163,8 +182,8 @@ function InboxNotificationList({
   }
   return (
     <ul aria-label="Lista de avisos">
-      {notifications.map((notification) => (
-        <NotificationRow key={notification.id} notification={notification} onSelect={onSelect} />
+      {groupByCourse(notifications).map((course) => (
+        <CourseNotificationRow course={course} key={course.roadmapId} onSelect={onSelect} />
       ))}
     </ul>
   );

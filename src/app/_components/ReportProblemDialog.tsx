@@ -29,7 +29,7 @@ const emptyDraft: ReportDraft = { name: '', email: '', subject: '', description:
 const fieldOrder: readonly ReportField[] = ['name', 'email', 'subject', 'description'];
 const sendFailure = 'No se pudo enviar el reporte. Revisa tu conexión e inténtalo de nuevo.';
 
-export function draftErrors(draft: ReportDraft): FieldErrors {
+function draftErrors(draft: ReportDraft): FieldErrors {
   const errors: FieldErrors = {};
   if (!draft.name.trim()) errors.name = 'Escribe tu nombre.';
   if (!problemReportEmailPattern.test(draft.email.trim()))
@@ -52,6 +52,7 @@ export function ReportProblemDialog({ version }: Readonly<{ version: string }>) 
   const pathname = usePathname();
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
+  const sendingRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<ReportDraft>(emptyDraft);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -68,7 +69,7 @@ export function ReportProblemDialog({ version }: Readonly<{ version: string }>) 
   }
 
   function openChanged(next: boolean) {
-    if (sending) return;
+    if (sendingRef.current) return;
     setOpen(next);
     if (next) {
       setErrors({});
@@ -78,6 +79,7 @@ export function ReportProblemDialog({ version }: Readonly<{ version: string }>) 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sendingRef.current) return;
     const found = draftErrors(draft);
     setErrors(found);
     setFailure(null);
@@ -86,20 +88,29 @@ export function ReportProblemDialog({ version }: Readonly<{ version: string }>) 
       formRef.current?.querySelector<HTMLElement>(`#${CSS.escape(fieldId(firstInvalid))}`)?.focus();
       return;
     }
+    sendingRef.current = true;
     setSending(true);
-    const response = await fetch('/api/problem-reports', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...draft, pageUrl: `${window.location.origin}${pathname}`, version }),
-    }).catch(() => null);
-    setSending(false);
-    if (!response?.ok) {
-      setFailure(response ? await responseMessage(response) : sendFailure);
-      return;
+    try {
+      const response = await fetch('/api/problem-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...draft,
+          pageUrl: `${window.location.origin}${pathname}`,
+          version,
+        }),
+      }).catch(() => null);
+      if (!response?.ok) {
+        setFailure(response ? await responseMessage(response) : sendFailure);
+        return;
+      }
+      setOpen(false);
+      setDraft(emptyDraft);
+      notify.success('Reporte enviado. Gracias por avisarnos.');
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
-    setOpen(false);
-    setDraft(emptyDraft);
-    notify.success('Reporte enviado. Gracias por avisarnos.');
   }
 
   function describedBy(field: ReportField, ...extra: string[]) {

@@ -102,7 +102,7 @@ Do not use green alone to communicate completion or current position. Pair it wi
 
 ### Institutional course positions
 
-Academic-overview course rows show a position plate: a 4px-radius label tinted with the position color at 16% over the card, a solid position-color dot, and the position name in Ink. The color always pairs with the textual position; it never conveys a position by color alone. Teaching staff whose position U-Campus has not reported show “Equipo docente” with an outlined Graphite dot instead of a color. The colors are exposed as `--position-*` tokens. Do not mark rows with a colored left border.
+Academic-overview course rows show a position plate: a 4px-radius label tinted with the position color at 16% over the card, a solid position-color dot, and the position name in Ink. The color always pairs with the textual position; it never conveys a position by color alone. Teaching staff whose position U-Campus has not reported show “Equipo docente” with an outlined Graphite dot instead of a color. The colors are exposed as `--position-*` tokens and stay identical in both themes, since they identify each position. Do not mark rows with a colored left border.
 
 - **Teaching assistant** (`{colors.teaching-assistant}`): Ayudante.
 - **Auxiliary professor** (`{colors.auxiliary-professor}`): Auxiliar.
@@ -110,6 +110,48 @@ Academic-overview course rows show a position plate: a 4px-radius label tinted w
 - **Coordinating professor** (`{colors.coordinating-professor}`): Profesor coordinador.
 - **Enrolled student** (`{colors.enrolled-student}`): Estudiante.
 - **Observer** (`{colors.observer}`): Oyente.
+
+### Dark theme
+
+The dark theme is opt-in: the theme button in the global navigation toggles between light and dark, and light is the default. It does not follow the system preference. The choice is stored in the `theme` cookie so the server renders the right theme and the embedded view inside U-Cursos follows it. The resolved theme is exposed as `data-theme` on `<html>`; write dark overrides with the `dark:` variant or under `[data-theme='dark']`, never with `prefers-color-scheme`.
+
+Dark colors come from the dark role tokens of [dcc-ui-kit](https://dcc-fcfm-uchile.github.io/dcc-ui-kit/site/) (`[data-dcc-theme="dark"]` in its `styles.css`) and from its palette, not from the U-Roadmaps Blue and Jade. The light theme keeps the palette described above. No color outside the kit's stylesheet may appear in the dark theme, with one exception: the twelve `--node-type-*` variants, which are colors chosen by the teaching team rather than theme colors.
+
+The distribution copies the kit's documentation site, not its `.dcc-root` default: the whole page sits on the surface color, cards are told apart by a subtle border instead of a fill, and the global navigation is a Grey/Default brand bar with white content.
+
+| Role | Tokens | Dark value | Kit role |
+| --- | --- | --- | --- |
+| Page and surfaces | `background`, `cloud`, `card`, `sidebar` | `#19202b` | `--dcc-surface` |
+| Raised surface | `popover` | `#222b38` | `--dcc-surface-raised` |
+| Soft fill and hover | `muted`, `secondary`, `accent` | `#283243` | `--dcc-surface-muted` |
+| Text / headings / secondary text | `foreground` / `ink` / `muted-foreground`, `graphite` | `#e2e9f0` / `#f3f6f9` / `#97abbb` | `--dcc-fg` / `--dcc-fg-strong` / `--dcc-fg-muted` |
+| Divider and card border / control border | `border`, `fog` / `input`, `steel` | `#2e3949` / `#65788e` | `--dcc-border-subtle` / `--dcc-border` |
+| Accent and its label | `primary` / `primary-foreground` | `#c0cfdd` / `#19202b` | `--dcc-accent` / `--dcc-on-accent` |
+| Selected fill | `primary-soft`, `info-soft` | `#1a3448` | `--dcc-info-bg` |
+| Focus | `ring` | `#5aaee0` | `--dcc-focus` |
+| Error (base / soft / deep) | `destructive` | `#ff8f7a` / `#3b211d` / `#ffb3a4` | `--dcc-danger` |
+| Success (base / soft / deep) | `progress` | `#4cc9d4` / `#173a3f` / `#7fdce4` | `--dcc-success` |
+| Info (base / soft / deep) | `info` | `#6bbde8` / `#1a3448` / `#9ad2f0` | `--dcc-info` |
+| Warning (base / soft / deep) | `warning` | `#e4b565` / `#3a2e18` / `#f0cf8f` | `--dcc-warning` |
+| Navigation bar | tokens scoped to `[data-global-navigation]` | `#40506a` with `#fcfdfe` content, 10% white hover | `.dcc-doc-bar`, `.dcc-nav-app` |
+
+The hover of a filled button is the accent with 8% of its label mixed in, the kit's state layer. Course-position dots use the kit's state colors and Blue/Light.
+
+Component references in the kit, where the U-Roadmaps name differs:
+
+- **Toast and inline Alert** follow the kit's _Alerta_ (soft state fill, regular text, state-colored icon), not its _Snackbar_. A toast without a state uses the info fill.
+- **Node panel (`Sidebar`)** is a regular surface, not the kit's brand sidebar.
+- **Badge** follows _Badge y tag_; the Node change mark and the notification count follow _Indicador_.
+- **Segmented Tabs** follow _Botón alternable_; line Tabs follow _Tabs_, including the fixed brand red `#d23118` for the active tab.
+- **Tutorial popover and speed-dial labels** follow _Popover_ (raised surface with border), not _Tooltip_ (inverted).
+- **Buttons**: filled buttons are light with a dark label; outline buttons take the accent as border and label; destructive buttons are filled.
+- **Checkbox, radio, and switch** fill with the control-border color and a white mark when checked.
+
+The landing hero is a brand surface that stays dark in both themes (`brand-surface` tokens: Ink in light, Grey/Default `#40506a` in dark). The U-Cursos excerpt inside it stays light because it depicts an external site.
+
+Switching themes plays a diagonal wipe: a band in the entered theme's `primary` and a thin line in its `progress`, so the sweep only shows colors of the theme being entered. The toggle icon is 20px, like the notification bell: a moon in the light theme and a sun in the dark theme.
+
+Node-type colors are stored once and painted through `nodeTypePaint`: each of the twelve palette colors has a lighter dark-theme variant (`--node-type-*`), and any other stored color is lightened by mixing. Course-position colors that are too dark for dark surfaces also have dark variants.
 
 ## Typography
 
@@ -169,7 +211,7 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 - **Secondary button**: white or cloud surface with blue or ink border. It must not compete with the primary action.
 - **Landing tutorial entry**: “Probar tutorial” is secondary to institutional sign-in. Explain that practice requires no session and saves no changes, then offer the existing Docente and Estudiante tutorial choices. Leaving practice returns to the landing page.
 - **Progress badge**: use the shared `progress` Badge variant for concise completion or current-position labels. It pairs `{colors.progress-soft}` with `{colors.progress-deep}` and must retain a textual state.
-- **Course header**: compact context label, Poppins course name, supporting term/code information, and visible progress when applicable.
+- **Course header**: compact context label, Poppins course name, supporting term/code information, and visible progress when applicable. On the roadmap canvas, teaching staff also get a footer row under a Fog hairline with links to the course's other pages ("Versiones", "Integrantes") as Blue ghost links inside a `nav`, never a disclosure menu: they leave the canvas, so they stay visible and separate from the canvas tools in the bottom toolbar.
 - **Progress track**: neutral base with Jade completion fill, a numeric value, and a textual completed/total description.
 - **Roadmap node**: white 8px-radius card with pedagogical title, node type, status label, and direct resource affordance. The current node uses a Jade border or marker; completed nodes use a filled completion symbol plus text. Blocked nodes use `{colors.blocked}` for border, type icon, and a 20% fill.
 - **Dependency**: blue directional structure. It remains distinguishable from Jade progress and from custom node-type colors.

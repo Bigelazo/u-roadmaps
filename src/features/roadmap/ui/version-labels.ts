@@ -1,3 +1,4 @@
+import { termLabel } from '@/shared/course-offering';
 import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 
 type Version = RoadmapVersionHistory['versions'][number];
@@ -9,7 +10,7 @@ export function creatorLabel(creator: { name: string } | null): string {
 export function originLabel(origin: Version['origin']): string {
   switch (origin.kind) {
     case 'COPY':
-      return `Copiada de la edición ${origin.year}-${origin.semester}`;
+      return `Copiada de ${termLabel(origin)}`;
     case 'EMPTY':
       return 'Creada desde cero';
   }

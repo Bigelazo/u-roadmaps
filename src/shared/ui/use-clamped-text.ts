@@ -9,12 +9,15 @@ export function useClampedText<Element extends HTMLElement>(text: string) {
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const measure = () => setIsClamped(element.scrollHeight > element.clientHeight);
+    const measure = () => setIsClamped(element.scrollHeight - element.clientHeight > 1);
     measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    element.addEventListener('pointerenter', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => {
+      element.removeEventListener('pointerenter', measure);
+      observer?.disconnect();
+    };
   }, [text]);
 
   return { ref, isClamped };

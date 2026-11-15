@@ -28,14 +28,25 @@ export function clearOfAvoidedAreas(
     return (
       placed.left >= 16 &&
       placed.top >= 16 &&
+      placed.bottom <= viewport.height - 16 &&
       avoided.every((obstacle) => !overlaps(placed, obstacle))
     );
   };
   if (fits(placement)) return placement;
-  const candidates = avoided.flatMap((obstacle) => [
-    { right: placement.right, bottom: viewport.height - obstacle.top + gap },
-    { right: viewport.width - obstacle.left + gap, bottom: placement.bottom },
-  ]);
+  const candidates = [
+    ...avoided.map((obstacle) => ({
+      right: viewport.width - obstacle.left + gap,
+      bottom: placement.bottom,
+    })),
+    ...avoided.map((obstacle) => ({
+      right: placement.right,
+      bottom: viewport.height - obstacle.bottom - gap - size.height,
+    })),
+    ...avoided.map((obstacle) => ({
+      right: placement.right,
+      bottom: viewport.height - obstacle.top + gap,
+    })),
+  ];
   return candidates.find(fits) ?? placement;
 }
 
@@ -98,10 +109,14 @@ export function useToastViewportPosition() {
       if (sidebar && sidebarRect && sidebarRect.left <= 1 && sidebarRect.height > 0) {
         bottom = Math.max(bottom, sidebar.offsetHeight + 12);
       }
+      const avoided = Array.from(document.querySelectorAll('[data-toast-avoid]'), (area) =>
+        area.getBoundingClientRect(),
+      ).filter((area) => area.width > 0 && area.height > 0);
       if (visible && obstacle && !obstacle.hidden) {
         const menu = obstacle.getBoundingClientRect();
         if (menu.width && menu.height) {
-          bottom = Math.max(bottom, window.innerHeight - menu.top + 12);
+          if (avoided.length) avoided.push(menu);
+          else bottom = Math.max(bottom, window.innerHeight - menu.top + 12);
         }
       }
       const toastHeight = Math.max(
@@ -115,9 +130,7 @@ export function useToastViewportPosition() {
       const placement = clearOfAvoidedAreas(
         { right: Math.min(right, Math.max(20, window.innerWidth - 216)), bottom },
         { width: element.getBoundingClientRect().width, height: toastHeight },
-        Array.from(document.querySelectorAll('[data-toast-avoid]'), (avoided) =>
-          avoided.getBoundingClientRect(),
-        ).filter((avoided) => avoided.width > 0 && avoided.height > 0),
+        avoided,
         { width: window.innerWidth, height: window.innerHeight },
       );
       element.style.setProperty('--toast-right', `${placement.right}px`);

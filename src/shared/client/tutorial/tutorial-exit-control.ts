@@ -65,6 +65,7 @@ function exitObstacles(exit: HTMLElement) {
 }
 
 export function placeTutorialExit(exit: HTMLElement) {
+  exit.setAttribute('data-toast-avoid', '');
   const applied = currentShift(exit);
   const natural = shifted(box(exit.getBoundingClientRect()), { x: -applied.x, y: -applied.y });
   const obstacles = exitObstacles(exit);
@@ -91,6 +92,7 @@ export function placeTutorialExit(exit: HTMLElement) {
 }
 
 export function releaseTutorialExit(exit: HTMLElement | null) {
+  exit?.removeAttribute('data-toast-avoid');
   exit?.style.removeProperty(shiftProperty);
   exit?.style.removeProperty('translate');
 }

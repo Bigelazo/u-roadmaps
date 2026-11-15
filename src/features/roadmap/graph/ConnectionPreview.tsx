@@ -1,4 +1,8 @@
-import { createContext, useContext } from 'react';
+import {
+  ConnectionTargetContext,
+  ConnectionRejectedTargetContext,
+} from './connection-preview-context';
+import { useContext } from 'react';
 import {
   getSmoothStepPath,
   useReactFlow,
@@ -16,7 +20,6 @@ import {
 import { useConnectionPreviewRoute } from '@/features/roadmap/graph/routing/DependencyRouting';
 import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
 
-export const ConnectionTargetContext = createContext<(NodeRect & { id: string }) | null>(null);
 const previewStyle = { stroke: 'var(--primary)', strokeWidth: 1.5, pointerEvents: 'none' } as const;
 const rejectedPreviewStyle = {
   stroke: 'var(--muted-foreground)',
@@ -24,8 +27,6 @@ const rejectedPreviewStyle = {
   strokeDasharray: '4 4',
   pointerEvents: 'none',
 } as const;
-
-export const ConnectionRejectedTargetContext = createContext<NodeRect | null>(null);
 
 function sourceTowardsPointer(source: NodeRect, point: Point) {
   const sourcePosition = nearestSide(nodeCenter(source), point);
@@ -113,6 +114,32 @@ export function TouchConnectionPreview({
       : pointer
         ? screenToFlowPosition(pointer, { snapToGrid: false })
         : null;
+  const path = touchConnectionPath(source, target, point, routedPath);
+  if (!path) return null;
+  return (
+    <ViewportPortal>
+      <svg
+        aria-hidden="true"
+        className="roadmap-connection-preview pointer-events-none absolute top-0 left-0 overflow-visible"
+        width={1}
+        height={1}
+      >
+        <DependencyPath
+          path={path}
+          className="react-flow__connection-path"
+          style={rejected ? rejectedPreviewStyle : previewStyle}
+        />
+      </svg>
+    </ViewportPortal>
+  );
+}
+
+function touchConnectionPath(
+  source: NodeRect,
+  target: NodeRect | null,
+  point: Point | null,
+  routedPath: string | null,
+) {
   if (!target && !point) return null;
   if (
     !target &&
@@ -134,22 +161,5 @@ export function TouchConnectionPreview({
     ...sourceTowardsPointer(source, point ?? nodeCenter(target!)),
     borderRadius: 8,
   });
-  const path = target ? routedPath : freePath;
-  if (!path) return null;
-  return (
-    <ViewportPortal>
-      <svg
-        aria-hidden="true"
-        className="roadmap-connection-preview pointer-events-none absolute top-0 left-0 overflow-visible"
-        width={1}
-        height={1}
-      >
-        <DependencyPath
-          path={path}
-          className="react-flow__connection-path"
-          style={rejected ? rejectedPreviewStyle : previewStyle}
-        />
-      </svg>
-    </ViewportPortal>
-  );
+  return target ? routedPath : freePath;
 }

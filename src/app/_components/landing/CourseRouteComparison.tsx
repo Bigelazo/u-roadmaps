@@ -142,7 +142,7 @@ function CourseMaterialRow({
       onPointerLeave={() => onMaterialHover(null)}
       className={cn(
         rowColumns,
-        'border-b border-[#e5e5e5] py-1.5 transition-colors duration-200 data-active:bg-primary-soft',
+        'border-b border-[#e5e5e5] py-1.5 transition-colors duration-200 data-active:bg-[#c9e0fc]',
         material.compactHidden && 'max-sm:hidden',
       )}
     >
@@ -301,27 +301,27 @@ export function CourseRouteComparison({ className }: { className?: string }) {
         desbloqueo y el avance de cada estudiante.
       </p>
       <div aria-hidden="true" className="order-2 lg:order-1">
-        <p className="mb-4 font-heading text-lg leading-[1.15] font-semibold tracking-[-0.02em] whitespace-nowrap text-primary-foreground">
+        <p className="mb-4 font-heading text-lg leading-[1.15] font-semibold tracking-[-0.02em] whitespace-nowrap text-brand-surface-foreground">
           Hoy, en U-Cursos
         </p>
-        <p className="-mt-2 mb-4 text-sm leading-normal text-primary-soft lg:min-h-[2lh]">
+        <p className="-mt-2 mb-4 text-sm leading-normal text-brand-surface-muted lg:min-h-[2lh]">
           Archivos y enlaces en secciones separadas, ordenados por fecha.
         </p>
         <CoursePageExcerpt activeNodeId={activeNodeId} onMaterialHover={hover} />
       </div>
       <div aria-hidden="true" className="relative order-2 hidden self-stretch lg:block">
-        <span className="absolute top-12 bottom-6 left-1/2 w-0.5 -translate-x-1/2 bg-primary-bright" />
+        <span className="absolute top-12 bottom-6 left-1/2 w-0.5 -translate-x-1/2 bg-brand-surface-line" />
       </div>
       <div className="order-1 lg:order-3">
         <p
           aria-hidden="true"
-          className="mb-4 font-heading text-lg leading-[1.15] font-semibold tracking-[-0.02em] whitespace-nowrap text-primary-foreground"
+          className="mb-4 font-heading text-lg leading-[1.15] font-semibold tracking-[-0.02em] whitespace-nowrap text-brand-surface-foreground"
         >
           Con U-Roadmaps
         </p>
         <p
           aria-hidden="true"
-          className="-mt-2 mb-4 text-sm leading-normal text-primary-soft lg:min-h-[2lh]"
+          className="-mt-2 mb-4 text-sm leading-normal text-brand-surface-muted lg:min-h-[2lh]"
         >
           Cada material dentro de su nodo, en el orden en que se estudia.
         </p>

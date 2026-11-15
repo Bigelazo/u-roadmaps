@@ -12,6 +12,7 @@ import type {
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import { SidebarProvider } from '@/shared/ui/sidebar';
+import { markdownText, writeMarkdown } from '../../../support/markdown-editor';
 import { mockViewport } from '../../../support/viewport';
 
 beforeEach(() => mockViewport(1280));
@@ -566,16 +567,16 @@ test('fullscreen edits the shared Node draft, retains it on close, and saves it'
   expect(dialog.queryByRole('button', { name: /Previsualizar/ })).toBeNull();
   await user.clear(dialog.getByLabelText('Título'));
   await user.type(dialog.getByLabelText('Título'), 'Límites y continuidad');
-  fireEvent.change(dialog.getByLabelText(/^Contenido/), { target: { value: description } });
+  writeMarkdown(dialog.getByLabelText(/^Contenido/), description);
   await user.keyboard('{Escape}');
 
   expect(perform).not.toHaveBeenCalled();
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
-  expect((screen.getByLabelText(/^Contenido/) as HTMLTextAreaElement).value).toBe(description);
+  expect(markdownText(screen.getByLabelText(/^Contenido/))).toBe(description);
 
   await user.click(screen.getByRole('button', { name: 'Editar nodo en pantalla completa' }));
   const reopened = within(screen.getByRole('dialog', { name: 'Editar nodo' }));
-  expect((reopened.getByLabelText(/^Contenido/) as HTMLTextAreaElement).value).toBe(description);
+  expect(markdownText(reopened.getByLabelText(/^Contenido/))).toBe(description);
   await user.click(reopened.getByRole('button', { name: 'Guardar cambios' }));
 
   expect(perform).toHaveBeenCalledWith({

@@ -47,6 +47,7 @@ vi.mock('driver.js', () => ({
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   mock.refresh.mockClear();
   mock.destroy.mockClear();
   mock.highlight.mockClear();
@@ -247,3 +248,69 @@ it('shows the closing popover under StrictMode and forgets it once shown', async
   expect(mock.highlight).toHaveBeenCalledOnce();
   expect(readTutorialClosingPopover()).toBe(false);
 });
+
+it('releases the step once on leaving even when the engine skips its destroyed hook', async () => {
+  vi.useFakeTimers();
+  mock.index = 0;
+  const leaveStep = vi.fn();
+  const target = visible(document.createElement('div'));
+  target.id = 'target';
+  document.body.append(target);
+  const { unmount } = render(
+    <RoadmapTutorial
+      steps={[{ element: '#target', title: 'Paso', description: '', onEnter: () => leaveStep }]}
+    />,
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(200);
+  });
+  act(() => mock.config.onCloseClick?.(document.body, {}, {} as never));
+  act(() => mock.exit!.onAction('leave'));
+  expect(leaveStep).toHaveBeenCalledOnce();
+
+  act(() => mock.config.onDestroyed?.(document.body, {}, {} as never));
+  unmount();
+  expect(leaveStep).toHaveBeenCalledOnce();
+});
+
+it.each([false, true])(
+  'releases timers, listeners and actions on unmount with StrictMode=%s',
+  async (strict) => {
+    vi.useFakeTimers();
+    mock.index = 0;
+    const addListener = vi.spyOn(window, 'addEventListener');
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const unsubscribe = vi.fn();
+    const subscribe = vi.fn(() => unsubscribe);
+    const onEnter = vi.fn();
+    const tutorial = (
+      <RoadmapTutorial
+        steps={[{ element: 'body', title: 'Paso', description: '', onEnter }]}
+        actions={{ report: vi.fn(), subscribe }}
+      />
+    );
+    const { unmount } = render(strict ? <StrictMode>{tutorial}</StrictMode> : tutorial);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(onEnter).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => window.dispatchEvent(new Event('resize')));
+    press(document.body, 'Escape');
+    expect(vi.getTimerCount()).toBe(3);
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(unsubscribe).toHaveBeenCalledTimes(strict ? 2 : 1);
+    const ownedEvents = new Set(['resize', 'orientationchange', 'keydown', 'keyup', 'keypress']);
+    const registrations = addListener.mock.calls.filter(([event]) => ownedEvents.has(event));
+    expect(registrations).toHaveLength(strict ? 10 : 5);
+    for (const registration of registrations)
+      expect(removeListener).toHaveBeenCalledWith(...registration);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(onEnter).toHaveBeenCalledOnce();
+  },
+);

@@ -2,26 +2,19 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ChevronDown, Download, FileText, Lock, X } from 'lucide-react';
 import { cn } from 'cn';
+import { ArrowLeft, ChevronDown, Lock } from 'lucide-react';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
-import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-import {
-  ResourceActionIcon,
-  ResourceIcon,
-  resourceActionLabel,
-} from '@/features/roadmap/ui/ResourceIcon';
-import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
+import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { originLabel } from '@/features/roadmap/ui/version-labels';
-import { VersionTeachingStaff } from '@/features/roadmap/ui/VersionTeachingStaff';
 import { Badge } from '@/shared/ui/badge';
-import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { versionHistoryUrl, versionUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/version-types';
 
 export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVersion }>) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [panelWidth, setPanelWidth] = useState(426);
   const projection = useMemo<RoadmapGraphProjection>(
     () => ({ kind: 'teaching', roadmap: version }),
     [version],
@@ -40,70 +33,14 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
             overlaySlots={{ topLeft: <VersionInformation version={version} /> }}
           />
         </div>
-        {selectedNode ? (
-          <aside
-            aria-label={selectedNode.title}
-            className="absolute inset-0 z-10 overflow-y-auto border-l border-fog bg-card sm:static sm:w-80 sm:shrink-0 lg:w-96"
-          >
-            <NodePanelHeader
-              title={selectedNode.title}
-              nodeType={version.nodeTypes.find(({ id }) => id === selectedNode.nodeTypeId)}
-              iconTestId="version-node-type-icon"
-              headingId="version-node-detail-title"
-              actions={
-                <Button
-                  aria-label="Cerrar detalle"
-                  onClick={() => setSelectedNodeId(null)}
-                  variant="ghost"
-                  size="icon"
-                >
-                  <X size={18} />
-                </Button>
-              }
-            />
-            <div className="px-6 py-5">
-              <h3 className="flex items-center gap-2 font-semibold">
-                <FileText size={18} /> Descripción
-              </h3>
-              <div className="mt-4">
-                <NodeDescription description={selectedNode.description} />
-              </div>
-              <h3 className="mt-6 flex items-center gap-2 font-semibold">
-                <Download size={18} /> Recursos
-              </h3>
-              {selectedNode.resources.length === 0 ? (
-                <p className="mt-3 text-sm text-muted-foreground">Este nodo no tiene recursos.</p>
-              ) : (
-                <ul className="mt-3 grid gap-2">
-                  {selectedNode.resources.map((resource) => (
-                    <li key={resource.id}>
-                      <a
-                        className="flex items-center gap-2 rounded-lg border border-fog px-3 py-2 text-sm hover:bg-muted"
-                        href={resource.url}
-                        aria-label={resourceActionLabel(resource)}
-                        {...(resource.type === 'FILE'
-                          ? { download: resource.title }
-                          : { target: '_blank', rel: 'noreferrer' })}
-                      >
-                        <ResourceIcon
-                          resource={resource}
-                          size={16}
-                          className="shrink-0 text-primary"
-                        />
-                        <span className="min-w-0 flex-1 truncate">{resource.title}</span>
-                        <ResourceActionIcon
-                          type={resource.type}
-                          size={16}
-                          className="text-muted-foreground"
-                        />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </aside>
-        ) : null}
+        <StudentNodeDetail
+          node={selectedNode}
+          status={selectedNode ? 'available' : null}
+          onClose={() => setSelectedNodeId(null)}
+          nodeTypes={version.nodeTypes}
+          panelWidth={panelWidth}
+          onPanelWidthChange={setPanelWidth}
+        />
       </div>
     </main>
   );
@@ -112,54 +49,43 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
 function VersionInformation({ version }: Readonly<{ version: RoadmapVersion }>) {
   const { version: authorship } = version;
   return (
-    <div className="pointer-events-auto flex max-h-[calc(100dvh-12rem)] w-80 max-w-full flex-col gap-2 overflow-y-auto [@media(max-height:500px)]:w-md [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:flex-wrap [@media(max-height:500px)]:items-center [@media(max-height:500px)]:gap-x-3 [@media(max-height:500px)]:gap-y-0">
+    <div className="pointer-events-auto flex max-h-[calc(100dvh-12rem)] w-80 max-w-full flex-col gap-2 overflow-y-auto max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-0 [@media(max-height:500px)]:w-md [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:flex-wrap [@media(max-height:500px)]:items-center [@media(max-height:500px)]:gap-x-3 [@media(max-height:500px)]:gap-y-0">
       <Link
         className={buttonVariants({ variant: 'ghost', size: 'sm', className: '-ml-2 w-fit' })}
         href={versionHistoryUrl(version.course.code)}
       >
         <ArrowLeft data-icon="inline-start" />
-        Historial de versiones
+        <span className="max-sm:sr-only">Historial de versiones</span>
       </Link>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground max-sm:hidden">
         {version.course.code} · {version.course.name}
       </p>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 max-sm:flex-1">
         <h1 className="font-heading text-xl font-semibold text-ink [@media(max-height:500px)]:text-base">
           {authorship.edition}
         </h1>
         <span className="inline-flex items-center gap-1.5 rounded-sm bg-muted px-2 py-0.5 text-xs font-bold text-ink">
           <Lock aria-hidden="true" className="size-3 shrink-0" />
-          Versión cerrada · solo lectura
+          <span className="max-sm:hidden">Versión cerrada · </span>Solo lectura
         </span>
       </div>
-      <details className="group/version mt-1 border-t border-fog pt-1 [@media(max-height:500px)]:basis-full">
+      <details className="group/version mt-1 border-t border-fog pt-1 max-sm:basis-full [@media(max-height:500px)]:basis-full">
         <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 rounded-sm text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-          Información de la versión
+          Procedencia
           <ChevronDown
             aria-hidden="true"
             className="size-4 shrink-0 transition-transform duration-200 ease-out group-open/version:rotate-180"
           />
         </summary>
-        <div className="mt-2 grid gap-5 pb-1">
-          <section aria-labelledby="version-lineage-heading" className="grid gap-2">
-            <h2
-              className="text-xs font-semibold text-muted-foreground"
-              id="version-lineage-heading"
-            >
-              Procedencia
-            </h2>
-            <VersionLineage
-              courseCode={version.course.code}
-              lineage={authorship.lineage}
-              origin={authorship.origin}
-            />
-          </section>
-          <section aria-labelledby="version-staff-heading" className="grid gap-2">
-            <h2 className="text-xs font-semibold text-muted-foreground" id="version-staff-heading">
-              Equipo docente
-            </h2>
-            <VersionTeachingStaff {...authorship} />
-          </section>
+        <div className="mt-2 grid gap-3 pb-1">
+          <p className="text-sm text-muted-foreground sm:hidden">
+            {version.course.code} · {version.course.name}
+          </p>
+          <VersionLineage
+            courseCode={version.course.code}
+            lineage={authorship.lineage}
+            origin={authorship.origin}
+          />
         </div>
       </details>
     </div>

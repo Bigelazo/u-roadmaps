@@ -1,5 +1,6 @@
 'use client';
 
+import { nodeTypePaint } from '@/shared/node-type';
 import {
   BookOpen,
   CalendarClock,
@@ -267,7 +268,8 @@ function RouteNode({
   const width = nodeWidth(node);
   const type = nodeTypes[node.type];
   const locked = node.status === 'locked';
-  const nodeColor = locked ? 'var(--blocked)' : type.color;
+  const typeColor = nodeTypePaint(type.color);
+  const nodeColor = locked ? 'var(--blocked)' : typeColor;
   return (
     <g
       transform={`translate(${node.x} ${node.y})`}
@@ -291,7 +293,7 @@ function RouteNode({
             style={{
               fill: locked
                 ? 'color-mix(in srgb, var(--blocked) 20%, var(--card))'
-                : `color-mix(in srgb, ${type.color} 3%, var(--card))`,
+                : `color-mix(in srgb, ${typeColor} 3%, var(--card))`,
             }}
             stroke={nodeColor}
             strokeWidth={2}
@@ -416,11 +418,11 @@ export function RouteSpecimen({
         </div>
         <figcaption className="mt-4 flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-            <span className="font-semibold text-primary-foreground">
+            <span className="font-semibold text-brand-surface-foreground">
               Curso de ejemplo · Programación · {completedCount} de {nodes.length} nodos completados
             </span>
             {nextNode ? (
-              <span className="text-primary-soft">Siguiente paso: {nextNode.title}</span>
+              <span className="text-brand-surface-muted">Siguiente paso: {nextNode.title}</span>
             ) : null}
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">

@@ -6,6 +6,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -165,25 +166,29 @@ function RoutedCanvas({
   children: ReactNode;
 }) {
   const previewContext = useMemo(() => (module ? { module, sceneKey } : null), [module, sceneKey]);
-  const [router, setRouter] = useState<DependencyRouter | null>(null);
+  const router = useRef<DependencyRouter | null>(null);
   const [result, setResult] = useState(emptyRoutes);
   const [failed, setFailed] = useState(false);
   useLayoutEffect(() => {
     if (!module) return;
     const instance = new DependencyRouter(module);
-    setRouter(instance);
-    return () => instance.dispose();
+    router.current = instance;
+    return () => {
+      router.current = null;
+      instance.dispose();
+    };
   }, [module]);
   useLayoutEffect(() => {
-    if (!router) return;
+    const instance = router.current;
+    if (!instance) return;
     try {
-      setResult(router.route(JSON.parse(sceneKey) as RoutingScene));
+      setResult(instance.route(JSON.parse(sceneKey) as RoutingScene));
       setFailed(false);
     } catch {
       setResult(emptyRoutes);
       setFailed(true);
     }
-  }, [router, sceneKey]);
+  }, [module, sceneKey]);
   return (
     <PreviewRoutingContext value={previewContext}>
       <RoutingContext value={result.routes}>

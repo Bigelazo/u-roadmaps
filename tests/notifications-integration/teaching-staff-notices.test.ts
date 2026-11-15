@@ -213,7 +213,7 @@ test('teaching staff recognize changes on a hidden Node as on a visible one', as
   expect(summaryInInboxWords(entry.summary)).toEqual([
     {
       title: 'Montículos',
-      items: ['Se actualizó la descripción.', '«Heaps» pasó a llamarse «Montículos».'],
+      items: ['Se actualizó la descripción.', 'Antes se llamaba «Heaps».'],
     },
   ]);
   expect(await pendingNotices(course.colleagueId, course.roadmapId)).toEqual([]);

@@ -1,4 +1,5 @@
-import { AnimatePresence, motion, type MotionStyle } from 'motion/react';
+import { AnimatePresence, domAnimation, LazyMotion, type MotionStyle } from 'motion/react';
+import * as m from 'motion/react-m';
 import { useNodeEntryProgress } from '@/features/roadmap/graph/DependencyAnimation';
 import {
   ArrowDown,
@@ -74,7 +75,7 @@ function NodeChangeBadge({ nodeId }: { nodeId: string }) {
       aria-label={label}
       title={label}
       role="img"
-      className="absolute top-[-10px] left-[-10px] z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-xs leading-none font-bold text-white tabular-nums shadow-sm"
+      className="absolute top-[-10px] left-[-10px] z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-xs leading-none font-bold text-white tabular-nums shadow-sm dark:text-destructive-foreground"
     >
       {formatBadgeCount(count)}
     </span>
@@ -162,7 +163,7 @@ function NodeConnectorPort({
           />
         }
       >
-        <motion.span
+        <m.span
           className="roadmap-node-port-visual"
           initial={false}
           animate={{ scale: revealed ? 1 : 0 }}
@@ -172,7 +173,7 @@ function NodeConnectorPort({
           }}
         >
           <Arrow aria-hidden="true" strokeWidth={2.25} />
-        </motion.span>
+        </m.span>
       </TooltipTrigger>
       <TooltipContent side={position}>Arrastrar dependencia</TooltipContent>
     </Tooltip>
@@ -271,7 +272,7 @@ function NodeActionMenuItem({
   } as CSSProperties;
 
   return (
-    <motion.div
+    <m.div
       className={styles.actionItem}
       style={itemStyle}
       initial={{ x: 0, y: 0, opacity: 0, scale: 0.65 }}
@@ -291,7 +292,7 @@ function NodeActionMenuItem({
         <TooltipTrigger
           delay={150}
           render={
-            <motion.button
+            <m.button
               type="button"
               aria-label={label}
               disabled={isClosing}
@@ -314,7 +315,7 @@ function NodeActionMenuItem({
             >
               {RestIcon ? (
                 <span className={styles.actionIcon} aria-hidden="true">
-                  <motion.span
+                  <m.span
                     data-testid={`node-action-${id}-current-icon`}
                     variants={{
                       rest: { opacity: 1, scale: 1 },
@@ -323,8 +324,8 @@ function NodeActionMenuItem({
                     transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <RestIcon />
-                  </motion.span>
-                  <motion.span
+                  </m.span>
+                  <m.span
                     data-testid={`node-action-${id}-preview-icon`}
                     variants={{
                       rest: { opacity: 0, scale: 0.85 },
@@ -333,17 +334,17 @@ function NodeActionMenuItem({
                     transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <Icon />
-                  </motion.span>
+                  </m.span>
                 </span>
               ) : (
                 <Icon aria-hidden="true" />
               )}
-            </motion.button>
+            </m.button>
           }
         />
         <TooltipContent side="right">{label}</TooltipContent>
       </Tooltip>
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -370,7 +371,7 @@ function NodeActionTriggerIcon({
 
   return (
     <AnimatePresence initial={false} mode="popLayout">
-      <motion.span
+      <m.span
         key={expanded ? 'close' : state}
         className={styles.triggerIcon}
         initial={{ opacity: 0, rotate: -45 }}
@@ -383,7 +384,7 @@ function NodeActionTriggerIcon({
           className="size-6"
           aria-hidden="true"
         />
-      </motion.span>
+      </m.span>
     </AnimatePresence>
   );
 }
@@ -399,7 +400,7 @@ function NodeActionTrigger({
   onToggle,
 }: NodeActionTriggerProps) {
   const trigger = (
-    <motion.button
+    <m.button
       type="button"
       aria-label={
         isOpen && !isClosing
@@ -422,7 +423,7 @@ function NodeActionTrigger({
         onToggle?.(nodeId, event.currentTarget);
       }}
     >
-      <motion.span
+      <m.span
         className={styles.triggerVisual}
         variants={{
           closed: { scale: restingScale },
@@ -438,8 +439,8 @@ function NodeActionTrigger({
           isOpen={isOpen}
           isClosing={isClosing}
         />
-      </motion.span>
-    </motion.button>
+      </m.span>
+    </m.button>
   );
 
   if (useActionSheet) return trigger;
@@ -654,9 +655,7 @@ export function RoadmapNode({ id, data, selected, width, height }: NodeProps<Roa
     !data.isActionMenuClosing;
   const connectionHoverActive = canConnect && connectionHovered;
   const connectionStarted = useStore((state) => state.connection.fromNode?.id === id);
-  useEffect(() => {
-    if (!canConnect) setConnectionHovered(false);
-  }, [canConnect]);
+  if (!canConnect && connectionHovered) setConnectionHovered(false);
   const trackConnectionHover = (event: PointerEvent<HTMLDivElement>) => {
     if (
       !canConnect ||
@@ -686,79 +685,91 @@ export function RoadmapNode({ id, data, selected, width, height }: NodeProps<Roa
       });
     if (coversAnotherNode) setConnectionHovered(false);
   };
-  const teacherBlocked = editing && data.isTeacherBlocked;
-  const blocked = locked || teacherBlocked;
-  const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
+  const { nodeColor, className, style } = nodeCardAppearance(data, selected);
   return (
-    <motion.div
-      ref={cardRef}
-      data-slot="roadmap-card"
-      data-testid="roadmap-card"
-      data-hidden={hidden || undefined}
-      data-connection-enabled={canConnect || undefined}
-      data-connection-hovered={connectionHoverActive || undefined}
-      onPointerEnter={trackConnectionHover}
-      onPointerMove={trackConnectionHover}
-      onPointerLeave={() => setConnectionHovered(false)}
-      data-block-reason={data.blockReason}
-      aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
-      aria-disabled={locked ? true : undefined}
-      className={cn(
-        'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transition-none',
-        selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-        hidden && 'border-dashed',
-        locked
-          ? 'cursor-not-allowed opacity-[0.88] shadow-none'
-          : cn(
-              'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
-              !hidden && 'shadow-(--shadow-roadmap-node)',
-            ),
-      )}
-      style={
-        {
-          '--roadmap-node-color': nodeColor,
+    <LazyMotion features={domAnimation} strict>
+      <m.div
+        ref={cardRef}
+        data-slot="roadmap-card"
+        data-testid="roadmap-card"
+        data-hidden={hidden || undefined}
+        data-connection-enabled={canConnect || undefined}
+        data-connection-hovered={connectionHoverActive || undefined}
+        onPointerEnter={trackConnectionHover}
+        onPointerMove={trackConnectionHover}
+        onPointerLeave={() => setConnectionHovered(false)}
+        data-block-reason={data.blockReason}
+        aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
+        aria-disabled={locked ? true : undefined}
+        className={className}
+        style={{
+          ...style,
           scale: entryProgress,
           transformOrigin: 'center center',
           width: size.width,
           height: size.height,
-          backgroundColor: blocked
-            ? 'color-mix(in srgb, var(--blocked) 20%, var(--card))'
-            : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
-          backgroundImage: hidden
-            ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 11px)`
-            : undefined,
-          borderColor: nodeColor,
-        } as MotionStyle
-      }
-    >
-      <div
-        data-testid="roadmap-node-content"
-        className="flex h-full min-w-0 items-center justify-start gap-2.5"
+        }}
       >
-        <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={nodeColor} />
-        <p
-          ref={titleText.ref}
-          title={titleText.isClamped ? data.title : undefined}
-          className="line-clamp-2 min-w-0 text-left wrap-break-word text-ink"
-          style={roadmapNodeTitleStyle}
+        <div
+          data-testid="roadmap-node-content"
+          className="flex h-full min-w-0 items-center justify-start gap-2.5"
         >
-          {data.title}
-        </p>
-      </div>
-      <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
-      <NodeActionBadge id={id} data={data} selected={selected} />
-      {nodeHandles.map(([handleId, position]) => (
-        <NodeConnectorPort
-          key={handleId}
-          handleId={handleId}
-          position={position}
-          title={data.title}
-          enabled={canConnect}
-          revealed={canConnect && (connectionHoverActive || connectionStarted)}
-          onStart={() => connector.start(id)}
-        />
-      ))}
-      <NodeNotificationBadge id={id} data={data} />
-    </motion.div>
+          <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={nodeColor} />
+          <p
+            ref={titleText.ref}
+            title={titleText.isClamped ? data.title : undefined}
+            className="line-clamp-2 min-w-0 text-left wrap-break-word text-ink"
+            style={roadmapNodeTitleStyle}
+          >
+            {data.title}
+          </p>
+        </div>
+        <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
+        <NodeActionBadge id={id} data={data} selected={selected} />
+        {nodeHandles.map(([handleId, position]) => (
+          <NodeConnectorPort
+            key={handleId}
+            handleId={handleId}
+            position={position}
+            title={data.title}
+            enabled={canConnect}
+            revealed={canConnect && (connectionHoverActive || connectionStarted)}
+            onStart={() => connector.start(id)}
+          />
+        ))}
+        <NodeNotificationBadge id={id} data={data} />
+      </m.div>
+    </LazyMotion>
   );
+}
+
+function nodeCardAppearance(data: RoadmapNodeData, selected: boolean | undefined) {
+  const locked = data.status === 'locked';
+  const hidden = data.isHidden;
+  const blocked = locked || (data.status === 'editing' && data.isTeacherBlocked);
+  const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
+  return {
+    nodeColor,
+    className: cn(
+      'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transition-none',
+      selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+      hidden && 'border-dashed',
+      locked
+        ? 'cursor-not-allowed opacity-[0.88] shadow-none'
+        : cn(
+            'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+            !hidden && 'shadow-(--shadow-roadmap-node)',
+          ),
+    ),
+    style: {
+      '--roadmap-node-color': nodeColor,
+      backgroundColor: blocked
+        ? 'color-mix(in srgb, var(--blocked) 20%, var(--card))'
+        : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
+      backgroundImage: hidden
+        ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 11px)`
+        : undefined,
+      borderColor: nodeColor,
+    } as MotionStyle,
+  };
 }

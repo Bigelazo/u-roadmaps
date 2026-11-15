@@ -36,6 +36,15 @@ type ConfirmationPresentation = {
   actions: ConfirmationActions;
 };
 
+const compactActionLabelLength = 24;
+
+function hasLongActions(actions: ConfirmationActions) {
+  return (
+    actions.length > 1 &&
+    actions.reduce((length, action) => length + action.label.length, 0) > compactActionLabelLength
+  );
+}
+
 type ConfirmationDialogProps = {
   confirmation: ConfirmationPresentation | null;
   className?: string;
@@ -97,7 +106,7 @@ function ConfirmationDialog({
   }, [confirmation]);
 
   const isWide =
-    confirmation !== null && (confirmation.actions.length > 1 || !!confirmation.content);
+    confirmation !== null && (!!confirmation.content || hasLongActions(confirmation.actions));
 
   return (
     <AlertDialog

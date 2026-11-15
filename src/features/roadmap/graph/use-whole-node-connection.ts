@@ -139,16 +139,19 @@ export function useWholeNodeConnection({
     longPressTimer.current = null;
     pendingTouch.current = null;
   }, []);
-  const cancelArrowMode = useCallback(() => {
-    cancelPendingTouch();
-    mobileSource.current = null;
+  const resetArrowState = useCallback(() => {
     setArrowSourceId(null);
     setArrowPointer(null);
     setTargetId(null);
     setRejectedTargetId(null);
     setArrowRejection(null);
     setArrowMessage(arrowModeMessage);
-  }, [cancelPendingTouch]);
+  }, []);
+  const cancelArrowMode = useCallback(() => {
+    cancelPendingTouch();
+    mobileSource.current = null;
+    resetArrowState();
+  }, [cancelPendingTouch, resetArrowState]);
   useEffect(() => {
     if (!arrowSourceId) return;
     const cancelOnEscape = (event: KeyboardEvent) => {
@@ -164,9 +167,11 @@ export function useWholeNodeConnection({
     if (
       activeId &&
       (!enabled || !nodesById.has(activeId) || nodesById.get(activeId)?.data.isHidden)
-    )
-      cancelArrowMode();
-  }, [cancelArrowMode, enabled, nodesById]);
+    ) {
+      cancelPendingTouch();
+      mobileSource.current = null;
+    }
+  }, [cancelPendingTouch, enabled, nodesById]);
   const startArrowMode = useCallback(
     (nodeId: string) => {
       const node = nodesById.get(nodeId);
@@ -344,13 +349,18 @@ export function useWholeNodeConnection({
     [cancelPendingTouch, chooseMobileTarget, suppressDropClick],
   );
 
+  const arrowSource = arrowSourceId ? nodesById.get(arrowSourceId) : undefined;
+  const arrowModeAvailable = enabled && Boolean(arrowSource && !arrowSource.data.isHidden);
+  const highlightsAvailable = enabled && (!arrowSourceId || arrowModeAvailable);
+  if (arrowSourceId && !arrowModeAvailable) resetArrowState();
+
   return {
-    targetId,
-    rejectedTargetId,
-    arrowSourceId,
-    arrowPointer,
-    arrowMessage,
-    arrowRejection,
+    targetId: highlightsAvailable ? targetId : null,
+    rejectedTargetId: highlightsAvailable ? rejectedTargetId : null,
+    arrowSourceId: arrowModeAvailable ? arrowSourceId : null,
+    arrowPointer: arrowModeAvailable ? arrowPointer : null,
+    arrowMessage: arrowModeAvailable ? arrowMessage : arrowModeMessage,
+    arrowRejection: arrowModeAvailable ? arrowRejection : null,
     arrowInput,
     startArrowMode,
     cancelArrowMode,

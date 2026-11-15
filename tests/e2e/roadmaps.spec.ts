@@ -1025,10 +1025,10 @@ test('teacher can save consecutive changes to the same Node', async ({
   const save = fullscreen.getByRole('button', { name: 'Guardar cambios' });
   await title.fill(firstTitle);
   await description.fill(firstDescription);
-  const highlightedDescription = fullscreen.locator('.markdown-editor pre');
-  await expect(highlightedDescription.locator('.token-title')).toHaveText('# Objetivo');
-  await expect(highlightedDescription.locator('.token-bold')).toHaveText('**Conceptos**');
-  await expect(highlightedDescription.locator('.token-italic')).toHaveText('*ejercicios*');
+  const formattedDescription = fullscreen.locator('.markdown-editor');
+  await expect(formattedDescription.locator('.cm-md-h1')).toContainText('Objetivo');
+  await expect(formattedDescription.locator('.cm-md-strong')).toContainText('Conceptos');
+  await expect(formattedDescription.locator('.cm-md-emphasis')).toContainText('ejercicios');
   await type.click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
   await expect(save).toBeEnabled();
@@ -1044,13 +1044,13 @@ test('teacher can save consecutive changes to the same Node', async ({
   await expect(fullscreen).toBeHidden();
   const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
   await expect(editor.getByLabel('Título', { exact: true })).toHaveValue(firstTitle);
-  await expect(editor.getByLabel(/^Contenido/)).toHaveValue(firstDescription);
+  await expect(editor.getByLabel(/^Contenido/)).toContainText('Objetivo');
   await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
 
   await title.fill(secondTitle);
   await description.fill(secondDescription);
-  await expect(highlightedDescription.locator('.token-title')).toHaveText('## Repaso');
-  await expect(description).toHaveValue(secondDescription);
+  await expect(formattedDescription.locator('.cm-md-h2')).toContainText('Repaso');
+  await expect(formattedDescription.locator('.cm-md-code')).toContainText('algoritmos');
   await type.click();
   await page.getByRole('option', { name: controlTypeName }).click();
   await expect(save).toBeEnabled();
@@ -1329,12 +1329,13 @@ test('landing access starts VTI and dismisses authentication failures without re
     page.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).toHaveCount(0);
 
-  await page.route('**/api/plogin/start', (route) =>
-    route.fulfill({ contentType: 'text/html', body: 'Ingreso institucional de prueba' }),
+  const institutionalLogin = page.waitForRequest((request) =>
+    request.url().startsWith('https://vti.example.test/login'),
   );
-  await page.goto('/academic-overview');
-  await expect(page).toHaveURL('/api/plogin/start');
-  await expect(page.getByText('Ingreso institucional de prueba')).toBeVisible();
+  await expect(page.goto('/academic-overview')).rejects.toThrow('ERR_NAME_NOT_RESOLVED');
+  const loginStart = (await institutionalLogin).redirectedFrom();
+  expect(new URL(loginStart!.url()).pathname).toBe('/api/plogin/start');
+  expect(new URL(loginStart!.redirectedFrom()!.url()).pathname).toBe('/academic-overview');
 });
 
 test('logout requires confirmation and removes the application session', async ({

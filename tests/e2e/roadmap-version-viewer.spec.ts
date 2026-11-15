@@ -90,7 +90,7 @@ closedVersion(
     const response = await ok(await api.get(versionPath(closed)));
     const body = await response.json();
     expect(body.version).toMatchObject({
-      edition: `Edición ${closedYear}-${closed.semester}`,
+      edition: `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
       creator: { id: course.users.teacher.id, name: course.users.teacher.name },
       teachingStaff: [
         {
@@ -171,14 +171,22 @@ closedVersion(
     const before = await sideEffectCounts(closed);
     await authenticateAs(page.context(), course.users.teachingAssistant.id);
     await page.goto(`/courses/${closed.courseCode}/versions`);
-    await page.getByRole('link', { name: `Ver Edición ${closedYear}-${closed.semester}` }).click();
+    await page
+      .getByRole('link', {
+        name: `Abrir roadmap de ${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
+      })
+      .click();
     await expect(page).toHaveURL(new RegExp(`${viewerPagePath(closed)}$`));
     await expect(
-      page.getByRole('heading', { name: `Edición ${closedYear}-${closed.semester}` }),
+      page.getByRole('heading', {
+        name: `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
+      }),
     ).toBeVisible();
     const canvas = page.locator('.react-flow');
     await expect(
-      canvas.getByRole('heading', { name: `Edición ${closedYear}-${closed.semester}` }),
+      canvas.getByRole('heading', {
+        name: `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
+      }),
     ).toBeVisible();
     const handles = canvas.getByTestId('roadmap-node-handle');
     await expect(handles.first()).toBeHidden();
@@ -194,29 +202,27 @@ closedVersion(
         elements.every((element) => getComputedStyle(element).stroke === 'rgb(0, 0, 0)'),
       ),
     ).toBe(true);
-    await canvas.getByText('Información de la versión', { exact: true }).click();
+    await canvas.getByText('Procedencia', { exact: true }).click();
     await expect(page.getByText('Creada desde cero')).toBeVisible();
-    const teacherEntry = page
-      .getByRole('list', { name: 'Equipo docente' })
-      .getByRole('listitem')
-      .filter({ hasText: course.users.teacher.name });
-    await expect(teacherEntry).toContainText('Profesor de cátedra');
-    await expect(teacherEntry).toContainText('Creó la versión');
+    await expect(page.getByRole('list', { name: 'Equipo docente' })).toHaveCount(0);
     await expect(page.getByText(course.users.studentWithProgress.name)).toHaveCount(0);
 
-    await canvas.getByText('Información de la versión', { exact: true }).click();
+    await canvas.getByText('Procedencia', { exact: true }).click();
     await page.getByRole('button', { name: 'Centrar mapa' }).click();
     await page.locator(`.react-flow__node[data-id="${version.nodeId}"]`).click();
-    const details = page.getByRole('complementary', { name: nodeTitle });
+    const details = page.locator('#student-node-detail-panel');
+    await expect(details).toContainText(nodeTitle);
     await expect(details).toBeVisible();
     const download = page.waitForEvent('download');
-    await details.getByRole('link', { name: /guia\.txt/ }).click();
+    await details.getByRole('link', { name: 'Descargar guia.txt' }).click();
     expect((await download).suggestedFilename()).toBe('guia.txt');
     await expect(page.getByRole('button', { name: /Completar|Recurso|Guardar/ })).toHaveCount(0);
-    await canvas.getByText('Información de la versión', { exact: true }).click();
+    await canvas.getByText('Procedencia', { exact: true }).click();
     const lineage = page.getByRole('list', { name: 'Linaje' });
     await expect(lineage.getByRole('listitem')).toHaveCount(1);
-    await expect(lineage).toContainText(`Edición ${closedYear}-${closed.semester}`);
+    await expect(lineage).toContainText(
+      `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
+    );
     await expect(lineage).toContainText('Esta versión');
     expect(await sideEffectCounts(closed)).toEqual(before);
   },

@@ -82,11 +82,6 @@ for (const width of [1280, 390]) {
     const creator = page.getByRole('button', { name: 'Crear en el mapa' });
     const beforeHover = await popover.boundingBox();
     await creator.hover();
-    await expect(
-      page
-        .locator('[data-slot="tooltip-content"][data-open]')
-        .filter({ hasText: 'Crear en el mapa' }),
-    ).toBeVisible();
     expect(await popover.boundingBox()).toEqual(beforeHover);
     const observation = page.evaluate(async () => {
       let overlaps = 0;

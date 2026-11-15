@@ -103,7 +103,7 @@ export function DateTimePicker({
               disabled={disabled}
               aria-label={selected ? `${dayLabel}: ${formatCalendarDay(selected.day)}` : dayLabel}
               className={cn(
-                'min-w-fit flex-1 justify-start font-normal tabular-nums',
+                'min-w-fit flex-1 justify-start font-normal tabular-nums dark:border-input dark:bg-card dark:text-foreground dark:hover:border-primary dark:hover:bg-card',
                 !selected && 'text-muted-foreground',
               )}
             />

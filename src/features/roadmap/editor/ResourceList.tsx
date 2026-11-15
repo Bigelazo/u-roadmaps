@@ -1,13 +1,10 @@
+import { resourceActionLabel } from '@/features/roadmap/ui/resource-action-label';
 import { Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
 import { Item, ItemMedia } from '@/shared/ui/item';
-import {
-  ResourceActionIcon,
-  ResourceIcon,
-  resourceActionLabel,
-} from '@/features/roadmap/ui/ResourceIcon';
+import { ResourceActionIcon, ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 import { ResourceMetadata } from '@/features/roadmap/ui/ResourceMetadata';
 import { dividedItemClassName } from './primitives';
 

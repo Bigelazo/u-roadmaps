@@ -208,7 +208,7 @@ copyScenario(
       kind: 'COPY',
       year: closed.year,
       semester: closed.semester,
-      edition: `Edición ${closed.year}-${closed.semester}`,
+      edition: `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closed.year}`,
     });
     expect(afterRemoval.version.lineage.map(({ year }: { year: number }) => year)).toEqual([
       closed.year,
@@ -309,7 +309,7 @@ copyScenario(
   'the creation dialog offers closed versions with a viewer link and creates the copy',
   async ({ course, scenario, page }) => {
     const { closed, next, source } = scenario;
-    const edition = `Edición ${closed.year}-${closed.semester}`;
+    const edition = `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closed.year}`;
     await authenticateAs(page.context(), course.users.teacher.id);
     await page.goto('/academic-overview');
     await page

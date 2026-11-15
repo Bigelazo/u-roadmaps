@@ -27,7 +27,6 @@ export type CourseMember = Readonly<{
 
 export type CourseParticipants = Readonly<{
   course: Readonly<CourseOfferingIdentifier & { name: string }>;
-  source: 'MUFASA' | 'LOCAL';
   hasRoadmap: boolean;
   visibleNodes: number;
   studentCount: number;
@@ -186,7 +185,6 @@ export async function readCourseParticipants(
 
   return {
     course: { ...identifier, name: courseOffering.course.name },
-    source: institutionalRoster ? 'MUFASA' : 'LOCAL',
     hasRoadmap: Boolean(courseOffering.roadmap),
     visibleNodes,
     studentCount: students.filter((member) => member.institutionalPosition === 'STUDENT').length,

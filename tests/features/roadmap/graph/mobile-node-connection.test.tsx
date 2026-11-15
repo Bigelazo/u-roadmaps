@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { useWholeNodeConnection } from '@/features/roadmap/graph/use-whole-node-connection';
@@ -31,14 +32,24 @@ function Harness({
   onPan,
   enabled = true,
   edges = [],
+  sourceStatus = 'visible',
+  onCommit,
 }: {
   onConnect: (connection: Connection) => void;
   onOpen: () => void;
   onPan?: () => void;
   enabled?: boolean;
   edges?: RoadmapFlowEdge[];
+  sourceStatus?: 'visible' | 'hidden' | 'removed';
+  onCommit?: (snapshot: {
+    source: string | null;
+    target: string | null;
+    pointer: { x: number; y: number } | null;
+  }) => void;
 }) {
-  const nodes: RoadmapFlowNode[] = ['source', 'target'].map((id) => ({
+  const nodes: RoadmapFlowNode[] = (
+    sourceStatus === 'removed' ? ['target'] : ['source', 'target']
+  ).map((id) => ({
     id,
     type: 'roadmap',
     position: { x: 0, y: 0 },
@@ -48,7 +59,7 @@ function Harness({
       typeName: 'Contenido',
       typeIcon: 'book-open',
       status: 'editing',
-      isHidden: false,
+      isHidden: id === 'source' && sourceStatus === 'hidden',
       isTeacherBlocked: false,
     },
   }));
@@ -58,6 +69,13 @@ function Harness({
     enabled,
     onConnect,
     onReject: () => {},
+  });
+  useLayoutEffect(() => {
+    onCommit?.({
+      source: connection.arrowSourceId,
+      target: connection.targetId,
+      pointer: connection.arrowPointer,
+    });
   });
   return (
     <div
@@ -238,3 +256,68 @@ test('tapping a target that already depends on the source keeps arrow mode and e
   expect(screen.getByLabelText('Motivo del rechazo').textContent).toBe('DEPENDENCY_CONFLICT');
   expect(onConnect).not.toHaveBeenCalled();
 });
+
+test.each(['disabled', 'hidden', 'removed'] as const)(
+  'invalidating an active source as %s clears arrow mode in one commit without resuming after restoration',
+  (invalidation) => {
+    const onConnect = vi.fn();
+    const onOpen = vi.fn();
+    const onCommit = vi.fn();
+    const view = render(<Harness onConnect={onConnect} onOpen={onOpen} onCommit={onCommit} />);
+    const source = beginLongPress();
+    const target = screen.getByText('Cuerpo de destino');
+    hitTarget = target;
+    fireEvent.touchMove(source, touch(250));
+    expect(onCommit).toHaveBeenLastCalledWith({
+      source: 'source',
+      target: 'target',
+      pointer: { x: 250, y: 100 },
+    });
+    onCommit.mockClear();
+    view.rerender(
+      <Harness
+        onConnect={onConnect}
+        onOpen={onOpen}
+        onCommit={onCommit}
+        enabled={invalidation !== 'disabled'}
+        sourceStatus={invalidation === 'disabled' ? 'visible' : invalidation}
+      />,
+    );
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    for (const [snapshot] of onCommit.mock.calls)
+      expect(snapshot).toEqual({ source: null, target: null, pointer: null });
+    view.rerender(<Harness onConnect={onConnect} onOpen={onOpen} onCommit={onCommit} />);
+    expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('');
+    hitTarget = target;
+    fireEvent.touchStart(target, touch(250));
+    fireEvent.touchEnd(target, ended(250));
+    expect(onConnect).not.toHaveBeenCalled();
+  },
+);
+
+test.each(['disabled', 'hidden', 'removed'] as const)(
+  'invalidating a pending dwell when the source becomes %s cancels it permanently',
+  (invalidation) => {
+    const onConnect = vi.fn();
+    const onOpen = vi.fn();
+    const view = render(<Harness onConnect={onConnect} onOpen={onOpen} />);
+    const source = screen.getByText('Cuerpo de origen');
+    hitTarget = source;
+    fireEvent.touchStart(source, touch());
+    act(() => vi.advanceTimersByTime(300));
+    view.rerender(
+      <Harness
+        onConnect={onConnect}
+        onOpen={onOpen}
+        enabled={invalidation !== 'disabled'}
+        sourceStatus={invalidation === 'disabled' ? 'visible' : invalidation}
+      />,
+    );
+    view.rerender(<Harness onConnect={onConnect} onOpen={onOpen} />);
+    act(() => vi.advanceTimersByTime(600));
+    expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('');
+    expect(onConnect).not.toHaveBeenCalled();
+    beginLongPress();
+    expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('source');
+  },
+);

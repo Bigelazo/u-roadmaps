@@ -359,8 +359,8 @@ test('the FI1001 catalog gives teaching staff their creation options and histori
   await page.getByRole('button', { name: `Crear roadmap de ${courseName}` }).click();
   const dialog = page.getByRole('dialog', { name: `Crear roadmap de ${courseName}` });
   await expect(dialog.getByRole('radio', { name: 'Roadmap vacío' })).toBeChecked();
-  for (const edition of ['Edición 2024-2', 'Edición 2025-1', 'Edición 2025-2', 'Edición 2026-1']) {
-    await expect(dialog.getByRole('radio', { name: new RegExp(edition) })).toBeVisible();
+  for (const edition of ['Primavera 2024', 'Otoño 2025', 'Primavera 2025', 'Otoño 2026']) {
+    await expect(dialog.getByRole('radio', { name: new RegExp(`^${edition}`) })).toBeVisible();
     await expect(dialog.getByRole('link', { name: `Ver ${edition}` })).toBeVisible();
   }
 
@@ -379,17 +379,17 @@ test('the FI1001 catalog gives teaching staff their creation options and histori
       0,
     );
     await page.getByRole('link', { name: `Historial de versiones de ${courseName}` }).click();
-    await expect(page.getByRole('listitem', { name: 'Edición 2026-1' })).toBeVisible();
-    await expect(page.getByRole('listitem', { name: 'Edición 2025-2' })).toBeVisible();
+    await expect(page.getByRole('listitem', { name: 'Otoño 2026' })).toBeVisible();
+    await expect(page.getByRole('listitem', { name: 'Primavera 2025' })).toBeVisible();
   }
 
   const historical = await apiAs({ id: developmentFixtureIds.historicalTeacher });
   const history = await (await ok(await historical.get('/api/FI1001/versions'))).json();
   expect(history.horizon).toEqual({ year: 2025, semester: 2 });
   expect(history.versions.map(({ edition }: { edition: string }) => edition)).toEqual([
-    'Edición 2025-2',
-    'Edición 2025-1',
-    'Edición 2024-2',
+    'Primavera 2025',
+    'Otoño 2025',
+    'Primavera 2024',
   ]);
   await ok(await historical.get('/api/FI1001/versions/2026/1'), 404);
 });
@@ -422,15 +422,13 @@ test('the FI1001 historical student sees the closed course while versions exclud
 
   await authenticateAs(page.context(), fixture.daniela);
   await page.goto('/courses/FI1001/versions/2026/1');
-  await expect(page.getByRole('heading', { name: 'Edición 2026-1' })).toBeVisible();
-  await page.getByText('Información de la versión', { exact: true }).click();
-  await expect(page.getByText('Copiada de la edición 2025-2')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Otoño 2026' })).toBeVisible();
+  await page.getByText('Procedencia', { exact: true }).click();
+  await expect(page.getByText('Copiada de Primavera 2025')).toBeVisible();
   await expect(
-    page
-      .getByRole('list', { name: 'Equipo docente' })
-      .getByRole('listitem')
-      .filter({ hasText: 'Martín Vega Ríos' }),
-  ).toContainText('Ayudante');
+    page.getByRole('list', { name: 'Linaje' }).getByRole('link', { name: 'Primavera 2025' }),
+  ).toHaveAttribute('href', '/courses/FI1001/versions/2025/2');
+  await expect(page.getByRole('list', { name: 'Equipo docente' })).toHaveCount(0);
   await expect(page.getByText('Nicolás Fuentes Arancibia')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Completar', exact: true })).toHaveCount(0);
 });

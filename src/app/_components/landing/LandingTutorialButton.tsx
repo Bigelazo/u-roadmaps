@@ -9,7 +9,12 @@ export function LandingTutorialButton() {
 
   return (
     <>
-      <Button size="lg" variant="secondary" onClick={() => setOpen(true)}>
+      <Button
+        size="lg"
+        variant="secondary"
+        className="dark:border-brand-surface-foreground dark:bg-transparent dark:text-brand-surface-foreground dark:hover:bg-brand-surface-foreground/10"
+        onClick={() => setOpen(true)}
+      >
         Probar tutorial
       </Button>
       <TutorialChoiceDialog open={open} onOpenChange={setOpen} origin="/" />

@@ -278,6 +278,28 @@ test('arms the exterior launch zone only after body hover and retains it through
   expect(card.dataset.connectionHovered).toBeUndefined();
 });
 
+test.each([
+  { label: 'the action menu opens', data: { isActionMenuOpen: true } },
+  { label: 'editing access is removed', data: { canManageActions: false } },
+  { label: 'the node is hidden', data: { isHidden: true } },
+])('requires a fresh body hover after $label', ({ data }) => {
+  enableHoverPointer();
+  const editable = nodeProps({ data: { status: 'editing', canManageActions: true } });
+  const { rerenderWith } = renderNode(editable);
+  const card = screen.getByTestId('roadmap-card');
+  measureCard(card);
+  fireEvent.pointerMove(card, { pointerType: 'mouse', clientX: 200, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+
+  rerenderWith({ ...editable, data: { ...editable.data, ...data } });
+  expect(card.dataset.connectionHovered).toBeUndefined();
+  rerenderWith(editable);
+  expect(card.dataset.connectionHovered).toBeUndefined();
+
+  fireEvent.pointerMove(card, { pointerType: 'mouse', clientX: 200, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+});
+
 test('an exterior band yields to an adjacent Node action control instead of intercepting it', () => {
   enableHoverPointer();
   render(
@@ -543,6 +565,30 @@ test('omits the title tooltip while the whole title fits and adds it once a resi
   expect(heading.hasAttribute('title')).toBe(false);
 });
 
+test('omits the title tooltip when the title fits but its layout rounds one pixel taller', () => {
+  const title = 'Nombre';
+  stubTitleLayout({ scrollHeight: 20, clientHeight: 19 });
+  renderNode(studentNodeProps({ id: 'rounded-title', data: { title } }));
+
+  expect(screen.getByText(title).hasAttribute('title')).toBe(false);
+});
+
+test('rechecks whether the title is cut when the pointer reaches it', () => {
+  const title = 'Nombre';
+  const layout = { scrollHeight: 38, clientHeight: 19 };
+  stubTitleLayout(layout);
+  renderNode(studentNodeProps({ id: 'stale-title', data: { title } }));
+  const heading = screen.getByText(title);
+  expect(heading.getAttribute('title')).toBe(title);
+
+  layout.scrollHeight = 19;
+  act(() => {
+    heading.dispatchEvent(new Event('pointerenter'));
+  });
+
+  expect(heading.hasAttribute('title')).toBe(false);
+});
+
 function mountChangedNode(data: Partial<RoadmapFlowNode['data']>) {
   const fetch = vi.fn(async () => Response.json({ byNode: { 'changed-node': 3 } }));
   vi.stubGlobal('fetch', fetch);
@@ -637,8 +683,8 @@ test.each([
     const id = label === 'Bloquear nodo' || label === 'Desbloquear' ? 'access' : 'visibility';
     const currentIcon = within(trigger).getByTestId(`node-action-${id}-current-icon`);
     const previewIcon = within(trigger).getByTestId(`node-action-${id}-preview-icon`);
-    expect(currentIcon.innerHTML).toContain(`lucide-${current}"`);
-    expect(previewIcon.innerHTML).toContain(`lucide-${preview}"`);
+    expect(currentIcon.innerHTML).toMatch(new RegExp(`lucide-${current}[" ]`));
+    expect(previewIcon.innerHTML).toMatch(new RegExp(`lucide-${preview}[" ]`));
 
     await waitFor(() => expect(getComputedStyle(currentIcon).opacity).toBe('1'));
     expect(getComputedStyle(previewIcon).opacity).toBe('0');

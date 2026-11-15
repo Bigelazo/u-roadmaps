@@ -55,10 +55,12 @@ test('loading the academic overview and opening the bell request no notification
   await page.goto('/academic-overview');
   await expect(bell(page)).toHaveAttribute('aria-label', 'Avisos, 2 sin leer');
   await openInbox(page);
-  await expect(noticeRows(page)).toHaveCount(2);
+  await expect(noticeRows(page)).toHaveCount(1);
+  await expect(noticeRows(page).locator('time')).toHaveCount(2);
   await page.keyboard.press('Escape');
   await openInbox(page, `2 avisos sin leer para el curso ${course.courseName}`);
-  await expect(noticeRows(page)).toHaveCount(2);
+  await expect(noticeRows(page)).toHaveCount(1);
+  await expect(noticeRows(page).locator('time')).toHaveCount(2);
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));

@@ -100,7 +100,7 @@ test('hide → show → block collapses to one access notice and recognition reb
     {
       title,
       node,
-      items: [[{ node }, ' fue ocultado del Roadmap.']],
+      items: ['Fue ocultado del Roadmap.'],
     },
   ]);
   await expect.poll(notices).toHaveLength(0);
