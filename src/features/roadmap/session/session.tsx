@@ -17,6 +17,8 @@ import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-previ
 import {
   canvasCommandCatalog,
   type AnyCommandEntry,
+  type CanvasCommand,
+  type RoadmapNodePlacement,
 } from '@/features/roadmap/canvas/commands/commands';
 import {
   useCanvasCommands,
@@ -73,6 +75,49 @@ function absorbsOwnEcho(echo: OwnEcho) {
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
 
+function unsynchronizedPlacement(failure: string) {
+  return `${failure} No se pudo sincronizar el canvas con el roadmap guardado.`;
+}
+
+type PlacementCommand = Extract<
+  CanvasCommand,
+  { kind: 'move-nodes' | 'apply-automatic-layout' | 'add-node' }
+>;
+type PlacementOutcome = Awaited<ReturnType<CanvasCommandSession['execute']>>;
+type PendingPlacement = {
+  command: PlacementCommand;
+  previewVersion?: string;
+  resolve: (outcome: PlacementOutcome) => void;
+};
+
+function isPlacement(command: CanvasCommand): command is PlacementCommand {
+  return (
+    command.kind === 'move-nodes' ||
+    command.kind === 'apply-automatic-layout' ||
+    command.kind === 'add-node'
+  );
+}
+
+function placementPositions(command: PlacementCommand): readonly RoadmapNodePlacement[] {
+  if (command.kind === 'add-node') return command.displaced;
+  if (command.kind === 'apply-automatic-layout') return command.layouts[command.direction ?? 'TB'];
+  return command.positions;
+}
+
+function projectPlacements(roadmap: AnyRoadmapDto, pending: readonly PendingPlacement[]) {
+  const positions = new Map<string, RoadmapNodePlacement['position']>();
+  for (const { command } of pending)
+    for (const { nodeId, position } of placementPositions(command)) positions.set(nodeId, position);
+  if (!positions.size) return roadmap;
+  return {
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) => {
+      const position = positions.get(node.id);
+      return position ? { ...node, positionX: position.x, positionY: position.y } : node;
+    }),
+  } as AnyRoadmapDto;
+}
+
 function matchesExperience(
   roadmap: AnyRoadmapDto,
   experience: RoadmapCanvasSessionInput['experience']['kind'],
@@ -127,6 +172,10 @@ function useInjectedSession(
   const [accessLost, setAccessLost] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionAliveRef = useRef(true);
+  const placementFailureRef = useRef<string | null>(null);
+  const placementsRef = useRef<{ pending: PendingPlacement[]; running: boolean; blocked: boolean }>(
+    { pending: [], running: false, blocked: false },
+  );
   const requestVersionRef = useRef(0);
   const canvasPreviewVersionRef = useRef(0);
   const ownEchoRef = useRef<OwnEcho>({ executing: 0, heard: 0, missed: false, expectedUntil: 0 });
@@ -157,15 +206,19 @@ function useInjectedSession(
       const requestVersion = ++requestVersionRef.current;
       try {
         const loadedRoadmap = await loadRoadmap();
-        if (requestVersion !== requestVersionRef.current) {
+        if (!sessionAliveRef.current || requestVersion !== requestVersionRef.current) {
           return false;
         }
         if (applyProjection) {
-          setRoadmap(loadedRoadmap);
+          setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
+          if (placementsRef.current.blocked) {
+            placementsRef.current.blocked = false;
+            setError(placementFailureRef.current);
+          }
         }
         return true;
       } catch (cause) {
-        if (requestVersion !== requestVersionRef.current) {
+        if (!sessionAliveRef.current || requestVersion !== requestVersionRef.current) {
           return false;
         }
         if (cause instanceof RoadmapAccessLostError) {
@@ -190,7 +243,7 @@ function useInjectedSession(
         (loaded) => {
           if (loaded && active) {
             retryDelay = 1000;
-            setError(null);
+            setError(placementFailureRef.current);
           }
         },
         (cause: unknown) => {
@@ -199,7 +252,11 @@ function useInjectedSession(
             retry = setTimeout(recover, retryDelay);
             retryDelay = Math.min(retryDelay * 2, 30_000);
           }
-          setError(messageFor(cause, refreshFailure));
+          setError(
+            placementsRef.current.blocked
+              ? unsynchronizedPlacement(placementFailureRef.current ?? genericFailure)
+              : messageFor(cause, refreshFailure),
+          );
         },
       );
     };
@@ -234,11 +291,12 @@ function useInjectedSession(
 
   useEffect(() => {
     sessionAliveRef.current = true;
+    const placements = placementsRef.current;
     const requestVersion = ++requestVersionRef.current;
     void loadRoadmap().then(
       (loadedRoadmap) => {
         if (requestVersion !== requestVersionRef.current) return;
-        setRoadmap(loadedRoadmap);
+        setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
       },
       (cause: unknown) => {
         if (requestVersion !== requestVersionRef.current) return;
@@ -251,11 +309,17 @@ function useInjectedSession(
     );
     return () => {
       sessionAliveRef.current = false;
+      requestVersionRef.current += 1;
       canvasPreviewVersionRef.current += 1;
+      const discarded = placements.pending;
+      placements.pending = [];
+      for (const pending of discarded) pending.resolve({ applied: false });
     };
   }, [loadRoadmap]);
 
   const dismissError = useCallback(() => {
+    if (placementsRef.current.blocked) return;
+    placementFailureRef.current = null;
     setError(null);
   }, []);
 
@@ -264,14 +328,14 @@ function useInjectedSession(
       const sessionEndedBeforeFailureRefresh = !sessionAliveRef.current;
       if (sessionEndedBeforeFailureRefresh) return;
       if (cause instanceof RoadmapClosedError) setIsClosed(true);
+      if (placement) placementFailureRef.current = messageFor(cause, genericFailure);
       if (placement || cause instanceof RoadmapClosedError) {
         try {
-          await refresh();
+          const recovered = await refresh();
+          if (placement && recovered) placementsRef.current.blocked = false;
         } catch {
           if (sessionAliveRef.current)
-            setError(
-              `${messageFor(cause, genericFailure)} No se pudo sincronizar el canvas con el roadmap guardado.`,
-            );
+            setError(unsynchronizedPlacement(messageFor(cause, genericFailure)));
           return;
         }
       }
@@ -325,8 +389,12 @@ function useInjectedSession(
     [persistence, reportFailure],
   );
 
-  const execute = useCallback<CanvasCommandSession['execute']>(
-    async (command, previewVersion) => {
+  const executeCommand = useCallback(
+    async (
+      command: CanvasCommand,
+      previewVersion?: string,
+      placement?: PendingPlacement,
+    ): Promise<PlacementOutcome> => {
       const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
       const { changesCanvasPreview } = entry;
       const echo = ownEchoRef.current;
@@ -335,22 +403,42 @@ function useInjectedSession(
       let result: ExecutionResult | void;
       try {
         result = await persistence.execute(command, previewVersion);
+        if (placement) {
+          placementsRef.current.pending = placementsRef.current.pending.filter(
+            (pending) => pending !== placement,
+          );
+          placementFailureRef.current = null;
+        }
       } catch (cause) {
+        if (placement) {
+          const placements = placementsRef.current;
+          placements.blocked = true;
+          const discarded = placements.pending;
+          placements.pending = [];
+          for (const pending of discarded)
+            if (pending !== placement) pending.resolve({ applied: false });
+        }
         const missed = settleOwnCommand(echo, !changesCanvasPreview);
-        const placement =
-          command.kind === 'move-nodes' || command.kind === 'apply-automatic-layout';
-        await reportFailure(cause, placement);
-        if (missed && !placement && sessionAliveRef.current) void refresh().catch(() => false);
+        const failedPlacement = isPlacement(command);
+        await reportFailure(cause, failedPlacement);
+        if (missed && !failedPlacement && sessionAliveRef.current)
+          void refresh().catch(() => false);
         return { applied: false };
       }
       if (!changesCanvasPreview) {
         settleOwnCommand(echo, true);
         if (echo.heard === heard) echo.expectedUntil = Date.now() + OWN_ECHO_WINDOW_MS;
       }
+      if (!sessionAliveRef.current) return { applied: false };
       const refreshed = () =>
         refresh().then(
           () => {
-            if (sessionAliveRef.current) setError(null);
+            if (
+              sessionAliveRef.current &&
+              !placementFailureRef.current &&
+              !placementsRef.current.blocked
+            )
+              setError(null);
           },
           (cause: unknown) => {
             if (sessionAliveRef.current) setError(messageFor(cause, refreshFailure));
@@ -368,6 +456,33 @@ function useInjectedSession(
       return { applied, ...result };
     },
     [loadCanvasPreview, persistence, refresh, reportFailure],
+  );
+
+  const execute = useCallback<CanvasCommandSession['execute']>(
+    (command, previewVersion) => {
+      if (!sessionAliveRef.current) return Promise.resolve({ applied: false });
+      if (!isPlacement(command)) return executeCommand(command, previewVersion);
+      if (placementsRef.current.blocked) return Promise.resolve({ applied: false });
+      return new Promise<PlacementOutcome>((resolve) => {
+        const placements = placementsRef.current;
+        placements.pending.push({ command, previewVersion, resolve });
+        setRoadmap((current) =>
+          current ? projectPlacements(current, placements.pending) : current,
+        );
+        if (placements.running) return;
+        placements.running = true;
+        void (async () => {
+          while (placements.pending.length) {
+            const placement = placements.pending[0];
+            placement.resolve(
+              await executeCommand(placement.command, placement.previewVersion, placement),
+            );
+          }
+          placements.running = false;
+        })();
+      });
+    },
+    [executeCommand],
   );
 
   const commandSession = useMemo(
