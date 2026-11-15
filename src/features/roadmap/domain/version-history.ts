@@ -42,7 +42,3 @@ export function compareRecordedStaff(
     a.name.localeCompare(b.name, 'es-CL')
   );
 }
-
-export function editionLabel({ year, semester }: AcademicTermKey) {
-  return `Edición ${year}-${semester}`;
-}

@@ -14,6 +14,7 @@ import { getInboxIdentity, readOwnInbox } from '@/features/notifications/server'
 import { NotificationsProvider } from '@/features/notifications';
 import { AcademicCacheIdentity } from '@/features/academic-overview';
 import { Toaster } from '@/shared/ui/toast';
+import { NavigationHistory } from '@/shared/client/navigation/navigation-history';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
 const poppins = Poppins({
@@ -44,6 +45,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="es" className={cn('font-sans', plusJakartaSans.variable, poppins.variable)}>
       <body>
         <NotificationsProvider identity={inboxIdentity} inbox={inbox}>
+          <AcademicCacheIdentity userId={user?.id ?? null} />
+          <NavigationHistory />
           {framed ? null : (
             <GlobalNavigation
               isAuthenticated={Boolean(user)}

@@ -70,7 +70,6 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   await page.getByRole('link', { name: `Integrantes de ${course.courseName}` }).click();
   await expect(page).toHaveURL(participantsPath(course));
   await expect(page.getByRole('heading', { level: 1, name: course.courseName })).toBeVisible();
-  await expect(page.getByText('No pudimos obtener el listado completo')).toHaveCount(0);
 
   const average = (withProgress + complete + withoutProgress + 0) / visibleNodes / 4;
   const summary = page.getByRole('region', { name: 'Completación promedio del roadmap' });
@@ -98,16 +97,21 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   await expect(students).not.toContainText(withdrawnStudent.name);
 
   const staff = page.getByRole('region', { name: 'Equipo docente' });
-  await expect(staff.getByRole('listitem')).toHaveCount(2);
+  const position = (name: string) => staff.getByRole('listitem', { name, exact: true });
+  await expect(position('Profesor de cátedra').getByRole('listitem')).toHaveCount(1);
   await expect(
-    staff.getByRole('listitem', { name: `Prueba ${teacher.rut}, Carolina` }),
-  ).toContainText('Profesor de cátedra · Sección 1');
-  await expect(staff.getByRole('listitem', { name: `Prueba ${teacher.rut}, Tomás` })).toContainText(
-    'Ayudante · Sección 2',
-  );
+    position('Profesor de cátedra').getByRole('listitem', {
+      name: `Prueba ${teacher.rut}, Carolina`,
+    }),
+  ).toContainText('Sección 1');
+  await expect(position('Ayudante').getByRole('listitem')).toHaveCount(1);
+  await expect(
+    position('Ayudante').getByRole('listitem', { name: `Prueba ${teacher.rut}, Tomás` }),
+  ).toContainText('Sección 2');
 
-  await page.getByRole('link', { name: 'Volver al roadmap' }).click();
-  await expect(page).toHaveURL(course.pagePath());
+  await page.getByRole('link', { name: 'Volver', exact: true }).click();
+  await expect(page).toHaveURL(/\/academic-overview$/);
+  await page.goto(course.pagePath());
   await page
     .getByRole('navigation', { name: 'Secciones del curso' })
     .getByRole('link', { name: 'Integrantes', exact: true })
@@ -115,17 +119,11 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   await expect(page).toHaveURL(participantsPath(course));
 });
 
-test('without U-Campus the page lists only local participants and warns it is incomplete', async ({
-  page,
-  course,
-}) => {
+test('without U-Campus the page lists only local participants', async ({ page, course }) => {
   await authenticateAs(page.context(), course.users.teacher.id);
 
   await page.goto(participantsPath(course));
 
-  await expect(
-    page.getByText('No pudimos obtener el listado completo desde U-Campus'),
-  ).toBeVisible();
   const students = page.getByRole('region', { name: 'Estudiantes' });
   await expect(
     students.getByRole('row', { name: course.users.studentWithProgress.name }),

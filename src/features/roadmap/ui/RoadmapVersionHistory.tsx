@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { ArrowRight, History } from 'lucide-react';
+import { History, Route } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { buttonVariants } from '@/shared/ui/button-variants';
-import { dividedListClassName, PageEyebrow, PageShell, PageTitle } from '@/shared/ui/page-layout';
+import { dividedListClassName, PageShell } from '@/shared/ui/page-layout';
+import { CoursePageHeader } from '@/features/roadmap/ui/CoursePageHeader';
 import { VersionOrigin } from '@/features/roadmap/ui/VersionOrigin';
 import { VersionTeachingStaff } from '@/features/roadmap/ui/VersionTeachingStaff';
 import { versionUrl } from '@/shared/version-history-url';
@@ -11,12 +12,16 @@ import type { RoadmapVersionHistory as VersionHistory } from '@/features/roadmap
 export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHistory }>) {
   const courseCode = history.course.code;
   return (
-    <PageShell className="mx-auto flex max-w-4xl flex-col gap-10 px-4 sm:px-6">
-      <header>
-        <PageEyebrow>{courseCode}</PageEyebrow>
-        <PageTitle className="mt-2 md:text-5xl">Historial de versiones</PageTitle>
-        <p className="mt-2 text-muted-foreground">{history.course.name}</p>
-      </header>
+    <PageShell className="mx-auto flex max-w-5xl flex-col gap-10 px-4 sm:px-6">
+      <CoursePageHeader
+        courseName={history.course.name}
+        courseCode={courseCode}
+        courseDetail={courseCode}
+        offering={history.latestOffering}
+        current="versions"
+        section="Historial de versiones"
+        fallbackHref="/academic-overview"
+      />
       {history.versions.length === 0 ? (
         <Empty className="border bg-card py-10">
           <EmptyHeader>
@@ -38,9 +43,9 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
               key={version.edition}
             >
               <div className="grid gap-1">
-                <h2 className="font-heading text-2xl font-semibold tracking-[-0.02em]">
+                <h3 className="font-heading text-xl font-semibold tracking-[-0.02em]">
                   {version.edition}
-                </h2>
+                </h3>
                 <VersionOrigin
                   courseCode={courseCode}
                   openEditions={history.versions}
@@ -48,19 +53,18 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
                 />
               </div>
               <section aria-label={`Equipo docente de ${version.edition}`} className="grid gap-2">
-                <h3 className="text-xs font-semibold text-muted-foreground">Equipo docente</h3>
+                <h4 className="text-xs font-semibold text-muted-foreground">Equipo docente</h4>
                 <VersionTeachingStaff {...version} />
               </section>
               <Link
-                aria-label={`Ver ${version.edition}`}
+                aria-label={`Abrir roadmap de ${version.edition}`}
                 className={buttonVariants({
-                  variant: 'outline',
                   className: 'justify-self-start sm:col-start-2 sm:row-start-1 sm:self-start',
                 })}
                 href={versionUrl({ courseCode, ...version })}
               >
-                Ver versión
-                <ArrowRight data-icon="inline-end" />
+                <Route aria-hidden="true" data-icon="inline-start" />
+                Abrir roadmap
               </Link>
             </li>
           ))}

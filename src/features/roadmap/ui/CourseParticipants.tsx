@@ -1,17 +1,12 @@
-import Link from 'next/link';
-import { ArrowLeft, Route } from 'lucide-react';
-import { Alert, AlertDescription } from '@/shared/ui/alert';
-import { buttonVariants } from '@/shared/ui/button-variants';
+import { Route } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
-import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
+import { PageShell } from '@/shared/ui/page-layout';
 import { termLabel } from '@/shared/course-offering';
-import { PositionPlate } from '@/shared/ui/position-plate';
-import type {
-  CourseMember,
-  CourseParticipants as Participants,
-} from '@/features/roadmap/course-participants-types';
+import type { CourseParticipants as Participants } from '@/features/roadmap/course-participants-types';
 
+import { CoursePageHeader } from './CoursePageHeader';
 import { StudentRoster } from './StudentRoster';
+import { StaffByPosition } from './StaffByPosition';
 
 function percent(ratio: number) {
   return `${Math.round(ratio * 100)}%`;
@@ -86,58 +81,23 @@ function AverageCompletion({ participants }: Readonly<{ participants: Participan
   );
 }
 
-function StaffRow({ member }: Readonly<{ member: CourseMember }>) {
-  const sections = sectionsLabel(member.sections);
-  return (
-    <li
-      aria-label={member.name}
-      className="flex flex-col gap-y-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-6 sm:px-5"
-    >
-      <p className="font-medium break-words">{member.name}</p>
-      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <PositionPlate position={member.institutionalPosition} />
-        {sections ? <span> · {sections}</span> : null}
-      </div>
-    </li>
-  );
-}
-
 export function CourseParticipants({ participants }: Readonly<{ participants: Participants }>) {
   const { course, students, teachingStaff } = participants;
   return (
     <PageShell className="mx-auto flex max-w-5xl flex-col gap-10 px-4 sm:px-6">
-      <header className="grid gap-4">
-        <Link
-          className={buttonVariants({ variant: 'outline', className: 'justify-self-start' })}
-          href={
-            participants.hasRoadmap
-              ? `/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`
-              : '/academic-overview'
-          }
-        >
-          <ArrowLeft data-icon="inline-start" />
-          {participants.hasRoadmap ? 'Volver al roadmap' : 'Volver al resumen académico'}
-        </Link>
-        <div>
-          <PageTitle className="text-balance md:text-4xl">{course.name}</PageTitle>
-          <p className="mt-2 text-muted-foreground">
-            {course.courseCode} · {termLabel(course)}
-          </p>
-        </div>
-      </header>
-
-      <h2 className="font-heading text-2xl font-semibold tracking-[-0.02em]">
-        Integrantes del curso
-      </h2>
-
-      {participants.source === 'LOCAL' ? (
-        <Alert>
-          <AlertDescription>
-            No pudimos obtener el listado completo desde U-Campus. Se muestran solo las personas que
-            ya ingresaron a U-Roadmaps.
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      <CoursePageHeader
+        courseName={course.name}
+        courseCode={course.courseCode}
+        courseDetail={`${course.courseCode} · ${termLabel(course)}`}
+        offering={course}
+        current="participants"
+        section="Integrantes del curso"
+        fallbackHref={
+          participants.hasRoadmap
+            ? `/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`
+            : '/academic-overview'
+        }
+      />
 
       <section aria-labelledby="teaching-staff" className="grid gap-4">
         <div className="flex items-baseline justify-between gap-4">
@@ -148,11 +108,12 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
             {plural(teachingStaff.length, 'persona', 'personas')}
           </p>
         </div>
-        <ul className={dividedListClassName}>
-          {teachingStaff.map((member) => (
-            <StaffRow key={member.key} member={member} />
-          ))}
-        </ul>
+        <StaffByPosition
+          layout="card"
+          staff={teachingStaff}
+          memberKey={(member) => member.key}
+          memberDetail={(member) => sectionsLabel(member.sections)}
+        />
       </section>
 
       <section aria-labelledby="students" className="grid gap-4">

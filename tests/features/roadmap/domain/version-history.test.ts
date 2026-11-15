@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  editionLabel,
   isWithinVersionHorizon,
   versionHistoryHorizon,
 } from '@/features/roadmap/domain/version-history';
@@ -54,8 +53,4 @@ describe('isWithinVersionHorizon', () => {
     expect(isWithinVersionHorizon({ year: 2026, semester: 2 }, horizon)).toBe(false);
     expect(isWithinVersionHorizon({ year: 2027, semester: 1 }, horizon)).toBe(false);
   });
-});
-
-it('labels an edition by its Academic term', () => {
-  expect(editionLabel({ year: 2026, semester: 1 })).toBe('Edición 2026-1');
 });

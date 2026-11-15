@@ -84,7 +84,7 @@ test('a closed version records its creator and the teaching staff active at clos
     {
       year: closedTerm.year,
       semester: closedTerm.semester,
-      edition: `Edición ${closedTerm.year}-${closedTerm.semester}`,
+      edition: `${closedTerm.semester === 1 ? 'Otoño' : 'Primavera'} ${closedTerm.year}`,
       closedAt: expect.any(String),
       creator: { id: creator.id, name: creator.name },
       teachingStaff: [
@@ -199,14 +199,14 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
     .getByRole('link', { name: 'Versiones' })
     .click();
   await expect(page).toHaveURL(new RegExp(`/courses/${past.courseCode}/versions$`));
-  const version = page.getByRole('listitem', { name: `Edición ${pastTerm.year}-1` });
+  const version = page.getByRole('listitem', { name: `Otoño ${pastTerm.year}` });
   await expect(version).toContainText('Creada desde cero');
   const member = version
     .getByRole('list', { name: 'Equipo docente' })
     .getByRole('listitem')
+    .filter({ hasText: 'Profesor de cátedra' })
     .filter({ hasText: teacher.name });
   await expect(member.getByText(teacher.name, { exact: true })).toBeVisible();
-  await expect(member.getByText('Profesor de cátedra', { exact: true })).toBeVisible();
   await expect(version).toContainText('Creador no registrado');
 
   await page.goto('/academic-overview');

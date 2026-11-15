@@ -27,7 +27,7 @@ type ContentProps = {
   node: RoadmapNode | StudentRoadmapNode;
   status: StudentNodeStatus;
   onClose: () => void;
-  onComplete: (node: RoadmapNode | StudentRoadmapNode) => void;
+  onComplete?: (node: RoadmapNode | StudentRoadmapNode) => void;
   onResourceAccess?: (resource: Resource) => void;
   isReadOnly?: boolean;
   isModal?: boolean;
@@ -87,12 +87,14 @@ function StudentNodeDetailContent({
         isSidebar={isSidebar}
         actions={
           <>
-            <CompleteNodeButton
-              status={status}
-              isReadOnly={isReadOnly}
-              hasUnreviewedResources={resources.some((resource) => !isReviewed(resource))}
-              onComplete={() => onComplete(node)}
-            />
+            {onComplete ? (
+              <CompleteNodeButton
+                status={status}
+                isReadOnly={isReadOnly}
+                hasUnreviewedResources={resources.some((resource) => !isReviewed(resource))}
+                onComplete={() => onComplete(node)}
+              />
+            ) : null}
             {!blocked && !isModal ? (
               <NodeFullscreenDialog
                 key={node.id}

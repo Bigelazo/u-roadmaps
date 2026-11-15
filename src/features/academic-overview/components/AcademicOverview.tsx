@@ -7,7 +7,7 @@ import {
   History,
   MapPinned,
   Route,
-  Users,
+  UserGroup,
 } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import {
@@ -34,11 +34,8 @@ function CourseProgress({
   const { completedNodes, visibleNodes } = progress;
   const percent = Math.round((completedNodes / visibleNodes) * 100);
   return (
-    <div className="mt-4 flex max-w-md items-center gap-3">
-      <div
-        aria-hidden="true"
-        className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-progress-soft"
-      >
+    <div className="flex items-center gap-3">
+      <div aria-hidden="true" className="h-1.5 w-24 overflow-hidden rounded-full bg-progress-soft">
         <div className="h-full rounded-full bg-progress" style={{ width: `${percent}%` }} />
       </div>
       <p
@@ -100,24 +97,14 @@ function CourseRoadmapAction({
           }}
           label={`el curso ${course.name}`}
         />
-        {isPastOffering ? (
-          <Link
-            aria-label={`Ver roadmap de ${course.name}`}
-            className={buttonVariants({ variant: 'outline' })}
-            href={roadmapUrl(course)}
-          >
-            Ver roadmap
-          </Link>
-        ) : (
-          <Link
-            aria-label={`Abrir roadmap de ${course.name}`}
-            className={buttonVariants()}
-            href={roadmapUrl(course)}
-          >
-            <Route aria-hidden="true" data-icon="inline-start" />
-            Abrir roadmap
-          </Link>
-        )}
+        <Link
+          aria-label={`Abrir roadmap de ${course.name}`}
+          className={buttonVariants({ variant: isPastOffering ? 'outline' : 'default' })}
+          href={roadmapUrl(course)}
+        >
+          <Route aria-hidden="true" data-icon="inline-start" />
+          Roadmap
+        </Link>
       </>
     );
   }
@@ -192,8 +179,8 @@ function CourseActions({
           className={buttonVariants({ variant: 'outline' })}
           href={versionHistoryUrl(course.courseCode)}
         >
-          <History aria-hidden="true" size={16} />
-          Historial de versiones
+          <History aria-hidden="true" data-icon="inline-start" />
+          Versiones
         </Link>
       ) : null}
       {course.role === 'TEACHER' && course.hasRoadmap ? (
@@ -202,7 +189,7 @@ function CourseActions({
           className={buttonVariants({ variant: 'outline' })}
           href={courseParticipantsUrl(course)}
         >
-          <Users aria-hidden="true" size={16} />
+          <UserGroup aria-hidden="true" data-icon="inline-start" />
           Integrantes
         </Link>
       ) : null}
@@ -251,9 +238,9 @@ function CourseRow({
             <PositionPlate position={position} />
             {course.department ? <span>{course.department}</span> : null}
           </div>
-          {course.progress ? <CourseProgress progress={course.progress} /> : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
+          {course.progress ? <CourseProgress progress={course.progress} /> : null}
           <CourseActions
             course={course}
             isPastOffering={isPastOffering}
