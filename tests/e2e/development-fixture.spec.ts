@@ -360,7 +360,7 @@ test('the FI1001 catalog gives teaching staff their creation options and histori
   const dialog = page.getByRole('dialog', { name: `Crear roadmap de ${courseName}` });
   await expect(dialog.getByRole('radio', { name: 'Roadmap vacío' })).toBeChecked();
   for (const edition of ['Primavera 2024', 'Otoño 2025', 'Primavera 2025', 'Otoño 2026']) {
-    await expect(dialog.getByRole('radio', { name: new RegExp(edition) })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: new RegExp(`^${edition}`) })).toBeVisible();
     await expect(dialog.getByRole('link', { name: `Ver ${edition}` })).toBeVisible();
   }
 
