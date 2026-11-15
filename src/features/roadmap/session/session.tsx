@@ -147,6 +147,7 @@ function useInjectedSession(
   const requestVersionRef = useRef(0);
   const canvasPreviewVersionRef = useRef(0);
   const ownEchoRef = useRef<OwnEcho>({ executing: 0, heard: 0, missed: false, expectedUntil: 0 });
+  const latestLoadRef = useRef<{ startedAt: number; succeeded: Promise<boolean> } | null>(null);
   const courseCode = input.courseOffering.identifier.courseCode;
   const year = input.courseOffering.identifier.year;
   const semester = input.courseOffering.identifier.semester;
@@ -165,7 +166,15 @@ function useInjectedSession(
   );
 
   const loadRoadmap = useCallback(async () => {
-    const loadedRoadmap = await persistence.load();
+    const loading = persistence.load();
+    latestLoadRef.current = {
+      startedAt: Date.now(),
+      succeeded: loading.then(
+        () => true,
+        () => false,
+      ),
+    };
+    const loadedRoadmap = await loading;
     if (!matchesExperience(loadedRoadmap, stableInput.experience.kind)) {
       throw new Error(loadFailure);
     }
@@ -238,8 +247,16 @@ function useInjectedSession(
       if (changedOffering.accessLost) recover();
       else if (experienceKind === 'teaching' && !absorbsOwnEcho(ownEchoRef.current)) recover();
     });
-    const stopRecovery = subscribeToRoadmapRecovery(() => {
-      if (experienceKind === 'teaching') recover();
+    const stopRecovery = subscribeToRoadmapRecovery((coveredSince) => {
+      if (experienceKind !== 'teaching') return;
+      const latestLoad = latestLoadRef.current;
+      if (coveredSince === undefined || !latestLoad || latestLoad.startedAt < coveredSince) {
+        recover();
+        return;
+      }
+      void latestLoad.succeeded.then((succeeded) => {
+        if (!succeeded && active) recover();
+      });
     });
     return () => {
       active = false;

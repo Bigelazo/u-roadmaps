@@ -26,22 +26,34 @@ export function subscribeToRoadmapChanges(
 
 const ROADMAP_RECOVERY_EVENT = 'u-roadmaps:roadmap-recovery';
 
-export function requestRoadmapRecovery() {
-  window.dispatchEvent(new Event(ROADMAP_RECOVERY_EVENT));
+export function requestRoadmapRecovery(coveredSince: number) {
+  window.dispatchEvent(new CustomEvent(ROADMAP_RECOVERY_EVENT, { detail: { coveredSince } }));
 }
 
-export function subscribeToRoadmapRecovery(listener: () => void) {
+export function subscribeToRoadmapRecovery(listener: (coveredSince?: number) => void) {
+  const reconnected = () => listener();
   const foreground = () => {
     if (document.visibilityState === 'visible') listener();
   };
-  window.addEventListener('online', listener);
+  const requested = (event: Event) => {
+    const detail: unknown = event instanceof CustomEvent ? event.detail : null;
+    const coveredSince =
+      typeof detail === 'object' &&
+      detail !== null &&
+      'coveredSince' in detail &&
+      typeof detail.coveredSince === 'number'
+        ? detail.coveredSince
+        : undefined;
+    listener(coveredSince);
+  };
+  window.addEventListener('online', reconnected);
   window.addEventListener('focus', foreground);
   document.addEventListener('visibilitychange', foreground);
-  window.addEventListener(ROADMAP_RECOVERY_EVENT, listener);
+  window.addEventListener(ROADMAP_RECOVERY_EVENT, requested);
   return () => {
-    window.removeEventListener('online', listener);
+    window.removeEventListener('online', reconnected);
     window.removeEventListener('focus', foreground);
     document.removeEventListener('visibilitychange', foreground);
-    window.removeEventListener(ROADMAP_RECOVERY_EVENT, listener);
+    window.removeEventListener(ROADMAP_RECOVERY_EVENT, requested);
   };
 }
