@@ -7,7 +7,7 @@ import {
 } from './ucampus';
 import type { MufasaInstitutionalCoursePosition } from '@/integrations/ucampus/server';
 import { randomUUID } from 'node:crypto';
-import { test as base, expect, type APIRequestContext } from '@playwright/test';
+import { test as base, expect, type APIRequestContext, type TestInfo } from '@playwright/test';
 import {
   copyFixtureRoadmap,
   developmentFixtureIds,
@@ -205,7 +205,22 @@ type OwnedTestData = {
   termYears: number[];
   rejections: Record<RejectedTable, string[]>;
 };
-let termSerial = 0;
+
+async function freeTermYear(testInfo: TestInfo, held: readonly number[]) {
+  const span = Math.floor(
+    (syntheticTermYearEnd - syntheticTermYearStart + 1) / testInfo.config.workers,
+  );
+  const first = syntheticTermYearStart + testInfo.parallelIndex * span;
+  const year = await queryJson<number | null>(`
+    SELECT min(candidate.year)
+    FROM generate_series(${first}, ${first + span - 1}) AS candidate(year)
+    WHERE candidate.year <> ALL(ARRAY[${held.map(literal).join(', ')}]::int[])
+      AND NOT EXISTS (SELECT 1 FROM "AcademicTerm" term WHERE term.year = candidate.year)
+      AND NOT EXISTS (SELECT 1 FROM "CourseOffering" offering WHERE offering.year = candidate.year);
+  `);
+  if (year === null) throw new Error('Synthetic term space exhausted.');
+  return year;
+}
 
 export const test = base.extend<{
   ownedTestData: OwnedTestData;
@@ -310,10 +325,7 @@ export const test = base.extend<{
 
   createTerm: async ({ ownedTestData }, provide, testInfo) => {
     await provide(async (semester = 1) => {
-      termSerial += 1;
-      const year = syntheticTermYearStart + testInfo.workerIndex * 100 + termSerial;
-      if (termSerial >= 100 || year > syntheticTermYearEnd)
-        throw new Error('Synthetic term space exhausted.');
+      const year = await freeTermYear(testInfo, ownedTestData.termYears);
       ownedTestData.termYears.push(year);
       const term = {
         year,
