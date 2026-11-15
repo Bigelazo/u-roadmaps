@@ -55,6 +55,56 @@ export async function recordKnowersValueAtEdit(
     ${onKnownValueConflict()} DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
 }
 
+export type RecipientKnownValue = Readonly<{
+  recipientId: string;
+  target: NoticeTargetRef;
+  knownValue: string;
+  context: TargetContext;
+  currentValue?: string;
+}>;
+
+export async function recordRecipientKnownValues(
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+  values: readonly RecipientKnownValue[],
+) {
+  const keys = new Set(
+    values.map(({ recipientId, target }) => `${recipientId}|${target.targetKey}`),
+  );
+  if (keys.size !== values.length)
+    throw new Error('A Notice target is recorded twice for the same recipient.');
+  if (!values.length) return;
+  await transaction.$executeRaw`
+    INSERT INTO "NoticeKnownValue" (${knownValueColumns()}, "context")
+    SELECT recipient, ${roadmapId}::uuid, target_key, notice_target, node, known, context::jsonb
+    FROM unnest(
+      ${values.map(({ recipientId }) => recipientId)}::uuid[],
+      ${values.map(({ target }) => target.targetKey)}::text[],
+      ${values.map(({ target }) => target.noticeTarget)}::text[],
+      ${values.map(({ target }) => target.nodeId)}::uuid[],
+      ${values.map(({ knownValue }) => knownValue)}::text[],
+      ${values.map(({ context }) => JSON.stringify(context))}::text[]
+    ) AS value(recipient, target_key, notice_target, node, known, context)
+    ON CONFLICT DO NOTHING`;
+  const edited = values.filter(
+    (value): value is RecipientKnownValue & { currentValue: string } =>
+      value.currentValue !== undefined,
+  );
+  if (!edited.length) return;
+  await transaction.$executeRaw`
+    INSERT INTO "NoticeKnownValue" (${knownValueColumns()}, "currentValue")
+    SELECT recipient, ${roadmapId}::uuid, target_key, notice_target, node, known, current
+    FROM unnest(
+      ${edited.map(({ recipientId }) => recipientId)}::uuid[],
+      ${edited.map(({ target }) => target.targetKey)}::text[],
+      ${edited.map(({ target }) => target.noticeTarget)}::text[],
+      ${edited.map(({ target }) => target.nodeId)}::uuid[],
+      ${edited.map(({ knownValue }) => knownValue)}::text[],
+      ${edited.map(({ currentValue }) => currentValue)}::text[]
+    ) AS value(recipient, target_key, notice_target, node, known, current)
+    ${onKnownValueConflict()} DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
+}
+
 export async function ensureKnownValue(
   transaction: Prisma.TransactionClient,
   identity: RecipientRoadmap,

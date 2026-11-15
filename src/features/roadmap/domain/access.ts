@@ -162,6 +162,26 @@ export function blockedNodeAccessMessage(
     : 'Este nodo permanece bloqueado por sus prerrequisitos.';
 }
 
+export type StudentAccessGraph = Readonly<{
+  nodes: readonly RoadmapAccessNode[];
+  nodesById: ReadonlyMap<string, RoadmapAccessNode>;
+  prerequisiteNodeIdsByNodeId: ReadonlyMap<string, readonly string[]>;
+}>;
+
+export function studentAccessGraph({
+  nodes,
+  dependencies,
+}: {
+  nodes: readonly RoadmapAccessNode[];
+  dependencies: readonly RoadmapGraphDependency[];
+}): StudentAccessGraph {
+  return {
+    nodes,
+    nodesById: new Map(nodes.map((node) => [node.id, node])),
+    prerequisiteNodeIdsByNodeId: nodeIdsByTarget(dependencies),
+  };
+}
+
 export function studentNodeAccessById({
   nodes,
   dependencies,
@@ -171,8 +191,13 @@ export function studentNodeAccessById({
   dependencies: readonly RoadmapGraphDependency[];
   completedNodeIds: ReadonlySet<string>;
 }) {
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const prerequisiteNodeIdsByNodeId = nodeIdsByTarget(dependencies);
+  return studentNodeAccessInGraph(studentAccessGraph({ nodes, dependencies }), completedNodeIds);
+}
+
+export function studentNodeAccessInGraph(
+  { nodes, nodesById, prerequisiteNodeIdsByNodeId }: StudentAccessGraph,
+  completedNodeIds: ReadonlySet<string>,
+) {
   const accessByNodeId = new Map<string, StudentNodeAccess>();
 
   function accessFor(nodeId: string, visitingNodeIds = new Set<string>()): StudentNodeAccess {

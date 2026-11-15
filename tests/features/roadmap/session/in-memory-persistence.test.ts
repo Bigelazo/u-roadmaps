@@ -481,16 +481,16 @@ test('Practice replaces a File in place and refuses a replacement for a Link', a
   ]);
 });
 
-test('refuses to delete a Dependency that is not in the Roadmap', async () => {
+test('deletes the listed Dependencies together, ignoring those not in the Roadmap', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
-  await expect(
-    persistence.execute({ kind: 'delete-dependencies', dependencyIds: ['missing'] }),
-  ).rejects.toThrow('La dependencia no existe en este roadmap.');
+  await persistence.execute({
+    kind: 'delete-dependencies',
+    dependencyIds: ['missing', 'selected-dependent'],
+  });
 
   expect((await persistence.load()).dependencies.map(({ id }) => id)).toEqual([
     'prerequisite-selected',
-    'selected-dependent',
   ]);
 });
 

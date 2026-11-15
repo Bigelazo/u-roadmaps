@@ -10,6 +10,7 @@ export {
   createRoadmapNode,
   createRoadmapNodeType,
   deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   deleteRoadmapNode,
   deleteRoadmapNodeType,
   previewNodeDeletion,

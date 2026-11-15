@@ -144,9 +144,17 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'create a Dependency with its preview version': {
+  'create a Dependency with its preview version and return it with the Nodes it blocks': {
     command: { kind: 'create-dependency', ...dependency },
     previewVersion: 'dependency-version',
+    response: {
+      dependency: { id: 'dependency-9', ...dependency },
+      nodes: [{ id: 'node-2', title: 'Derivadas' }],
+    },
+    resolves: {
+      dependency: { id: 'dependency-9', ...dependency },
+      teacherBlockedNodeIds: ['node-2'],
+    },
     requests: [
       [
         '/dependencies',
@@ -158,9 +166,18 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'delete a Dependency': {
-    command: { kind: 'delete-dependencies', dependencyIds: ['dependency-1'] },
-    requests: [['/dependencies/dependency-1', { method: 'DELETE' }]],
+  'delete Dependencies in one request': {
+    command: { kind: 'delete-dependencies', dependencyIds: ['dependency-1', 'dependency-2'] },
+    requests: [
+      [
+        '/dependencies',
+        {
+          method: 'DELETE',
+          headers: json,
+          body: JSON.stringify({ dependencyIds: ['dependency-1', 'dependency-2'] }),
+        },
+      ],
+    ],
   },
   'place a Teacher block with its preview version': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },

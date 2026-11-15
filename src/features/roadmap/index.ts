@@ -1,4 +1,5 @@
 export { RoadmapCanvasSession } from '@/features/roadmap/session';
+export { RoadmapPageLoading } from '@/features/roadmap/session/RoadmapCanvasLoading';
 export {
   parseCourseCode,
   parseCourseOfferingIdentifier,

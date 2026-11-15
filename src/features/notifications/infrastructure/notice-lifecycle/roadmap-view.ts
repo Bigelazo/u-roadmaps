@@ -70,6 +70,19 @@ function viewResource(
 
 const resourceOrder = [{ createdAt: 'asc' }, { id: 'asc' }] as const;
 
+function firstBy<Row>(rows: readonly Row[], key: (row: Row) => string) {
+  const index = new Map<string, Row>();
+  for (const row of rows) if (!index.has(key(row))) index.set(key(row), row);
+  return index;
+}
+
+const byId = ({ id }: { id: string }) => id;
+const dependencyKey = ({
+  sourceNodeId,
+  targetNodeId,
+}: Pick<RoadmapViewDependency, 'sourceNodeId' | 'targetNodeId'>) =>
+  JSON.stringify([sourceNodeId, targetNodeId]);
+
 export function roadmapView(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -81,6 +94,11 @@ export function roadmapView(
   let allResources: Promise<readonly RoadmapViewResource[]> | undefined;
   let allDependencies: Promise<readonly RoadmapViewDependency[]> | undefined;
   let allNodeTypes: Promise<readonly RoadmapViewNodeType[]> | undefined;
+  let nodeIndex: Promise<ReadonlyMap<string, RoadmapViewNode>> | undefined;
+  let resourceIndex: Promise<ReadonlyMap<string, RoadmapViewResource>> | undefined;
+  let resourcesByNode: Promise<ReadonlyMap<string, readonly RoadmapViewResource[]>> | undefined;
+  let dependencyIndex: Promise<ReadonlyMap<string, RoadmapViewDependency>> | undefined;
+  let nodeTypeIndex: Promise<ReadonlyMap<string, RoadmapViewNodeType>> | undefined;
   const nodes = new Map<string, Promise<RoadmapViewNode | null>>();
   const resources = new Map<string, Promise<RoadmapViewResource | null>>();
   const roles = new Map<string, Promise<ParticipantRole | null>>();
@@ -122,7 +140,10 @@ export function roadmapView(
       return allNodes;
     },
     node(nodeId) {
-      if (allNodes) return allNodes.then((all) => all.find(({ id }) => id === nodeId) ?? null);
+      if (allNodes) {
+        nodeIndex ??= allNodes.then((all) => firstBy(all, byId));
+        return nodeIndex.then((index) => index.get(nodeId) ?? null);
+      }
       let node = nodes.get(nodeId);
       if (!node) {
         node = transaction.roadmapNode
@@ -139,8 +160,10 @@ export function roadmapView(
       return allResources;
     },
     resource(resourceId) {
-      if (allResources)
-        return allResources.then((all) => all.find(({ id }) => id === resourceId) ?? null);
+      if (allResources) {
+        resourceIndex ??= allResources.then((all) => firstBy(all, byId));
+        return resourceIndex.then((index) => index.get(resourceId) ?? null);
+      }
       let resource = resources.get(resourceId);
       if (!resource) {
         resource = transaction.resource
@@ -151,8 +174,10 @@ export function roadmapView(
       return resource;
     },
     nodeResources(nodeId) {
-      if (allResources)
-        return allResources.then((all) => all.filter((resource) => resource.nodeId === nodeId));
+      if (allResources) {
+        resourcesByNode ??= allResources.then((all) => Map.groupBy(all, ({ nodeId: id }) => id));
+        return resourcesByNode.then((groups) => [...(groups.get(nodeId) ?? [])]);
+      }
       let found = nodeResources.get(nodeId);
       if (!found) {
         found = transaction.resource
@@ -207,15 +232,12 @@ export function roadmapView(
       return allDependencies;
     },
     dependency(sourceNodeId, targetNodeId) {
-      if (allDependencies)
-        return allDependencies.then(
-          (all) =>
-            all.find(
-              (dependency) =>
-                dependency.sourceNodeId === sourceNodeId &&
-                dependency.targetNodeId === targetNodeId,
-            ) ?? null,
+      if (allDependencies) {
+        dependencyIndex ??= allDependencies.then((all) => firstBy(all, dependencyKey));
+        return dependencyIndex.then(
+          (index) => index.get(dependencyKey({ sourceNodeId, targetNodeId })) ?? null,
         );
+      }
       return transaction.dependency.findFirst({
         where: { sourceNodeId, targetNodeId, sourceNode: { roadmapId } },
         select: { id: true, sourceNodeId: true, targetNodeId: true },
@@ -242,8 +264,10 @@ export function roadmapView(
       return allNodeTypes;
     },
     nodeType(nodeTypeId) {
-      if (allNodeTypes)
-        return allNodeTypes.then((all) => all.find(({ id }) => id === nodeTypeId) ?? null);
+      if (allNodeTypes) {
+        nodeTypeIndex ??= allNodeTypes.then((all) => firstBy(all, byId));
+        return nodeTypeIndex.then((index) => index.get(nodeTypeId) ?? null);
+      }
       let nodeType = nodeTypes.get(nodeTypeId);
       if (!nodeType) {
         nodeType = transaction.nodeType

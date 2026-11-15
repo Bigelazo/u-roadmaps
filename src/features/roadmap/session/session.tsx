@@ -14,7 +14,10 @@ import {
 } from 'react';
 import type { CanvasState, CanvasStateAction } from '@/features/roadmap/canvas/state';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
-import { canvasCommandCatalog } from '@/features/roadmap/canvas/commands/commands';
+import {
+  canvasCommandCatalog,
+  type AnyCommandEntry,
+} from '@/features/roadmap/canvas/commands/commands';
 import {
   useCanvasCommands,
   type CanvasCommands,
@@ -44,6 +47,29 @@ function messageFor(cause: unknown, fallback: string) {
 }
 
 const refreshFailure = 'No se pudo actualizar el roadmap.';
+const OWN_ECHO_WINDOW_MS = 2000;
+
+type OwnEcho = { executing: number; heard: number; missed: boolean; expectedUntil: number };
+
+function settleOwnCommand(echo: OwnEcho, counted: boolean) {
+  if (!counted) return false;
+  echo.executing -= 1;
+  if (echo.executing > 0) return false;
+  const { missed } = echo;
+  echo.missed = false;
+  return missed;
+}
+
+function absorbsOwnEcho(echo: OwnEcho) {
+  echo.heard += 1;
+  if (echo.executing > 0) {
+    echo.missed = true;
+    return true;
+  }
+  if (Date.now() > echo.expectedUntil) return false;
+  echo.expectedUntil = 0;
+  return true;
+}
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
 
@@ -103,13 +129,23 @@ function useInjectedSession(
   const sessionAliveRef = useRef(true);
   const requestVersionRef = useRef(0);
   const canvasPreviewVersionRef = useRef(0);
+  const ownEchoRef = useRef<OwnEcho>({ executing: 0, heard: 0, missed: false, expectedUntil: 0 });
+  const latestLoadRef = useRef<{ startedAt: number; succeeded: Promise<boolean> } | null>(null);
   const courseCode = input.courseOffering.identifier.courseCode;
   const year = input.courseOffering.identifier.year;
   const semester = input.courseOffering.identifier.semester;
   const experienceKind = input.experience.kind;
   const experienceTerm = input.experience.term;
   const loadRoadmap = useCallback(async () => {
-    const loadedRoadmap = await persistence.load();
+    const loading = persistence.load();
+    latestLoadRef.current = {
+      startedAt: Date.now(),
+      succeeded: loading.then(
+        () => true,
+        () => false,
+      ),
+    };
+    const loadedRoadmap = await loading;
     if (!matchesExperience(loadedRoadmap, experienceKind)) {
       throw new Error(loadFailure);
     }
@@ -174,10 +210,19 @@ function useInjectedSession(
         changedOffering.semester !== semester
       )
         return;
-      if (experienceKind === 'teaching' || changedOffering.accessLost) recover();
+      if (changedOffering.accessLost) recover();
+      else if (experienceKind === 'teaching' && !absorbsOwnEcho(ownEchoRef.current)) recover();
     });
-    const stopRecovery = subscribeToRoadmapRecovery(() => {
-      if (experienceKind === 'teaching') recover();
+    const stopRecovery = subscribeToRoadmapRecovery((coveredSince) => {
+      if (experienceKind !== 'teaching') return;
+      const latestLoad = latestLoadRef.current;
+      if (coveredSince === undefined || !latestLoad || latestLoad.startedAt < coveredSince) {
+        recover();
+        return;
+      }
+      void latestLoad.succeeded.then((succeeded) => {
+        if (!succeeded && active) recover();
+      });
     });
     return () => {
       active = false;
@@ -274,20 +319,39 @@ function useInjectedSession(
 
   const execute = useCallback<CanvasCommandSession['execute']>(
     async (command, previewVersion) => {
+      const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
+      const { changesCanvasPreview } = entry;
+      const echo = ownEchoRef.current;
+      const heard = echo.heard;
+      if (!changesCanvasPreview) echo.executing += 1;
       let result: ExecutionResult | void;
       try {
         result = await persistence.execute(command, previewVersion);
       } catch (cause) {
+        const missed = settleOwnCommand(echo, !changesCanvasPreview);
         await reportFailure(cause);
+        if (missed && sessionAliveRef.current) void refresh().catch(() => false);
         return { applied: false };
       }
-      const { changesCanvasPreview } = canvasCommandCatalog[command.kind];
-      try {
-        if (!changesCanvasPreview) await refresh();
-        setError(null);
-      } catch (cause) {
-        setError(messageFor(cause, refreshFailure));
+      if (!changesCanvasPreview) {
+        settleOwnCommand(echo, true);
+        if (echo.heard === heard) echo.expectedUntil = Date.now() + OWN_ECHO_WINDOW_MS;
       }
+      const refreshed = () =>
+        refresh().then(
+          () => {
+            if (sessionAliveRef.current) setError(null);
+          },
+          (cause: unknown) => {
+            if (sessionAliveRef.current) setError(messageFor(cause, refreshFailure));
+          },
+        );
+      const update = entry.shownBeforeRefresh?.(command, result ?? {});
+      if (changesCanvasPreview) setError(null);
+      else if (update && sessionAliveRef.current) {
+        setRoadmap((current) => (current ? update(current) : current));
+        void refreshed();
+      } else await refreshed();
       const sessionAliveToAnnounceAppliedCommand = sessionAliveRef.current;
       const applied = sessionAliveToAnnounceAppliedCommand;
       if (applied && changesCanvasPreview) await loadCanvasPreview();
