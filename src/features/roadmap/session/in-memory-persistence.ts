@@ -7,39 +7,30 @@ import {
 import {
   confirmChange,
   planChange,
-  type ChangeWithImpact,
   type RoadmapSnapshot,
 } from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
 import {
   decideNodeTypeAssignment,
   decideNodeTypeChange,
-  type NodeTypeChange,
 } from '@/features/roadmap/domain/node-type';
 import type {
   AnyRoadmapDto,
-  Resource,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
 } from '@/features/roadmap/types';
 import {
-  canvasCommandCatalog,
-  type AnyCommandEntry,
-} from '@/features/roadmap/canvas/commands/commands';
+  practiceCommands,
+  type AnyPracticeCommand,
+  type PracticeRoadmap,
+  type SimulatedProgress,
+} from '@/features/roadmap/session/practice-commands';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
 function copy<T>(value: T): T {
   return structuredClone(value);
 }
-
-type AnyRoadmapNode = AnyRoadmapDto['nodes'][number];
-type NodeDraft = { readonly id: string };
-
-type SimulatedProgress = {
-  readonly completedNodeIds: Set<string>;
-  readonly reviewedResourceIds: Set<string>;
-};
 
 function asStudentRoadmap(
   roadmap: AnyRoadmapDto,
@@ -90,26 +81,6 @@ function snapshotOf(roadmap: AnyRoadmapDto): RoadmapSnapshot {
 }
 
 export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
-
-export type PracticeRoadmap = {
-  roadmap: AnyRoadmapDto;
-  readonly canvasPreviewProgress: SimulatedProgress;
-  readonly createdNodePosition?: Point;
-  complete(nodeId: string): void;
-  completeCanvasPreview(nodeId: string): void;
-  resetCanvasPreview(): void;
-  updateNodes(update: (nodes: AnyRoadmapNode[]) => readonly NodeDraft[]): void;
-  mutateNode(nodeId: string, update: (node: AnyRoadmapNode) => NodeDraft): void;
-  mutateResource(resourceId: string, update: (resource: Resource) => Resource | null): void;
-  appendResource(nodeId: string, resource: Resource): void;
-  confirm(
-    change: ChangeWithImpact,
-    previewVersion?: string,
-  ): { readonly blockedNodeIds: readonly string[] };
-  requireAvailableNodeType(nodeTypeId: string): void;
-  decideNodeType(change: NodeTypeChange): void;
-  settleEach<Item>(items: readonly Item[], apply: (item: Item) => void): void;
-};
 
 export function createInMemoryRoadmapSessionPersistence(
   initialRoadmap: AnyRoadmapDto,
@@ -265,8 +236,8 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async execute(command, previewVersion) {
-      const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
-      return entry.practice(practice, command, previewVersion);
+      const apply: AnyPracticeCommand = practiceCommands[command.kind];
+      return apply(practice, command, previewVersion);
     },
   };
 }
