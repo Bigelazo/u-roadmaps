@@ -1,5 +1,6 @@
 'use client';
 
+import { nodeTypePaint } from '@/shared/node-type';
 import {
   ConnectionTargetContext,
   ConnectionRejectedTargetContext,
@@ -32,6 +33,7 @@ import {
   useReactFlow,
   useUpdateNodeInternals,
   type FitViewOptions,
+  type ReactFlowProps,
 } from '@xyflow/react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { LayoutFreeform, LockKeyhole, Maximize, Move } from 'lucide-react';
@@ -128,6 +130,7 @@ const overlayGap = 12;
 const sideInset = 16;
 const roadmapDependencyHandles = ['top', 'right', 'bottom', 'left'] as const;
 const dependencyStroke = 'var(--ink)';
+const readOnlyDependencyStroke = 'var(--dependency-read-only, #000)';
 const bottomRightPanelClassName =
   'pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1';
 
@@ -248,7 +251,6 @@ type RoadmapGraphActionMenu = NodeActionCallbacks & {
 function mapProjectionToFlow(
   projection: RoadmapGraphProjection,
   onDeleteDependency: (dependencyId: string) => void,
-  selectedNodeId: string | null | undefined,
   actionMenu: RoadmapGraphActionMenu,
   notificationsEnabled = false,
   sizeForTitle: RoadmapNodeSizer = roadmapNodeSizeForTitle,
@@ -272,7 +274,7 @@ function mapProjectionToFlow(
         roadmapId: roadmap.roadmap.id,
         notificationsEnabled,
         title: node.title,
-        typeColor: nodeType?.color ?? 'var(--primary)',
+        typeColor: nodeType ? nodeTypePaint(nodeType.color) : 'var(--primary)',
         typeName: nodeType?.name ?? unknownNodeType.name,
         typeIcon: nodeType?.icon ?? unknownNodeType.icon,
         status: isTeacherView ? 'editing' : studentNodeStatus(node),
@@ -289,7 +291,6 @@ function mapProjectionToFlow(
         onAction: actionMenu.onAction,
       },
       position: { x: node.positionX, y: node.positionY },
-      selected: node.id === selectedNodeId,
       hidden: !isTeacherView && isHidden,
       connectable: canEdit && !isHidden,
       deletable: false,
@@ -301,7 +302,7 @@ function mapProjectionToFlow(
     };
   });
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
-    const defaultStroke = isTeacherView && !canEdit ? '#000' : dependencyStroke;
+    const defaultStroke = isTeacherView && !canEdit ? readOnlyDependencyStroke : dependencyStroke;
     return {
       id: dependency.id,
       source: dependency.sourceNodeId,
@@ -320,6 +321,16 @@ function mapProjectionToFlow(
     };
   });
   return { nodes, edges };
+}
+
+function selectFlowNode(
+  flow: ReturnType<typeof mapProjectionToFlow>,
+  selectedNodeId: string | null | undefined,
+): ReturnType<typeof mapProjectionToFlow> {
+  return {
+    ...flow,
+    nodes: flow.nodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
+  };
 }
 
 function keepMeasuredNodes(
@@ -949,32 +960,33 @@ function useRoadmapGraphController({
     selectedNodeIdRef,
     emitEditingIntent,
   });
-  const [flow, setFlow] = useState(() =>
-    mapProjectionToFlow(
-      stableProjection,
-      deleteDependency,
-      selectedNodeId,
-      actionMenu,
-      notificationsEnabled,
-      sizeForTitle,
-    ),
+  const projectedFlow = useMemo(
+    () =>
+      mapProjectionToFlow(
+        stableProjection,
+        deleteDependency,
+        actionMenu,
+        notificationsEnabled,
+        sizeForTitle,
+      ),
+    [actionMenu, deleteDependency, notificationsEnabled, sizeForTitle, stableProjection],
   );
-
-  useEffect(() => {
+  const [flow, setFlow] = useState(() => selectFlowNode(projectedFlow, selectedNodeId));
+  const [appliedInput, setAppliedInput] = useState({ projectedFlow, selectedNodeId });
+  if (
+    appliedInput.projectedFlow !== projectedFlow ||
+    appliedInput.selectedNodeId !== selectedNodeId
+  ) {
+    setAppliedInput({ projectedFlow, selectedNodeId });
     setFlow((current) =>
-      keepMeasuredNodes(
-        mapProjectionToFlow(
-          stableProjection,
-          deleteDependency,
-          selectedNodeIdRef.current,
-          actionMenu,
-          notificationsEnabled,
-          sizeForTitle,
-        ),
-        current,
+      selectFlowNode(
+        appliedInput.projectedFlow !== projectedFlow
+          ? keepMeasuredNodes(projectedFlow, current)
+          : current,
+        selectedNodeId,
       ),
     );
-  }, [actionMenu, deleteDependency, notificationsEnabled, sizeForTitle, stableProjection]);
+  }
 
   const applyNodePositions = useCallback(
     (positions: readonly RoadmapNodePlacement[]) => {
@@ -1002,16 +1014,6 @@ function useRoadmapGraphController({
       ),
     [applyNodePositions, flow.nodes],
   );
-
-  useEffect(() => {
-    setFlow((current) => ({
-      ...current,
-      nodes: current.nodes.map((node) => ({
-        ...node,
-        selected: node.id === selectedNodeId,
-      })),
-    }));
-  }, [selectedNodeId]);
 
   const connectNodes = useCallback(
     (connection: Connection) => {
@@ -1097,19 +1099,10 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   const coarsePointer = useCoarsePointer();
   const [pointerType, setPointerType] = useState<string | null>(null);
   const touchInput = pointerType ? pointerType === 'touch' : coarsePointer;
-  const [movingNodes, setMovingNodes] = useState(false);
-  const [movementScope, setMovementScope] = useState({
+  const { touchMoveMode, setMovingNodes } = useTouchNodeMovement(
     canEdit,
-    roadmapId: props.projection.roadmap.roadmap.id,
-  });
-  if (
-    movementScope.canEdit !== canEdit ||
-    movementScope.roadmapId !== props.projection.roadmap.roadmap.id
-  ) {
-    setMovementScope({ canEdit, roadmapId: props.projection.roadmap.roadmap.id });
-    setMovingNodes(false);
-  }
-  const touchMoveMode = canEdit && movingNodes;
+    props.projection.roadmap.roadmap.id,
+  );
   const [blockedNoticeNodeId, setBlockedNoticeNodeId] = useState<string | null>(null);
   const isActionMenuActive = Boolean(openActionMenuNodeId || closingActionMenuNodeId);
   const isNavigationEnabled = !isActionMenuActive;
@@ -1122,39 +1115,14 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     onConnect: connectNodes,
     onReject: notifyConnectionRejection,
   });
-  const connectionNodes = useMemo(
-    () =>
-      flow.nodes.map((node) => ({
-        ...node,
-        className:
-          node.id === connection.arrowSourceId
-            ? 'roadmap-node--arrow-source'
-            : node.id === connection.targetId
-              ? 'roadmap-node--connection-target'
-              : node.id === connection.rejectedTargetId
-                ? 'roadmap-node--connection-rejected'
-                : undefined,
-      })),
-    [flow.nodes, connection.targetId, connection.rejectedTargetId, connection.arrowSourceId],
-  );
-  const { startArrowMode } = connection;
-  const nodeConnector = useMemo(() => ({ start: startArrowMode }), [startArrowMode]);
-  const targetNode = flow.nodes.find((node) => node.id === connection.targetId);
-  const targetRect = targetNode
-    ? {
-        id: targetNode.id,
-        ...targetNode.position,
-        ...roadmapNodeDimensions(targetNode),
-      }
-    : null;
-  const rejectedTargetNode = flow.nodes.find((node) => node.id === connection.rejectedTargetId);
-  const rejectedTargetRect = rejectedTargetNode
-    ? { ...rejectedTargetNode.position, ...roadmapNodeDimensions(rejectedTargetNode) }
-    : null;
-  const arrowSourceNode = flow.nodes.find((node) => node.id === connection.arrowSourceId);
-  const arrowSourceRect = arrowSourceNode
-    ? { ...arrowSourceNode.position, ...roadmapNodeDimensions(arrowSourceNode) }
-    : null;
+  const {
+    connectionNodes,
+    nodeConnector,
+    targetRect,
+    rejectedTargetRect,
+    arrowSourceNode,
+    arrowSourceRect,
+  } = useConnectionPreviewNodes(flow.nodes, connection);
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && touchMoveMode) {
@@ -1307,23 +1275,13 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                     onEdgeMouseLeave={
                       canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
                     }
-                    onNodeDragStop={
-                      canInteract
-                        ? (_event, _node, dragged) => settleDraggedNodes(dragged)
-                        : undefined
-                    }
-                    onSelectionDragStop={
-                      canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
-                    }
+                    {...editableFlowHandlers(
+                      canInteract,
+                      connection,
+                      settleDraggedNodes,
+                      deleteDependencies,
+                    )}
                     onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
-                    onConnectStart={canInteract ? connection.onConnectStart : undefined}
-                    onConnectEnd={canInteract ? connection.onConnectEnd : undefined}
-                    onConnect={canInteract ? connection.onConnect : undefined}
-                    onEdgesDelete={
-                      canInteract
-                        ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
-                        : undefined
-                    }
                     onMoveEnd={(event, viewport) => {
                       if (!event) return;
                       onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
@@ -1338,24 +1296,18 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                       props={props}
                       model={model}
                       nodeMovementControl={
-                        canEdit &&
-                        !connection.arrowSourceId &&
-                        (coarsePointer || touchInput || touchMoveMode) ? (
-                          <Button
-                            type="button"
-                            variant={touchMoveMode ? 'default' : 'outline'}
-                            aria-pressed={touchMoveMode}
-                            className="min-h-11 shrink-0"
-                            disabled={!canInteract}
-                            onClick={() => {
-                              connection.cancelArrowMode();
-                              setMovingNodes((current) => !current);
-                            }}
-                          >
-                            <Move aria-hidden="true" data-icon="inline-start" />
-                            {touchMoveMode ? 'Listo' : 'Mover nodos'}
-                          </Button>
-                        ) : null
+                        <NodeMovementControl
+                          canEdit={canEdit}
+                          arrowSourceId={connection.arrowSourceId}
+                          coarsePointer={coarsePointer}
+                          touchInput={touchInput}
+                          touchMoveMode={touchMoveMode}
+                          canInteract={canInteract}
+                          onToggle={() => {
+                            connection.cancelArrowMode();
+                            setMovingNodes((current) => !current);
+                          }}
+                        />
                       }
                       onAutoLayout={() => {
                         dependencyAnimationRef.current?.finish();
@@ -1394,50 +1346,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
             </span>
           </div>
         ) : null}
-        {connection.arrowSourceId ? (
-          <div
-            data-arrow-mode-controls
-            className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center [@media(max-height:500px)]:top-2"
-          >
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
-            >
-              <span>
-                {connection.arrowRejection ? (
-                  <DependencyRejectionMessage {...connection.arrowRejection} />
-                ) : connection.arrowInput === 'pointer' &&
-                  arrowSourceNode &&
-                  connection.arrowMessage === arrowModeMessage ? (
-                  <>
-                    Haz clic en el nodo que requiere{' '}
-                    <NodeName
-                      title={arrowSourceNode.data.title}
-                      nodeType={{
-                        name: arrowSourceNode.data.typeName,
-                        icon: arrowSourceNode.data.typeIcon,
-                        color: arrowSourceNode.data.typeColor,
-                      }}
-                    />
-                  </>
-                ) : (
-                  connection.arrowMessage
-                )}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-label="Cancelar modo flecha"
-                className="pointer-events-auto"
-                onClick={connection.cancelArrowMode}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <ArrowModeControls connection={connection} arrowSourceNode={arrowSourceNode} />
       </div>
       {model.useActionSheet ? (
         <NodeActionSheet
@@ -1669,7 +1578,7 @@ function BlockedNodeNotice({
           <PopoverPrimitive.Popup
             initialFocus={false}
             finalFocus={false}
-            className="flex w-72 max-w-[calc(100vw-2rem)] origin-(--transform-origin) gap-3 rounded-lg bg-popover p-3 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+            className="flex w-72 max-w-[calc(100vw-2rem)] origin-(--transform-origin) gap-3 rounded-lg bg-popover p-3 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden transition-[opacity,transform] duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
           >
             <LockKeyhole className="mt-0.5 size-5 shrink-0 text-graphite" aria-hidden="true" />
             <div className="flex min-w-0 flex-col gap-1">
@@ -1698,4 +1607,177 @@ function BlockedNodeNotice({
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>
   );
+}
+
+function useTouchNodeMovement(canEdit: boolean, roadmapId: string) {
+  const [movingNodes, setMovingNodes] = useState(false);
+  const [movementScope, setMovementScope] = useState({
+    canEdit,
+    roadmapId,
+  });
+  if (movementScope.canEdit !== canEdit || movementScope.roadmapId !== roadmapId) {
+    setMovementScope({ canEdit, roadmapId });
+    setMovingNodes(false);
+  }
+  const touchMoveMode = canEdit && movingNodes;
+  return { touchMoveMode, setMovingNodes };
+}
+
+function NodeMovementControl({
+  canEdit,
+  arrowSourceId,
+  coarsePointer,
+  touchInput,
+  touchMoveMode,
+  canInteract,
+  onToggle,
+}: {
+  canEdit: boolean;
+  arrowSourceId: string | null;
+  coarsePointer: boolean;
+  touchInput: boolean;
+  touchMoveMode: boolean;
+  canInteract: boolean;
+  onToggle: () => void;
+}) {
+  return canEdit && !arrowSourceId && (coarsePointer || touchInput || touchMoveMode) ? (
+    <Button
+      type="button"
+      variant={touchMoveMode ? 'default' : 'outline'}
+      aria-pressed={touchMoveMode}
+      className="min-h-11 shrink-0"
+      disabled={!canInteract}
+      onClick={onToggle}
+    >
+      <Move aria-hidden="true" data-icon="inline-start" />
+      {touchMoveMode ? 'Listo' : 'Mover nodos'}
+    </Button>
+  ) : null;
+}
+
+function ArrowModeControls({
+  connection,
+  arrowSourceNode,
+}: {
+  connection: ReturnType<typeof useWholeNodeConnection>;
+  arrowSourceNode: RoadmapFlowNode | undefined;
+}) {
+  return connection.arrowSourceId ? (
+    <div
+      data-arrow-mode-controls
+      className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center [@media(max-height:500px)]:top-2"
+    >
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
+      >
+        <span>
+          {connection.arrowRejection ? (
+            <DependencyRejectionMessage {...connection.arrowRejection} />
+          ) : connection.arrowInput === 'pointer' &&
+            arrowSourceNode &&
+            connection.arrowMessage === arrowModeMessage ? (
+            <>
+              Haz clic en el nodo que requiere{' '}
+              <NodeName
+                title={arrowSourceNode.data.title}
+                nodeType={{
+                  name: arrowSourceNode.data.typeName,
+                  icon: arrowSourceNode.data.typeIcon,
+                  color: arrowSourceNode.data.typeColor,
+                }}
+              />
+            </>
+          ) : (
+            connection.arrowMessage
+          )}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label="Cancelar modo flecha"
+          className="pointer-events-auto"
+          onClick={connection.cancelArrowMode}
+        >
+          Cancelar
+        </Button>
+      </div>
+    </div>
+  ) : null;
+}
+
+function useConnectionPreviewNodes(
+  nodes: RoadmapFlowNode[],
+  connection: ReturnType<typeof useWholeNodeConnection>,
+) {
+  const connectionNodes = useMemo(
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        className:
+          node.id === connection.arrowSourceId
+            ? 'roadmap-node--arrow-source'
+            : node.id === connection.targetId
+              ? 'roadmap-node--connection-target'
+              : node.id === connection.rejectedTargetId
+                ? 'roadmap-node--connection-rejected'
+                : undefined,
+      })),
+    [nodes, connection.targetId, connection.rejectedTargetId, connection.arrowSourceId],
+  );
+  const { startArrowMode } = connection;
+  const nodeConnector = useMemo(() => ({ start: startArrowMode }), [startArrowMode]);
+  const targetNode = nodes.find((node) => node.id === connection.targetId);
+  const targetRect = targetNode
+    ? {
+        id: targetNode.id,
+        ...targetNode.position,
+        ...roadmapNodeDimensions(targetNode),
+      }
+    : null;
+  const rejectedTargetNode = nodes.find((node) => node.id === connection.rejectedTargetId);
+  const rejectedTargetRect = rejectedTargetNode
+    ? { ...rejectedTargetNode.position, ...roadmapNodeDimensions(rejectedTargetNode) }
+    : null;
+  const arrowSourceNode = nodes.find((node) => node.id === connection.arrowSourceId);
+  const arrowSourceRect = arrowSourceNode
+    ? { ...arrowSourceNode.position, ...roadmapNodeDimensions(arrowSourceNode) }
+    : null;
+
+  return {
+    connectionNodes,
+    nodeConnector,
+    targetRect,
+    rejectedTargetRect,
+    arrowSourceNode,
+    arrowSourceRect,
+  };
+}
+
+function editableFlowHandlers(
+  enabled: boolean,
+  connection: ReturnType<typeof useWholeNodeConnection>,
+  settleDraggedNodes: (nodes: readonly RoadmapFlowNode[]) => void,
+  deleteDependencies: (ids: string[]) => void,
+): Pick<
+  ReactFlowProps<RoadmapFlowNode, RoadmapFlowEdge>,
+  | 'onNodeDragStop'
+  | 'onSelectionDragStop'
+  | 'onConnectStart'
+  | 'onConnectEnd'
+  | 'onConnect'
+  | 'onEdgesDelete'
+> {
+  return {
+    onNodeDragStop: enabled ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined,
+    onSelectionDragStop: enabled ? (_event, dragged) => settleDraggedNodes(dragged) : undefined,
+    onConnectStart: enabled ? connection.onConnectStart : undefined,
+    onConnectEnd: enabled ? connection.onConnectEnd : undefined,
+    onConnect: enabled ? connection.onConnect : undefined,
+    onEdgesDelete: enabled
+      ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
+      : undefined,
+  };
 }

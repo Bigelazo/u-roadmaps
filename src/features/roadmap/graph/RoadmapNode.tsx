@@ -76,7 +76,7 @@ function NodeChangeBadge({ nodeId }: { nodeId: string }) {
       aria-label={label}
       title={label}
       role="img"
-      className="absolute top-[-10px] left-[-10px] z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-xs leading-none font-bold text-white tabular-nums shadow-sm"
+      className="absolute top-[-10px] left-[-10px] z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-xs leading-none font-bold text-white tabular-nums shadow-sm dark:text-destructive-foreground"
     >
       {formatBadgeCount(count)}
     </span>
@@ -656,9 +656,7 @@ export function RoadmapNode({ id, data, selected, width, height }: NodeProps<Roa
     !data.isActionMenuClosing;
   const connectionHoverActive = canConnect && connectionHovered;
   const connectionStarted = useStore((state) => state.connection.fromNode?.id === id);
-  useEffect(() => {
-    if (!canConnect) setConnectionHovered(false);
-  }, [canConnect]);
+  if (!canConnect && connectionHovered) setConnectionHovered(false);
   const trackConnectionHover = (event: PointerEvent<HTMLDivElement>) => {
     if (
       !canConnect ||
@@ -688,9 +686,7 @@ export function RoadmapNode({ id, data, selected, width, height }: NodeProps<Roa
       });
     if (coversAnotherNode) setConnectionHovered(false);
   };
-  const teacherBlocked = editing && data.isTeacherBlocked;
-  const blocked = locked || teacherBlocked;
-  const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
+  const { nodeColor, className, style } = nodeCardAppearance(data, selected);
   return (
     <LazyMotion features={domAnimation} strict>
       <m.div
@@ -706,33 +702,14 @@ export function RoadmapNode({ id, data, selected, width, height }: NodeProps<Roa
         data-block-reason={data.blockReason}
         aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
         aria-disabled={locked ? true : undefined}
-        className={cn(
-          'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transition-none',
-          selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-          hidden && 'border-dashed',
-          locked
-            ? 'cursor-not-allowed opacity-[0.88] shadow-none'
-            : cn(
-                'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
-                !hidden && 'shadow-(--shadow-roadmap-node)',
-              ),
-        )}
-        style={
-          {
-            '--roadmap-node-color': nodeColor,
-            scale: entryProgress,
-            transformOrigin: 'center center',
-            width: size.width,
-            height: size.height,
-            backgroundColor: blocked
-              ? 'color-mix(in srgb, var(--blocked) 20%, var(--card))'
-              : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
-            backgroundImage: hidden
-              ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 11px)`
-              : undefined,
-            borderColor: nodeColor,
-          } as MotionStyle
-        }
+        className={className}
+        style={{
+          ...style,
+          scale: entryProgress,
+          transformOrigin: 'center center',
+          width: size.width,
+          height: size.height,
+        }}
       >
         <div
           data-testid="roadmap-node-content"
@@ -765,4 +742,35 @@ export function RoadmapNode({ id, data, selected, width, height }: NodeProps<Roa
       </m.div>
     </LazyMotion>
   );
+}
+
+function nodeCardAppearance(data: RoadmapNodeData, selected: boolean | undefined) {
+  const locked = data.status === 'locked';
+  const hidden = data.isHidden;
+  const blocked = locked || (data.status === 'editing' && data.isTeacherBlocked);
+  const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
+  return {
+    nodeColor,
+    className: cn(
+      'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transition-none',
+      selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+      hidden && 'border-dashed',
+      locked
+        ? 'cursor-not-allowed opacity-[0.88] shadow-none'
+        : cn(
+            'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+            !hidden && 'shadow-(--shadow-roadmap-node)',
+          ),
+    ),
+    style: {
+      '--roadmap-node-color': nodeColor,
+      backgroundColor: blocked
+        ? 'color-mix(in srgb, var(--blocked) 20%, var(--card))'
+        : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
+      backgroundImage: hidden
+        ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 11px)`
+        : undefined,
+      borderColor: nodeColor,
+    } as MotionStyle,
+  };
 }

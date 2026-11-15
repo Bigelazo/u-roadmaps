@@ -278,6 +278,28 @@ test('arms the exterior launch zone only after body hover and retains it through
   expect(card.dataset.connectionHovered).toBeUndefined();
 });
 
+test.each([
+  { label: 'the action menu opens', data: { isActionMenuOpen: true } },
+  { label: 'editing access is removed', data: { canManageActions: false } },
+  { label: 'the node is hidden', data: { isHidden: true } },
+])('requires a fresh body hover after $label', ({ data }) => {
+  enableHoverPointer();
+  const editable = nodeProps({ data: { status: 'editing', canManageActions: true } });
+  const { rerenderWith } = renderNode(editable);
+  const card = screen.getByTestId('roadmap-card');
+  measureCard(card);
+  fireEvent.pointerMove(card, { pointerType: 'mouse', clientX: 200, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+
+  rerenderWith({ ...editable, data: { ...editable.data, ...data } });
+  expect(card.dataset.connectionHovered).toBeUndefined();
+  rerenderWith(editable);
+  expect(card.dataset.connectionHovered).toBeUndefined();
+
+  fireEvent.pointerMove(card, { pointerType: 'mouse', clientX: 200, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+});
+
 test('an exterior band yields to an adjacent Node action control instead of intercepting it', () => {
   enableHoverPointer();
   render(

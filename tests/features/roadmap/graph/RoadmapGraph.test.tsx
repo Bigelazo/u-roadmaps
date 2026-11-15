@@ -240,12 +240,14 @@ test('enables the complete editing capability only for an editable teaching proj
 beforeEach(() => mockViewport(1280));
 afterEach(() => vi.unstubAllGlobals());
 
-test('read-only teaching graphs hide connection handles and render black dependencies', () => {
+test('read-only teaching graphs hide connection handles and render neutral dependencies', () => {
   render(
     <RoadmapGraph projection={{ kind: 'teaching', roadmap: teacherRoadmap }} {...commonProps} />,
   );
 
-  expect(screen.getByTestId('dependency-dependency-1').style.stroke).toBe('rgb(0, 0, 0)');
+  expect(screen.getByTestId('dependency-dependency-1').style.stroke).toBe(
+    'var(--dependency-read-only, #000)',
+  );
   for (const handle of screen.getAllByTestId('flow-handle')) {
     expect(handle.style.visibility).toBe('hidden');
     expect(handle.style.pointerEvents).toBe('none');

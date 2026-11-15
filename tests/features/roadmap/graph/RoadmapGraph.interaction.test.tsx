@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { Profiler, useState, type ReactNode } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mockViewport } from '../../../support/viewport';
@@ -459,13 +459,24 @@ test.each([
 
 test('keeps a dragged node position when selecting it before the roadmap reloads', async () => {
   const user = userEvent.setup();
-  render(<GraphHarness />);
+  const selections: string[] = [];
+  render(
+    <Profiler
+      id="graph-selection"
+      onRender={() => selections.push(screen.getByTestId('selected-node').textContent ?? '')}
+    >
+      <GraphHarness />
+    </Profiler>,
+  );
 
   await user.click(screen.getByRole('button', { name: 'Arrastrar nodo' }));
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('200,160');
 
-  await user.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
+  selections.length = 0;
+  fireEvent.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('200,160');
+  expect(selections.length).toBeGreaterThan(0);
+  expect(selections.every((nodeId) => nodeId === 'node-1')).toBe(true);
 });
 
 test('emits only the selected Node identifier through the Roadmap boundary', async () => {
@@ -527,12 +538,27 @@ test('keeps the dimensions React Flow measured when refreshed roadmap data arriv
   const user = userEvent.setup();
   const updatedRoadmap = structuredClone(roadmap);
   updatedRoadmap.nodes[1].isTeacherBlocked = true;
-  const { rerender } = render(<GraphHarness />);
+  updatedRoadmap.nodes[0].positionX = 400;
+  const committedPositions: string[] = [];
+  const view = (roadmapData: RoadmapDto) => (
+    <Profiler
+      id="graph-projection"
+      onRender={() =>
+        committedPositions.push(screen.getByTestId('node-position-node-1').textContent ?? '')
+      }
+    >
+      <GraphHarness roadmapData={roadmapData} />
+    </Profiler>
+  );
+  const { rerender } = render(view(roadmap));
   await user.click(screen.getByRole('button', { name: 'Medir nodos' }));
   expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
 
-  rerender(<GraphHarness roadmapData={updatedRoadmap} />);
+  committedPositions.length = 0;
+  rerender(view(updatedRoadmap));
 
+  expect(committedPositions.length).toBeGreaterThan(0);
+  expect(committedPositions.every((position) => position === '400,0')).toBe(true);
   expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
   expect(screen.getByTestId('node-measured-node-2').textContent).toBe('180x80');
 });
