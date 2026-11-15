@@ -13,10 +13,11 @@ import { postJson, request } from './inbox-api';
 
 const NodeChangeCountsContext = createContext<Record<string, number> | undefined>(undefined);
 
-function useNodeChangeCounts(roadmapId: string) {
+function useNodeChangeCounts(roadmapId: string | undefined) {
   const [result, setResult] = useState<{ roadmapId: string; byNode: Record<string, number> }>();
   const generation = useRef(0);
   const refetch = useCallback(async () => {
+    if (!roadmapId) return;
     const current = ++generation.current;
     const response = await request<{ byNode: Record<string, number> }>(
       `/node-changes?${new URLSearchParams({ roadmapId })}`,
@@ -31,33 +32,7 @@ function useNodeChangeCounts(roadmapId: string) {
       ++requestGeneration.current;
     };
   }, [refetch]);
-  return { byNode: result?.roadmapId === roadmapId ? result.byNode : undefined, refetch };
-}
-
-function ActiveNodeChangeCounts({
-  roadmapId,
-  openedNodeId,
-  children,
-}: {
-  roadmapId: string;
-  openedNodeId: string | null;
-  children: ReactNode;
-}) {
-  const { byNode, refetch } = useNodeChangeCounts(roadmapId);
-  const reviewedOpening = useRef<string | null>(null);
-  useEffect(() => {
-    if (!openedNodeId) {
-      reviewedOpening.current = null;
-      return;
-    }
-    if (!byNode || reviewedOpening.current === openedNodeId) return;
-    reviewedOpening.current = openedNodeId;
-    if (!byNode[openedNodeId]) return;
-    void postJson('/node-changes', { roadmapId, nodeId: openedNodeId }).then(refetch, () => {
-      reviewedOpening.current = null;
-    });
-  }, [byNode, openedNodeId, refetch, roadmapId]);
-  return <NodeChangeCountsContext value={byNode}>{children}</NodeChangeCountsContext>;
+  return { byNode: result && result.roadmapId === roadmapId ? result.byNode : undefined, refetch };
 }
 
 export function NodeChangeCountsProvider({
@@ -73,14 +48,29 @@ export function NodeChangeCountsProvider({
   simulatedCounts?: Readonly<Record<string, number>>;
   children: ReactNode;
 }) {
-  if (simulatedCounts)
-    return <NodeChangeCountsContext value={simulatedCounts}>{children}</NodeChangeCountsContext>;
-  return enabled ? (
-    <ActiveNodeChangeCounts key={roadmapId} roadmapId={roadmapId} openedNodeId={openedNodeId}>
+  const activeRoadmapId = enabled && !simulatedCounts ? roadmapId : undefined;
+  const { byNode, refetch } = useNodeChangeCounts(activeRoadmapId);
+  const reviewedOpening = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeRoadmapId || !openedNodeId) {
+      reviewedOpening.current = null;
+      return;
+    }
+    const opening = JSON.stringify([activeRoadmapId, openedNodeId]);
+    if (!byNode || reviewedOpening.current === opening) return;
+    reviewedOpening.current = opening;
+    if (!byNode[openedNodeId]) return;
+    void postJson('/node-changes', { roadmapId: activeRoadmapId, nodeId: openedNodeId }).then(
+      refetch,
+      () => {
+        reviewedOpening.current = null;
+      },
+    );
+  }, [activeRoadmapId, byNode, openedNodeId, refetch]);
+  return (
+    <NodeChangeCountsContext value={simulatedCounts ?? (enabled ? byNode : undefined)}>
       {children}
-    </ActiveNodeChangeCounts>
-  ) : (
-    <NodeChangeCountsContext value={undefined}>{children}</NodeChangeCountsContext>
+    </NodeChangeCountsContext>
   );
 }
 

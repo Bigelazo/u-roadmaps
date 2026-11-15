@@ -600,7 +600,6 @@ function mountChangedNode(data: Partial<RoadmapFlowNode['data']>) {
             id: 'changed-node',
             data: {
               title: 'Variables',
-              roadmapId: 'roadmap',
               notificationsEnabled: true,
               status: 'editing',
               linkCount: 1,

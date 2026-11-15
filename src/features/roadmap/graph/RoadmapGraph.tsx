@@ -272,7 +272,6 @@ function mapProjectionToFlow(
       type: 'roadmap',
       ...sizeForTitle(node.title),
       data: {
-        roadmapId: roadmap.roadmap.id,
         notificationsEnabled,
         title: node.title,
         typeColor: nodeType ? nodeTypePaint(nodeType.color) : 'var(--primary)',
@@ -793,41 +792,26 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   );
 }
 
-type NodeActionMenuState = {
-  editing: RoadmapGraphEditing;
-  selectedNodeId: string | null | undefined;
-  nodeId: string;
-} | null;
-
-function activeMenuNodeId(
-  state: NodeActionMenuState,
-  editing: RoadmapGraphEditing | undefined,
-  selectedNodeId: string | null | undefined,
-) {
-  return editing && state?.editing === editing && state.selectedNodeId === selectedNodeId
-    ? state.nodeId
-    : null;
-}
-
 function useNodeActionMenu({
   editing,
   useActionSheet,
   selectedNodeId,
-  selectedNodeIdRef,
   emitEditingIntent,
 }: {
   editing: RoadmapGraphEditing | undefined;
   useActionSheet: boolean;
   selectedNodeId: string | null | undefined;
-  selectedNodeIdRef: RefObject<string | null | undefined>;
   emitEditingIntent: (intent: RoadmapGraphEditingIntent) => void;
 }) {
-  const [openMenu, setOpenMenu] = useState<NodeActionMenuState>(null);
-  const [closingMenu, setClosingMenu] = useState<NodeActionMenuState>(null);
-  const openNodeId = activeMenuNodeId(openMenu, editing, selectedNodeId);
-  const closingNodeId = useActionSheet
-    ? null
-    : activeMenuNodeId(closingMenu, editing, selectedNodeId);
+  const [openNodeId, setOpenMenu] = useState<string | null>(null);
+  const [closingMenu, setClosingMenu] = useState<string | null>(null);
+  const [menuScope, setMenuScope] = useState({ editing, selectedNodeId });
+  if (menuScope.editing !== editing || menuScope.selectedNodeId !== selectedNodeId) {
+    setMenuScope({ editing, selectedNodeId });
+    setOpenMenu(null);
+    setClosingMenu(null);
+  }
+  const closingNodeId = useActionSheet ? null : closingMenu;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusRef = useRef(true);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -841,10 +825,10 @@ function useNodeActionMenu({
     (nodeId: string) => {
       if (!editing || useActionSheet) return;
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-      setClosingMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
+      setClosingMenu(nodeId);
       closeTimerRef.current = setTimeout(() => setClosingMenu(null), nodeActionMenuCloseDurationMs);
     },
-    [editing, selectedNodeIdRef, useActionSheet],
+    [editing, useActionSheet],
   );
   const closeActionMenu = useCallback(
     (restoreFocus = true) => {
@@ -870,9 +854,9 @@ function useNodeActionMenu({
       }
       if (openNodeId) beginClosing(openNodeId);
       restoreFocusRef.current = true;
-      setOpenMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
+      setOpenMenu(nodeId);
     },
-    [beginClosing, closeActionMenu, closingNodeId, editing, openNodeId, selectedNodeIdRef],
+    [beginClosing, closeActionMenu, closingNodeId, editing, openNodeId],
   );
   const onAction = useCallback(
     (intent: NodeActionIntent) => {
@@ -913,22 +897,17 @@ function useRoadmapGraphController({
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
   const onEditingIntent = editing?.onEditingIntent;
-  const handlers = useRef<{ onEditingIntent?: (intent: RoadmapGraphEditingIntent) => void }>({
-    onEditingIntent,
-  });
-  useEffect(() => {
-    handlers.current = { onEditingIntent };
-  }, [onEditingIntent]);
-  const selectedNodeIdRef = useRef(selectedNodeId);
   const lastSelectedNodeIdRef = useRef<string | null>(selectedNodeId ?? null);
   useEffect(() => {
-    selectedNodeIdRef.current = selectedNodeId;
     if (selectedNodeId) lastSelectedNodeIdRef.current = selectedNodeId;
   }, [selectedNodeId]);
   const keyboardMovePendingRef = useRef(false);
-  const emitEditingIntent = useCallback((intent: RoadmapGraphEditingIntent) => {
-    handlers.current.onEditingIntent?.(intent);
-  }, []);
+  const emitEditingIntent = useCallback(
+    (intent: RoadmapGraphEditingIntent) => {
+      onEditingIntent?.(intent);
+    },
+    [onEditingIntent],
+  );
   const deleteDependencies = useCallback(
     (dependencyIds: readonly string[]) => {
       if (dependencyIds.length === 0) return;
@@ -947,7 +926,6 @@ function useRoadmapGraphController({
     editing,
     useActionSheet,
     selectedNodeId,
-    selectedNodeIdRef,
     emitEditingIntent,
   });
   const projectedFlow = useMemo(
@@ -1055,7 +1033,6 @@ function useRoadmapGraphController({
     actionMenuFinalFocus,
     openActionMenuNodeId: actionMenu.openNodeId,
     closingActionMenuNodeId: actionMenu.closingNodeId,
-    selectedNodeIdRef,
     keyboardMovePendingRef,
     deleteDependencies,
     closeActionMenu,
@@ -1075,7 +1052,6 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     canEdit,
     openActionMenuNodeId,
     closingActionMenuNodeId,
-    selectedNodeIdRef,
     keyboardMovePendingRef,
     deleteDependencies,
     closeActionMenu,
@@ -1136,7 +1112,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     }
     const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
     if (!node) return;
-    if (event.key === 'Escape' && node.dataset.id === selectedNodeIdRef.current) {
+    if (event.key === 'Escape' && node.dataset.id === props.selectedNodeId) {
       onClearSelectedNode?.();
       return;
     }

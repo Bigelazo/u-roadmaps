@@ -13,7 +13,6 @@ function ResizablePanelFixture({ storageKey }: { storageKey: string }) {
   const { width, setWidth } = usePersistentPanelWidth({
     storageKey,
     initialWidth: 400,
-    limits: panelWidthLimits,
   });
 
   return (
@@ -94,4 +93,26 @@ test('keeps resizing within its readable minimum and canvas-preserving maximum',
   expect(separator.getAttribute('aria-valuenow')).toBe(String(panelWidthLimits.max));
   expect(separator.getAttribute('aria-orientation')).toBe('vertical');
   expect(separator.getAttribute('aria-controls')).toBe('test-panel');
+});
+
+test('restores and clamps stored widths without writing to storage', () => {
+  window.localStorage.setItem('panel-width', '900');
+  const persist = vi.spyOn(window.localStorage, 'setItem');
+  render(<ResizablePanelFixture storageKey="panel-width" />);
+  expect(screen.getByLabelText('Ancho del panel').textContent).toBe('560');
+  expect(persist).not.toHaveBeenCalled();
+});
+
+test('allows resizing when reading and writing storage are unavailable', async () => {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get: () => {
+      throw new Error('Storage unavailable');
+    },
+  });
+  const user = userEvent.setup();
+  render(<ResizablePanelFixture storageKey="panel-width" />);
+  await user.tab();
+  await user.keyboard('{ArrowRight}');
+  expect(screen.getByLabelText('Ancho del panel').textContent).toBe('420');
 });

@@ -4,11 +4,9 @@ import { act, render } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { OwnInboxRealtime } from '@/features/notifications/components/own-realtime';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
-import {
-  RoadmapCanvasSessionPersistenceProvider,
-  useRoadmapCanvasSession,
-} from '@/features/roadmap/session/session';
+import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import { SimulatedNotificationStream } from '../../../support/notification-stream';
 
 const courseOffering = {
@@ -38,7 +36,7 @@ const teachingRoadmap: RoadmapDto = {
 };
 
 function TeachingCanvas() {
-  useRoadmapCanvasSession({
+  useTestCanvasSession({
     courseOffering,
     experience: { kind: 'teaching', term: 'current' },
   });
