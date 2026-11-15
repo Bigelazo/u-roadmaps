@@ -97,6 +97,7 @@ import {
 } from '@/shared/client/tutorial/tutorial-support';
 import { cn } from 'cn';
 import { useRoadmapNodeSizing } from './use-roadmap-node-sizing';
+import { reconcileFlow } from './flow-reconciliation';
 import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
@@ -317,17 +318,6 @@ function mapProjectionToFlow(
     };
   });
   return { nodes, edges };
-}
-
-function keepMeasuredNodes(
-  flow: ReturnType<typeof mapProjectionToFlow>,
-  current: ReturnType<typeof mapProjectionToFlow>,
-) {
-  const measuredById = new Map(current.nodes.map((node) => [node.id, node.measured]));
-  return {
-    ...flow,
-    nodes: flow.nodes.map((node) => ({ ...node, measured: measuredById.get(node.id) })),
-  };
 }
 
 function isRoadmapDependencyHandle(
@@ -959,7 +949,7 @@ function useRoadmapGraphController({
 
   useEffect(() => {
     setFlow((current) =>
-      keepMeasuredNodes(
+      reconcileFlow(
         mapProjectionToFlow(
           stableProjection,
           deleteDependency,

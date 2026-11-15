@@ -42,6 +42,8 @@ import {
 import { formatCalendarDay } from '@/shared/calendar-day-format';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import type {
+  AnyRoadmapDto,
+  RoadmapDependency,
   RoadmapDependencyRequest,
   RoadmapNode,
   TeacherBlockOperation,
@@ -132,12 +134,15 @@ export type CommandEntry<Command extends { kind: string }, Impact> = {
     previewVersion?: string,
   ): ExecutionResult | void;
   readonly changesCanvasPreview?: true;
+  shownBeforeRefresh?(command: Command, result: ExecutionResult): RoadmapUpdate | null;
   success?(command: Command, outcome: CommandOutcome, impact?: Impact | null): string;
   report?(command: Command, outcome: CommandOutcome): PracticeCanvasAction | null;
   readonly confirmedAction?: ConfirmedAction<Command, Impact>;
 } & (Command['kind'] extends keyof PlannedChangeImpactOf
   ? { readonly changeImpact: { path(command: Command): string; readonly failure: string } }
   : unknown);
+
+export type RoadmapUpdate = <Roadmap extends AnyRoadmapDto>(roadmap: Roadmap) => Roadmap;
 
 const command = <Command extends { kind: string }, Impact = ImpactRead<Command['kind']>>(
   entry: CommandEntry<Command, Impact>,
@@ -436,7 +441,7 @@ export const canvasCommandCatalog = {
             practice,
             scheduledUnlock(command.nodeId, command.operation, command.schedule),
           )
-        : practice.confirm(command, previewVersion),
+        : void practice.confirm(command, previewVersion),
     confirmedAction: {
       impact: async (session, command) => {
         const operations = teacherBlockImpactOperations(command.operation);
@@ -528,16 +533,39 @@ export const canvasCommandCatalog = {
         `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
       failure: 'No se pudo calcular el impacto de la dependencia.',
     },
+    result: async ([response]) => {
+      const { dependency, nodes }: { dependency: RoadmapDependency; nodes: { id: string }[] } =
+        await response.json();
+      return { dependency, teacherBlockedNodeIds: nodes.map(({ id }) => id) };
+    },
     practice: (practice, command, previewVersion) => {
-      practice.confirm(command, previewVersion);
+      const { blockedNodeIds } = practice.confirm(command, previewVersion);
       const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = command;
+      const dependency = {
+        id: crypto.randomUUID(),
+        sourceNodeId,
+        targetNodeId,
+        sourceHandle,
+        targetHandle,
+      };
       practice.roadmap = {
         ...practice.roadmap,
-        dependencies: [
-          ...practice.roadmap.dependencies,
-          { id: crypto.randomUUID(), sourceNodeId, targetNodeId, sourceHandle, targetHandle },
-        ],
+        dependencies: [...practice.roadmap.dependencies, dependency],
       };
+      return { dependency, teacherBlockedNodeIds: blockedNodeIds };
+    },
+    shownBeforeRefresh: (_, { dependency, teacherBlockedNodeIds = [] }) => {
+      if (!dependency) return null;
+      const blocked = new Set(teacherBlockedNodeIds);
+      return (roadmap) => ({
+        ...roadmap,
+        nodes: roadmap.nodes.map((node) =>
+          'isTeacherBlocked' in node && blocked.has(node.id)
+            ? { ...node, isTeacherBlocked: true }
+            : node,
+        ),
+        dependencies: [...roadmap.dependencies, dependency],
+      });
     },
     confirmedAction: {
       impact: readChangeImpact,
@@ -576,6 +604,13 @@ export const canvasCommandCatalog = {
         ...practice.roadmap,
         dependencies: practice.roadmap.dependencies.filter(({ id }) => !removed.has(id)),
       };
+    },
+    shownBeforeRefresh: ({ dependencyIds }) => {
+      const removed = new Set(dependencyIds);
+      return (roadmap) => ({
+        ...roadmap,
+        dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
+      });
     },
     confirmedAction: {
       apply: executeAsRequested,

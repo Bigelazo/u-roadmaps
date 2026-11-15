@@ -20,6 +20,7 @@ import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-con
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
 import { executeWithChangeImpact } from '../support/execute-with-change-impact';
+import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
 
 const teachingInput = {
   courseOffering: {
@@ -1528,5 +1529,162 @@ describe('canvas commands', () => {
         { type: 'enterCanvasPreview' },
       ]);
     });
+  });
+});
+
+function heldLoads(adapter: RoadmapCanvasSessionPersistence) {
+  const held: (() => void)[] = [];
+  let holding = false;
+  const load = vi.fn(async () => {
+    if (holding) await new Promise<void>((resolve) => held.push(resolve));
+    return adapter.load();
+  });
+  return {
+    persistence: { ...adapter, load },
+    loads: () => load.mock.calls.length,
+    hold: () => {
+      holding = true;
+    },
+    release: () => {
+      holding = false;
+      held.splice(0).forEach((resolve) => resolve());
+    },
+  };
+}
+
+function signalRoadmapChange() {
+  window.dispatchEvent(
+    new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+      detail: teachingInput.courseOffering.identifier,
+    }),
+  );
+}
+
+const dependencyPairs = (session: {
+  roadmap: { dependencies: readonly { sourceNodeId: string; targetNodeId: string }[] } | null;
+}) =>
+  session.roadmap?.dependencies.map(
+    ({ sourceNodeId, targetNodeId }) => `${sourceNodeId}>${targetNodeId}`,
+  );
+
+const connectDerivativesToIntegrals = {
+  kind: 'create-dependency',
+  sourceNodeId: 'derivatives',
+  targetNodeId: 'integrals',
+  sourceHandle: 'right',
+  targetHandle: 'left',
+} as const;
+
+describe('Dependency edits on the canvas', () => {
+  afterEach(() => vi.mocked(notify.success).mockClear());
+
+  test('a created Dependency appears before the refresh resolves, and the refresh prevails', async () => {
+    const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+    const loads = heldLoads(adapter);
+    const canvas = await openCanvas(loads.persistence);
+    loads.hold();
+
+    act(() => {
+      void canvas.commands().request(connectDerivativesToIntegrals);
+    });
+
+    await waitFor(() =>
+      expect(dependencyPairs(canvas.session())).toEqual([
+        'limits>derivatives',
+        'derivatives>integrals',
+      ]),
+    );
+    expect(successToasts()).toEqual(['Dependencia creada exitosamente.']);
+    await adapter.execute({ kind: 'delete-dependencies', dependencyIds: ['limits-derivatives'] });
+    await act(async () => loads.release());
+    await waitFor(() =>
+      expect(dependencyPairs(canvas.session())).toEqual(['derivatives>integrals']),
+    );
+  });
+
+  test('deleted Dependencies leave the canvas before the refresh resolves', async () => {
+    const loads = heldLoads(createInMemoryRoadmapSessionPersistence(roadmap));
+    const canvas = await openCanvas(loads.persistence);
+    await act(() =>
+      canvas.commands().request({
+        kind: 'delete-dependencies',
+        dependencyIds: ['limits-derivatives'],
+      }),
+    );
+    loads.hold();
+
+    act(() => {
+      void canvas.commands().confirm('delete-dependencies');
+    });
+
+    await waitFor(() => expect(dependencyPairs(canvas.session())).toEqual([]));
+    expect(canvas.commands().pending).toBeNull();
+    await act(async () => loads.release());
+  });
+
+  test('an own change whose echo arrives before its response loads the Roadmap once', async () => {
+    const loads = heldLoads(
+      intercepting(
+        createInMemoryRoadmapSessionPersistence(roadmap),
+        'create-dependency',
+        async (_, forward) => {
+          const executed = await forward();
+          signalRoadmapChange();
+          return executed;
+        },
+      ),
+    );
+    const canvas = await openCanvas(loads.persistence);
+
+    await act(() => canvas.commands().request(connectDerivativesToIntegrals));
+
+    expect(loads.loads()).toBe(2);
+    expect(dependencyPairs(canvas.session())).toEqual([
+      'limits>derivatives',
+      'derivatives>integrals',
+    ]);
+  });
+
+  test('an own change whose echo arrives after its response loads the Roadmap once', async () => {
+    const loads = heldLoads(createInMemoryRoadmapSessionPersistence(roadmap));
+    const canvas = await openCanvas(loads.persistence);
+
+    await act(() => canvas.commands().request(connectDerivativesToIntegrals));
+    await act(async () => signalRoadmapChange());
+
+    expect(loads.loads()).toBe(2);
+  });
+
+  test('changes by others still load the Roadmap, also right after an own echo', async () => {
+    const loads = heldLoads(createInMemoryRoadmapSessionPersistence(roadmap));
+    const canvas = await openCanvas(loads.persistence);
+
+    await act(async () => signalRoadmapChange());
+    expect(loads.loads()).toBe(2);
+
+    await act(() => canvas.commands().request(connectDerivativesToIntegrals));
+    await act(async () => signalRoadmapChange());
+    await act(async () => signalRoadmapChange());
+
+    expect(loads.loads()).toBe(4);
+  });
+
+  test('a change heard while an own command fails still loads the Roadmap', async () => {
+    const loads = heldLoads(
+      intercepting(
+        createInMemoryRoadmapSessionPersistence(roadmap),
+        'create-dependency',
+        async () => {
+          signalRoadmapChange();
+          throw new Error('La dependencia entra en conflicto con otra modificación.');
+        },
+      ),
+    );
+    const canvas = await openCanvas(loads.persistence);
+
+    await act(() => canvas.commands().request(connectDerivativesToIntegrals));
+
+    await waitFor(() => expect(loads.loads()).toBe(2));
+    expect(canvas.session().error).toBe('La dependencia entra en conflicto con otra modificación.');
   });
 });
