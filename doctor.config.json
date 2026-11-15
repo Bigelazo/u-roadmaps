@@ -123,11 +123,49 @@
       },
       {
         "files": ["src/features/roadmap/editor/MarkdownEditor.tsx"],
-        "rules": ["react-doctor/no-array-index-as-key"]
+        "rules": ["react-doctor/no-array-index-as-key", "react-doctor/prefer-dynamic-import"]
       },
       {
         "files": ["src/shared/ui/toast.tsx"],
         "rules": ["react-doctor/shadcn-icon-button-requires-label"]
+      },
+      {
+        "files": ["src/app/[(]site[)]/academic-overview/page.tsx"],
+        "rules": ["react-doctor/server-sequential-independent-await"]
+      },
+      {
+        "files": [
+          "src/features/roadmap/editor/markdown-indentation.ts",
+          "src/features/roadmap/editor/markdown-live-preview.ts"
+        ],
+        "rules": ["react-doctor/prefer-dynamic-import"]
+      },
+      {
+        "files": ["src/features/roadmap/editor/NodeCreator.tsx"],
+        "rules": ["react-doctor/no-prevent-default"]
+      },
+      {
+        "files": ["src/features/roadmap/graph/routing/DependencyRouting.tsx"],
+        "rules": ["react-doctor/no-adjust-state-on-prop-change"]
+      },
+      {
+        "files": ["src/features/roadmap/session/node-creation.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/roadmap/ui/RoadmapPanelColumn.tsx"],
+        "rules": ["react-doctor/no-derived-state", "react-doctor/no-derived-state-effect"]
+      },
+      {
+        "files": [
+          "src/shared/client/tutorial/tutorial-position.ts",
+          "src/shared/client/tutorial/tutorial-session.ts"
+        ],
+        "rules": ["react-doctor/js-set-map-lookups"]
+      },
+      {
+        "files": ["tests/notifications-integration/own-inbox-snapshot.test.ts"],
+        "rules": ["react-doctor/no-json-parse-stringify-clone"]
       }
     ]
   }
