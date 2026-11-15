@@ -97,8 +97,10 @@ async function untilDelivered(streams: readonly OpenStream[], expected: number) 
   await delay(300);
 }
 
-async function denseRoadmap(course: IntegrationCourse) {
-  const nodeIds = Array.from({ length: 100 }, () => randomUUID());
+type RoadmapSize = { nodes: number; dependencies: number; resources: number };
+
+async function denseRoadmap(course: IntegrationCourse, size: RoadmapSize) {
+  const nodeIds = Array.from({ length: size.nodes }, () => randomUUID());
   await prisma.roadmapNode.createMany({
     data: nodeIds.map((id, index) => ({
       id,
@@ -110,9 +112,10 @@ async function denseRoadmap(course: IntegrationCourse) {
     })),
   });
   const pairs = new Set<string>();
-  for (let index = 0; pairs.size < 150; index += 1) {
-    const source = index % 90;
-    const target = source + 1 + Math.floor(index / 90);
+  const sources = size.nodes - 10;
+  for (let index = 0; pairs.size < size.dependencies; index += 1) {
+    const source = index % sources;
+    const target = source + 1 + Math.floor(index / sources);
     pairs.add(`${nodeIds[source]}:${nodeIds[target]}`);
   }
   await prisma.dependency.createMany({
@@ -122,7 +125,7 @@ async function denseRoadmap(course: IntegrationCourse) {
     }),
   });
   await prisma.resource.createMany({
-    data: Array.from({ length: 200 }, (_, index) => ({
+    data: Array.from({ length: size.resources }, (_, index) => ({
       roadmapNodeId: nodeIds[index % nodeIds.length],
       title: `Lectura ${index}`,
       url: `https://example.test/lectura-${index}`,
@@ -226,37 +229,44 @@ describe.skipIf(!output)('roadmap load benchmark', () => {
     },
   );
 
-  test('times entry snapshots for a dense Roadmap', { timeout: 120_000 }, async ({ course }) => {
-    const nodeIds = await denseRoadmap(course);
-    await enterRoadmap(course.studentId, course.roadmapId);
-    const accessible = new Set([course.change.nodeId, ...nodeIds]);
-    const durations: number[] = [];
-    let snapshots = 0;
-    for (let round = 0; round < ROUNDS; round += 1) {
-      await prisma.$transaction(async (transaction) => {
-        const started = performance.now();
-        const result = await entryTargetSnapshots(
-          transaction,
-          course.studentId,
-          course.roadmapId,
-          [],
-          accessible,
-        );
-        durations.push(performance.now() - started);
-        snapshots = result.length;
+  test.for([
+    { nodes: 100, dependencies: 150, resources: 200 },
+    { nodes: 400, dependencies: 600, resources: 800 },
+  ])(
+    'times entry snapshots for a Roadmap with $nodes Nodes',
+    { timeout: 120_000 },
+    async (size, { course }) => {
+      const nodeIds = await denseRoadmap(course, size);
+      await enterRoadmap(course.studentId, course.roadmapId);
+      const accessible = new Set([course.change.nodeId, ...nodeIds]);
+      const durations: number[] = [];
+      let snapshots = 0;
+      for (let round = 0; round < ROUNDS; round += 1) {
+        await prisma.$transaction(async (transaction) => {
+          const started = performance.now();
+          const result = await entryTargetSnapshots(
+            transaction,
+            course.studentId,
+            course.roadmapId,
+            [],
+            accessible,
+          );
+          durations.push(performance.now() - started);
+          snapshots = result.length;
+        });
+      }
+      expect(snapshots).toBeGreaterThan(accessible.size);
+      await record({
+        scenario: 'entry-target-snapshots',
+        nodes: accessible.size,
+        dependencies: size.dependencies,
+        resources: size.resources,
+        snapshots,
+        ms: Math.round(median(durations)),
+        durations: durations.map(Math.round),
       });
-    }
-    expect(snapshots).toBeGreaterThan(accessible.size);
-    await record({
-      scenario: 'entry-target-snapshots',
-      nodes: accessible.size,
-      dependencies: 150,
-      resources: 200,
-      snapshots,
-      ms: Math.round(median(durations)),
-      durations: durations.map(Math.round),
-    });
-  });
+    },
+  );
 
   test(
     'times two Course offering synchronizations with a slow MUFASA',
