@@ -299,24 +299,17 @@ const teacherBlockScheduleSuccess = (
 };
 
 const nodeMoves = {
-  requests: ({ positions }: { positions: readonly RoadmapNodePlacement[] }): RouteRequest[] =>
-    positions.map(({ nodeId, position }) => ({
-      method: 'PATCH',
-      path: `/nodes/${nodeId}`,
-      body: { positionX: position.x, positionY: position.y },
-    })),
+  requests: ({
+    positions,
+  }: {
+    positions: readonly RoadmapNodePlacement[];
+  }): readonly RouteRequest[] =>
+    positions.length ? [{ method: 'PATCH', path: '/placement', body: { positions } }] : [],
   failure: 'No se pudo guardar la posición.',
   practice: (
     practice: PracticeRoadmap,
     { positions }: { positions: readonly RoadmapNodePlacement[] },
-  ) =>
-    practice.settleEach(positions, ({ nodeId, position }) =>
-      practice.mutateNode(nodeId, (node) => ({
-        ...node,
-        positionX: position.x,
-        positionY: position.y,
-      })),
-    ),
+  ) => practice.placeNodes(positions),
 };
 
 type AutomaticLayouts = Readonly<Record<RoadmapLayoutDirection, readonly RoadmapNodePlacement[]>>;

@@ -524,3 +524,47 @@ test('a practice student completes a Node only after reviewing its Resources, wi
     }),
   ]);
 });
+
+test('a missing placement target rejects the entire movement before changing positions', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  await expect(
+    persistence.execute({
+      kind: 'move-nodes',
+      positions: [
+        { nodeId: 'selected', position: { x: 80, y: 240 } },
+        { nodeId: 'missing', position: { x: 240, y: 240 } },
+      ],
+    }),
+  ).rejects.toThrow();
+  expect((await persistence.load()).nodes).toEqual(roadmap.nodes);
+});
+
+test.each([
+  [
+    { nodeId: 'selected', position: { x: 80, y: 240 } },
+    { nodeId: 'selected', position: { x: 240, y: 240 } },
+  ],
+  [{ nodeId: 'selected', position: { x: Infinity, y: 240 } }],
+  [{ nodeId: '', position: { x: 80, y: 240 } }],
+])('invalid complete placements preserve every Practice position', async (...positions) => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  await expect(persistence.execute({ kind: 'move-nodes', positions })).rejects.toThrow();
+  expect((await persistence.load()).nodes).toEqual(roadmap.nodes);
+});
+
+test('an automatic layout with a missing target leaves all Practice positions unchanged', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  await expect(
+    persistence.execute({
+      kind: 'apply-automatic-layout',
+      layouts: {
+        TB: [
+          { nodeId: 'selected', position: { x: 80, y: 240 } },
+          { nodeId: 'missing', position: { x: 240, y: 240 } },
+        ],
+        LR: [],
+      },
+    }),
+  ).rejects.toThrow();
+  expect((await persistence.load()).nodes).toEqual(roadmap.nodes);
+});

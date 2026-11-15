@@ -260,14 +260,22 @@ function useInjectedSession(
   }, []);
 
   const reportFailure = useCallback(
-    async (cause: unknown) => {
+    async (cause: unknown, placement = false) => {
       const sessionEndedBeforeFailureRefresh = !sessionAliveRef.current;
       if (sessionEndedBeforeFailureRefresh) return;
-      if (cause instanceof RoadmapClosedError) {
-        setIsClosed(true);
-        await refresh().catch(() => false);
+      if (cause instanceof RoadmapClosedError) setIsClosed(true);
+      if (placement || cause instanceof RoadmapClosedError) {
+        try {
+          await refresh();
+        } catch {
+          if (sessionAliveRef.current)
+            setError(
+              `${messageFor(cause, genericFailure)} No se pudo sincronizar el canvas con el roadmap guardado.`,
+            );
+          return;
+        }
       }
-      setError(messageFor(cause, genericFailure));
+      if (sessionAliveRef.current) setError(messageFor(cause, genericFailure));
     },
     [refresh],
   );
@@ -329,8 +337,10 @@ function useInjectedSession(
         result = await persistence.execute(command, previewVersion);
       } catch (cause) {
         const missed = settleOwnCommand(echo, !changesCanvasPreview);
-        await reportFailure(cause);
-        if (missed && sessionAliveRef.current) void refresh().catch(() => false);
+        const placement =
+          command.kind === 'move-nodes' || command.kind === 'apply-automatic-layout';
+        await reportFailure(cause, placement);
+        if (missed && !placement && sessionAliveRef.current) void refresh().catch(() => false);
         return { applied: false };
       }
       if (!changesCanvasPreview) {

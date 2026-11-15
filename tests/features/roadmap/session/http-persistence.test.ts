@@ -89,8 +89,12 @@ const executions: Record<string, Execution> = {
         },
       ],
       [
-        '/nodes/node-2',
-        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 10, positionY: 140 }) },
+        '/placement',
+        {
+          method: 'PATCH',
+          headers: json,
+          body: JSON.stringify({ positions: [{ nodeId: 'node-2', position: { x: 10, y: 140 } }] }),
+        },
       ],
     ],
     response: { node: { id: 'node-9' } },
@@ -109,7 +113,7 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'move Nodes, one change per Node': {
+  'save a complete Node movement in one request': {
     command: {
       kind: 'move-nodes',
       positions: [
@@ -119,12 +123,17 @@ const executions: Record<string, Execution> = {
     },
     requests: [
       [
-        '/nodes/node-1',
-        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 30, positionY: 40 }) },
-      ],
-      [
-        '/nodes/node-2',
-        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 50, positionY: 60 }) },
+        '/placement',
+        {
+          method: 'PATCH',
+          headers: json,
+          body: JSON.stringify({
+            positions: [
+              { nodeId: 'node-1', position: { x: 30, y: 40 } },
+              { nodeId: 'node-2', position: { x: 50, y: 60 } },
+            ],
+          }),
+        },
       ],
     ],
   },
@@ -139,8 +148,12 @@ const executions: Record<string, Execution> = {
     },
     requests: [
       [
-        '/nodes/node-1',
-        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 0, positionY: 200 }) },
+        '/placement',
+        {
+          method: 'PATCH',
+          headers: json,
+          body: JSON.stringify({ positions: [{ nodeId: 'node-1', position: { x: 0, y: 200 } }] }),
+        },
       ],
     ],
   },
@@ -541,11 +554,9 @@ test.each([
   await expect(call()).rejects.toThrow('El roadmap está cerrado.');
 });
 
-test('a batch with one failing item still sends the others and rethrows the failure', async () => {
-  const fetchMock = vi.fn(async (url: string) =>
-    url.endsWith('/node-1')
-      ? Response.json({ error: { message: 'El nodo no existe.' } }, { status: 404 })
-      : new Response(null, { status: 204 }),
+test('a rejected complete placement returns its failure from one request', async () => {
+  const fetchMock = vi.fn(async () =>
+    Response.json({ error: { message: 'El nodo no existe.' } }, { status: 404 }),
   );
   vi.stubGlobal('fetch', fetchMock);
 
@@ -559,10 +570,10 @@ test('a batch with one failing item still sends the others and rethrows the fail
     }),
   ).rejects.toThrow('El nodo no existe.');
 
-  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-    api('/nodes/node-1'),
-    api('/nodes/node-2'),
-  ]);
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+    api('/placement'),
+    expect.objectContaining({ method: 'PATCH' }),
+  );
 });
 
 test('a Resource access survives navigation and only a Link needs the client to report it', async () => {
@@ -598,4 +609,10 @@ test('a refused Resource access is not reported as recorded', async () => {
   await expect(
     http.recordResourceAccess({ id: 'link-1', type: 'LINK' }, 'roadmap'),
   ).rejects.toThrow('No se pudo registrar el acceso al recurso.');
+});
+
+test('an empty movement makes no transport submission', async () => {
+  const fetchMock = respondWith();
+  await http.execute({ kind: 'move-nodes', positions: [] });
+  expect(fetchMock).not.toHaveBeenCalled();
 });
