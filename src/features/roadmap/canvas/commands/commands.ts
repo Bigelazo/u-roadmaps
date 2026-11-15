@@ -16,7 +16,6 @@ import type {
   ResourceInput,
 } from '@/features/roadmap/editor/types';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
-import { nodesDisplacedByNewNode } from '@/features/roadmap/graph/node-collisions';
 import type { PracticeRoadmap } from '@/features/roadmap/session/in-memory-persistence';
 import type {
   ExecutionResult,
@@ -638,52 +637,24 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Nodos ordenados exitosamente.',
   }),
-  'add-node': command<{ kind: 'add-node'; node: NewRoadmapNode } & NewNodePlacement>({
-    requests: ({ node, position, displaced }) => [
-      {
-        method: 'POST',
-        path: '/nodes',
-        body: {
-          ...node,
-          description: node.description || null,
-          positionX: position.x,
-          positionY: position.y,
-        },
+  'add-node': command<
+    { kind: 'add-node'; nodeId: string; node: NewRoadmapNode } & NewNodePlacement
+  >({
+    requests: ({ nodeId, node, position, displaced }) => ({
+      method: 'POST',
+      path: '/nodes',
+      body: {
+        nodeId,
+        ...node,
+        description: node.description || null,
+        positionX: position.x,
+        positionY: position.y,
+        displaced,
       },
-      ...nodeMoves.requests({ positions: displaced }),
-    ],
+    }),
     failure: 'No se pudo crear el nodo.',
     result: async ([response]) => ({ createdNodeId: (await response.json()).node.id }),
-    practice: (practice, { node, position: requested }) => {
-      practice.requireAvailableNodeType(node.nodeTypeId);
-      const id = crypto.randomUUID();
-      const position = practice.createdNodePosition ?? requested;
-      nodeMoves.practice(practice, {
-        positions: nodesDisplacedByNewNode(
-          practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
-            id,
-            title,
-            position: { x: positionX, y: positionY },
-          })),
-          { id, title: node.title, position },
-        ),
-      });
-      practice.updateNodes((nodes) => [
-        ...nodes,
-        {
-          id,
-          title: node.title,
-          description: node.description || null,
-          nodeTypeId: node.nodeTypeId,
-          positionX: position.x,
-          positionY: position.y,
-          isVisible: node.isVisible,
-          isTeacherBlocked: false,
-          resources: [],
-        },
-      ]);
-      return { createdNodeId: id };
-    },
+    practice: (practice, input) => practice.createNode(input),
     success: () => 'Nodo creado exitosamente.',
     report: (_, { createdNodeId }) =>
       createdNodeId ? { type: 'addNode', nodeId: createdNodeId } : null,

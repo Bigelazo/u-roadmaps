@@ -11,8 +11,15 @@ import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
 import { closeToast, findToast, queryToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
 
-beforeEach(() => mockViewport(640));
+const graphPlacement = vi.hoisted(() => ({ x: 480, y: 240 }));
+
+beforeEach(() => {
+  mockViewport(640);
+  graphPlacement.x = 480;
+  graphPlacement.y = 240;
+});
 afterAll(() => vi.unstubAllGlobals());
 
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
@@ -48,7 +55,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   }) => (
     <>
       {bottomLeftActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
-      {bottomRightActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
+      {bottomRightActions?.(() => ({ position: { ...graphPlacement }, displaced: [] }))}
       <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
       <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
@@ -511,6 +518,40 @@ describe('RoadmapCanvasSession', () => {
     await waitFor(async () =>
       expect((await persistence.load()).nodeTypes.map(({ name }) => name)).toEqual(['Contenido']),
     );
+  });
+
+  test('retains one creation identity and its original placement until confirmed, then allocates a new identity', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    const execute = persistence.execute.bind(persistence);
+    const attempts: Extract<CanvasCommand, { kind: 'add-node' }>[] = [];
+    persistence.execute = async (command, version) => {
+      if (command.kind === 'add-node') {
+        attempts.push(structuredClone(command));
+        if (attempts.length === 1) throw new Error('Response unavailable');
+      }
+      return execute(command, version);
+    };
+    renderSession(persistence);
+    await user.click(await screen.findByRole('button', { name: 'Crear en el mapa' }));
+    await user.click(await screen.findByText('Crear nodo'));
+    await user.type(screen.getByLabelText('Título'), 'Derivadas');
+    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
+    await screen.findByText('No se pudo crear el nodo. Tu borrador se mantiene; intenta de nuevo.');
+    expect(attempts[0].nodeId).toEqual(expect.any(String));
+    graphPlacement.x = 800;
+    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Crear nodo' })).toBeNull());
+    expect(attempts[1]).toEqual(attempts[0]);
+    expect((await persistence.load()).nodes).toContainEqual(
+      expect.objectContaining({ id: attempts[0].nodeId, title: 'Derivadas', positionX: 480 }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Crear en el mapa' }));
+    await user.click(await screen.findByText('Crear nodo'));
+    await user.type(screen.getByLabelText('Título'), 'Integrales');
+    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
+    await waitFor(() => expect(attempts).toHaveLength(3));
+    expect(attempts[2].nodeId).not.toBe(attempts[0].nodeId);
   });
 });
 

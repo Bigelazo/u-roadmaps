@@ -208,6 +208,7 @@ describe('canvas commands', () => {
     act(() => {
       request = canvas.commands().request({
         kind: 'add-node',
+        nodeId: crypto.randomUUID(),
         node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
         position: { x: 480, y: 240 },
         displaced: [],
@@ -242,6 +243,7 @@ describe('canvas commands', () => {
     act(() => {
       request = canvas.commands().request({
         kind: 'add-node',
+        nodeId: crypto.randomUUID(),
         node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
         position: { x: 480, y: 240 },
         displaced: [],
@@ -1310,6 +1312,7 @@ describe('canvas commands', () => {
         'creating a Node',
         {
           kind: 'add-node',
+          nodeId: crypto.randomUUID(),
           node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
           position: { x: 480, y: 240 },
           displaced: [],
@@ -1448,6 +1451,7 @@ describe('canvas commands', () => {
       const canvas = await openCanvas();
       const command = {
         kind: 'add-node',
+        nodeId: crypto.randomUUID(),
         node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
         position: { x: 480, y: 240 },
         displaced: [],

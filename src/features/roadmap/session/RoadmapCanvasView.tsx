@@ -381,6 +381,7 @@ function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
 
 export function RoadmapCanvasView({ input }: Props) {
   const model = useRoadmapCanvasController({ input });
+  const pendingCreationRef = useRef<Extract<CanvasCommand, { kind: 'add-node' }> | null>(null);
   const {
     canvasFocusRef,
     selectedNodeId,
@@ -412,13 +413,20 @@ export function RoadmapCanvasView({ input }: Props) {
     placeNewNode: (title: string) => NewNodePlacement,
     onProgress: (progress: NodeCreationProgress) => void,
   ) => {
+    const creation = (pendingCreationRef.current ??= structuredClone({
+      kind: 'add-node',
+      nodeId: crypto.randomUUID(),
+      node,
+      ...placeNewNode(node.title),
+    }));
     const outcome = await createNodeWithResources(
       canvasCommands.run,
-      { kind: 'add-node', node, ...placeNewNode(node.title) },
+      creation,
       resources,
       onProgress,
     );
     if (!outcome) return false;
+    pendingCreationRef.current = null;
     const summary = nodeCreationSummary(resources.length, outcome.failed);
     if (summary?.tone === 'error') {
       dismissError();

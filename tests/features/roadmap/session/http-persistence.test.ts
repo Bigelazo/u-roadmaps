@@ -68,6 +68,7 @@ const executions: Record<string, Execution> = {
   'add a Node, move the Nodes it pushed aside and resolve with its identifier': {
     command: {
       kind: 'add-node',
+      nodeId: 'node-9',
       node: { title: 'Límites', description: '', nodeTypeId: 'content', isVisible: true },
       position: { x: 10, y: 20 },
       displaced: [{ nodeId: 'node-2', position: { x: 10, y: 140 } }],
@@ -79,21 +80,15 @@ const executions: Record<string, Execution> = {
           method: 'POST',
           headers: json,
           body: JSON.stringify({
+            nodeId: 'node-9',
             title: 'Límites',
             description: null,
             nodeTypeId: 'content',
             isVisible: true,
             positionX: 10,
             positionY: 20,
+            displaced: [{ nodeId: 'node-2', position: { x: 10, y: 140 } }],
           }),
-        },
-      ],
-      [
-        '/placement',
-        {
-          method: 'PATCH',
-          headers: json,
-          body: JSON.stringify({ positions: [{ nodeId: 'node-2', position: { x: 10, y: 140 } }] }),
         },
       ],
     ],

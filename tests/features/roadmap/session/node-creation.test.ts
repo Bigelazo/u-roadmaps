@@ -8,6 +8,7 @@ import {
 
 const addNode: Extract<CanvasCommand, { kind: 'add-node' }> = {
   kind: 'add-node',
+  nodeId: crypto.randomUUID(),
   node: { title: 'Límites', description: '', nodeTypeId: 'content', isVisible: true },
   position: { x: 0, y: 0 },
   displaced: [],
