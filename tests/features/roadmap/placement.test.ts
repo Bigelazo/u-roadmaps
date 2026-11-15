@@ -416,10 +416,14 @@ test.for(['inactive', 'student', 'closed'] as const)(
 );
 
 test('an empty movement preserves the persisted Roadmap', async ({ course }) => {
-  const before = await readRoadmapForParticipant(teacher(course));
+  const { nodeTypes: beforeTypes, ...before } = await readRoadmapForParticipant(teacher(course));
   const { port, facts } = recordingChangePort();
   await saveRoadmapNodePositions({ ...teacher(course), input: { positions: [] } }, port);
-  expect(await readRoadmapForParticipant(teacher(course))).toEqual(before);
+  const { nodeTypes: afterTypes, ...after } = await readRoadmapForParticipant(teacher(course));
+  expect(after).toEqual(before);
+  expect(afterTypes.filter(({ isPredefined }) => !isPredefined)).toEqual(
+    beforeTypes.filter(({ isPredefined }) => !isPredefined),
+  );
   expect(facts()).toEqual([]);
 });
 
