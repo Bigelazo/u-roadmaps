@@ -262,10 +262,8 @@ test('orders every Node vertically or horizontally and keeps the chosen position
     ['Vertical', 'positionY'],
   ] as const) {
     await page.getByRole('button', { name: 'Ordenar', exact: true }).click();
-    const dialog = page.getByRole('alertdialog', { name: '¿Ordenar los nodos automáticamente?' });
-    await expect(dialog).toContainText(
-      'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
-    );
+    const dialog = page.getByRole('alertdialog', { name: '¿Ordenar los nodos?' });
+    await expect(dialog).toContainText('Todos los nodos cambiarán de posición.');
     await dialog.getByRole('button', { name: choice }).click();
     await expect(dialog).toHaveCount(0);
     await expect(toast(page, 'Nodos ordenados exitosamente.').first()).toBeVisible();

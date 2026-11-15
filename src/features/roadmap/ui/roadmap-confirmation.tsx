@@ -92,9 +92,8 @@ function roadmapNodeName(
 }
 
 export const roadmapAutoLayoutConfirmation = {
-  title: '¿Ordenar los nodos automáticamente?',
-  description:
-    'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
+  title: '¿Ordenar los nodos?',
+  description: 'Todos los nodos cambiarán de posición.',
   intent: 'warning',
   actions: [
     { id: canvasConfirmationChoices.autoLayoutVertical, label: 'Vertical', emphasis: 'primary' },

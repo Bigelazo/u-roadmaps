@@ -1,5 +1,6 @@
 'use client';
 
+import { nodeTypePaint } from '@/shared/node-type';
 import { type ReactNode } from 'react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { NodeType } from '@/features/roadmap/types';
@@ -29,51 +30,46 @@ export function NodePanelHeader({
   isSidebar = false,
 }: Props) {
   const Header = isSidebar ? SidebarHeader : 'header';
+  const Title = isModal ? SheetTitle : 'h2';
 
   return (
     <Header
       className={cn(
-        'shrink-0 border-b border-border px-6 pt-4 pb-6',
-        isSidebar && 'shrink-0 p-0 px-6 pt-4 pb-6',
+        'sticky top-0 z-10 shrink-0 border-b border-border bg-card px-6 py-2.5',
+        isSidebar && 'gap-0 p-0 px-6 py-2.5',
       )}
     >
       <div className="flex min-h-11 items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-xs font-bold tracking-[1.2px] text-primary uppercase max-sm:sr-only">
-          Nodo seleccionado
-        </p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {nodeType ? (
+            <NodeTypeIcon
+              icon={nodeType.icon}
+              data-testid={iconTestId}
+              className="size-5 shrink-0"
+              style={{ color: nodeTypePaint(nodeType.color) }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="truncate text-[0.6875rem] leading-4 font-bold tracking-[1.2px] text-primary uppercase max-sm:sr-only">
+              Nodo seleccionado
+            </p>
+            <Title
+              id={headingId}
+              title={title}
+              className="line-clamp-2 min-w-0 font-heading text-lg leading-snug font-semibold tracking-[-0.02em] wrap-break-word"
+            >
+              {title}
+            </Title>
+          </div>
+        </div>
         <div
-          className="ml-auto flex shrink-0 items-center justify-end gap-1"
+          className="flex shrink-0 items-center justify-end gap-1"
           role="group"
           aria-label="Acciones del nodo"
         >
           {actions}
         </div>
-      </div>
-      <div className="mt-2 flex min-w-0 items-start gap-3">
-        {nodeType ? (
-          <NodeTypeIcon
-            icon={nodeType.icon}
-            data-testid={iconTestId}
-            className="mt-1 size-5 shrink-0"
-            style={{ color: nodeType.color }}
-            aria-hidden="true"
-          />
-        ) : null}
-        {isModal ? (
-          <SheetTitle
-            id={headingId}
-            className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word"
-          >
-            {title}
-          </SheetTitle>
-        ) : (
-          <h2
-            id={headingId}
-            className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word"
-          >
-            {title}
-          </h2>
-        )}
       </div>
       {footer}
     </Header>

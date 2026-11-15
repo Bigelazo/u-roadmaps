@@ -1,3 +1,4 @@
+import { nodeTypePaint } from '@/shared/node-type';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
@@ -129,7 +130,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
     });
     const markup = renderToStaticMarkup(confirmation.title);
     expect(markup).toContain('data-slot="node-name"');
-    expect(markup).toContain('color:#024AD8');
+    expect(markup).toContain(`color:${nodeTypePaint('#024AD8')}`);
     expect(markup).not.toMatch(/[“”«»"]Funciones/);
   });
 
@@ -524,9 +525,8 @@ describe('canvasConfirmation', () => {
         roadmap,
       ),
     ).toMatchObject({
-      title: '¿Ordenar los nodos automáticamente?',
-      description:
-        'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
+      title: '¿Ordenar los nodos?',
+      description: 'Todos los nodos cambiarán de posición.',
       intent: 'warning',
       actions: [
         { id: 'auto-layout-vertical', label: 'Vertical' },
