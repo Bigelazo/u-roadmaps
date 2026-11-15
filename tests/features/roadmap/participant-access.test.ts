@@ -58,6 +58,48 @@ test('reads one participant’s accessible Nodes in each Roadmap where their Par
   expect(await read(course.studentId)).toEqual(new Map());
 });
 
+test('each Roadmap’s access follows only its own Dependencies', async ({ course, otherCourse }) => {
+  const offering = await prisma.courseOffering.findFirstOrThrow({
+    where: { roadmap: { id: otherCourse.roadmapId } },
+    select: { id: true },
+  });
+  await prisma.participation.create({
+    data: { userId: course.studentId, courseOfferingId: offering.id, role: 'STUDENT' },
+  });
+  const first = course.change.nodeId;
+  const dependent = await addNode(course, 'Pilas');
+  const otherFirst = otherCourse.change.nodeId;
+  const otherDependent = await addNode(otherCourse, 'Grafos');
+  await prisma.dependency.createMany({
+    data: [
+      { sourceNodeId: first, targetNodeId: dependent.id },
+      { sourceNodeId: otherFirst, targetNodeId: otherDependent.id },
+    ],
+  });
+  const read = () =>
+    prisma.$transaction((tx) =>
+      readParticipantAccess(tx, {
+        userId: course.studentId,
+        roadmapIds: [course.roadmapId, otherCourse.roadmapId],
+      }),
+    );
+
+  expect(await read()).toEqual(
+    new Map([
+      [course.roadmapId, new Set([first])],
+      [otherCourse.roadmapId, new Set([otherFirst])],
+    ]),
+  );
+
+  await prisma.completion.create({ data: { userId: course.studentId, roadmapNodeId: otherFirst } });
+  expect(await read()).toEqual(
+    new Map([
+      [course.roadmapId, new Set([first])],
+      [otherCourse.roadmapId, new Set([otherFirst, otherDependent.id])],
+    ]),
+  );
+});
+
 test('a student reaches a Node’s Resources only with the access Completion requires', async ({
   course,
 }) => {
