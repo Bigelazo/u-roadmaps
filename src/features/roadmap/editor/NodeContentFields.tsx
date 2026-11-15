@@ -16,6 +16,7 @@ type FieldProps = {
   idPrefix: string;
   value: NodeContent;
   onChange: (patch: Partial<NodeContent>) => void;
+  disabled?: boolean;
 };
 
 export function NodeTitleField({
@@ -70,6 +71,7 @@ export function NodeDescriptionField({
   onChange,
   placeholder,
   action,
+  disabled,
 }: FieldProps & { placeholder?: string; action?: ReactNode }) {
   const label = (
     <FieldLabel
@@ -96,6 +98,7 @@ export function NodeDescriptionField({
         aria-describedby={`${idPrefix}-description-help`}
         placeholder={placeholder}
         value={value.description}
+        disabled={disabled}
         onValueChange={(description) => onChange({ description })}
       />
       <FieldDescription id={`${idPrefix}-description-help`} className="flex items-start gap-1.5">

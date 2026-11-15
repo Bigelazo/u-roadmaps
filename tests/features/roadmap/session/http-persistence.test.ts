@@ -611,3 +611,56 @@ test('an empty movement makes no transport submission', async () => {
   await http.execute({ kind: 'move-nodes', positions: [] });
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+test('a lost creation response is uncertain rather than a confirmed rejection', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Connection interrupted')));
+  const { command } =
+    executions['add a Node, move the Nodes it pushed aside and resolve with its identifier'];
+  await expect(http.execute(command)).rejects.toMatchObject({ name: 'UncertainNodeCreationError' });
+});
+
+test.each([{}, { node: {} }, { node: { id: 'another-node' } }])(
+  'an unreadable or mismatched creation result %j remains uncertain',
+  async (response) => {
+    respondWith(response);
+    const { command } =
+      executions['add a Node, move the Nodes it pushed aside and resolve with its identifier'];
+    await expect(http.execute(command)).rejects.toMatchObject({
+      name: 'UncertainNodeCreationError',
+    });
+  },
+);
+
+test('a creation response with invalid JSON remains uncertain', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{', { status: 201 })),
+  );
+  const { command } =
+    executions['add a Node, move the Nodes it pushed aside and resolve with its identifier'];
+  await expect(http.execute(command)).rejects.toMatchObject({ name: 'UncertainNodeCreationError' });
+});
+
+test('a structured server rejection definitively rejects creation', async () => {
+  refuseWith(400, { message: 'El tipo no existe.', code: 'INVALID_REQUEST' });
+  const { command } =
+    executions['add a Node, move the Nodes it pushed aside and resolve with its identifier'];
+  await expect(http.execute(command)).rejects.toMatchObject({
+    name: 'Error',
+    message: 'El tipo no existe.',
+  });
+});
+
+test('an unrecognized failed creation response cannot prove rollback', async () => {
+  refuseWith(502);
+  const { command } =
+    executions['add a Node, move the Nodes it pushed aside and resolve with its identifier'];
+  await expect(http.execute(command)).rejects.toMatchObject({ name: 'UncertainNodeCreationError' });
+});
+
+test('a failed creation response without the application error code cannot prove rollback', async () => {
+  refuseWith(502, { message: 'Gateway unavailable' });
+  const { command } =
+    executions['add a Node, move the Nodes it pushed aside and resolve with its identifier'];
+  await expect(http.execute(command)).rejects.toMatchObject({ name: 'UncertainNodeCreationError' });
+});

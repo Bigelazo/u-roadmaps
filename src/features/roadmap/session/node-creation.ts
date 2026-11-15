@@ -30,16 +30,19 @@ export async function createNodeWithResources(
   addNode: AddNodeCommand,
   resources: readonly StagedResource[],
   onProgress?: (progress: NodeCreationProgress) => void,
+  isActive: () => boolean = () => true,
 ): Promise<NodeCreationOutcome | null> {
   const created = await run(addNode, { announce: resources.length === 0 });
-  if (!created.applied) return null;
+  if (!created.applied || !isActive()) return null;
   const nodeId = created.createdNodeId ?? null;
   if (!nodeId) return { nodeId, failed: resources };
   const failed: StagedResource[] = [];
   for (const [index, resource] of resources.entries()) {
+    if (!isActive()) return null;
     onProgress?.({ current: index + 1, total: resources.length });
-    const { applied } = await run(resourceCommand(nodeId, resource), { announce: false });
-    if (!applied) failed.push(resource);
+    const result = await run(resourceCommand(nodeId, resource), { announce: false });
+    if (result.sessionEnded || !isActive()) return null;
+    if (!result.applied) failed.push(resource);
   }
   return { nodeId, failed };
 }

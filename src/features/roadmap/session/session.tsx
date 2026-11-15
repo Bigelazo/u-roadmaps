@@ -41,6 +41,11 @@ import {
 } from '@/features/roadmap/session/change-signal';
 
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
+import {
+  UncertainNodeCreationError,
+  uncertainCreationMessage,
+  type PlacementRecovery,
+} from './placement-recovery';
 
 const persistenceContext = createContext<RoadmapCanvasSessionPersistence | null>(null);
 
@@ -149,6 +154,9 @@ type RoadmapCanvasSessionState = {
   roadmap: AnyRoadmapDto | null;
   canvasPreviewRoadmap: StudentRoadmapDto | null;
   error: string | null;
+  placementRecovery: PlacementRecovery | null;
+  recoverPlacement: () => Promise<boolean>;
+  isActive: () => boolean;
   dismissError: () => void;
   accessLost: boolean;
   isClosed: boolean;
@@ -171,7 +179,11 @@ function useInjectedSession(
   const [isClosed, setIsClosed] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [placementRecovery, setPlacementRecovery] = useState<PlacementRecovery | null>(null);
   const sessionAliveRef = useRef(true);
+  const isActive = useCallback(() => sessionAliveRef.current, []);
+  const authoritativeRoadmapRef = useRef<AnyRoadmapDto | null>(null);
+  const uncertainCreationRef = useRef<Extract<PlacementCommand, { kind: 'add-node' }> | null>(null);
   const placementFailureRef = useRef<string | null>(null);
   const placementsRef = useRef<{ pending: PendingPlacement[]; running: boolean; blocked: boolean }>(
     { pending: [], running: false, blocked: false },
@@ -210,9 +222,21 @@ function useInjectedSession(
           return false;
         }
         if (applyProjection) {
+          authoritativeRoadmapRef.current = loadedRoadmap;
           setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
-          if (placementsRef.current.blocked) {
+          const uncertain = uncertainCreationRef.current;
+          if (uncertain) {
+            const found = loadedRoadmap.nodes.some((node) => node.id === uncertain.nodeId);
+            placementsRef.current.blocked = true;
+            setPlacementRecovery({
+              kind: found ? 'recovered-creation' : 'uncertain-creation',
+              message: found
+                ? 'El nodo está guardado. Continúa para finalizar esta creación.'
+                : uncertainCreationMessage,
+            });
+          } else if (placementsRef.current.blocked) {
             placementsRef.current.blocked = false;
+            setPlacementRecovery(null);
             setError(placementFailureRef.current);
           }
         }
@@ -296,6 +320,7 @@ function useInjectedSession(
     void loadRoadmap().then(
       (loadedRoadmap) => {
         if (requestVersion !== requestVersionRef.current) return;
+        authoritativeRoadmapRef.current = loadedRoadmap;
         setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
       },
       (cause: unknown) => {
@@ -328,14 +353,23 @@ function useInjectedSession(
       const sessionEndedBeforeFailureRefresh = !sessionAliveRef.current;
       if (sessionEndedBeforeFailureRefresh) return;
       if (cause instanceof RoadmapClosedError) setIsClosed(true);
-      if (placement) placementFailureRef.current = messageFor(cause, genericFailure);
+      if (placement) {
+        placementFailureRef.current = messageFor(cause, genericFailure);
+        setPlacementRecovery({
+          kind: 'unsynchronized',
+          message: `${placementFailureRef.current} Sincronizando el canvas con el roadmap guardado…`,
+        });
+      }
       if (placement || cause instanceof RoadmapClosedError) {
         try {
           const recovered = await refresh();
           if (placement && recovered) placementsRef.current.blocked = false;
         } catch {
-          if (sessionAliveRef.current)
-            setError(unsynchronizedPlacement(messageFor(cause, genericFailure)));
+          if (sessionAliveRef.current) {
+            const message = unsynchronizedPlacement(messageFor(cause, genericFailure));
+            setPlacementRecovery({ kind: 'unsynchronized', message });
+            setError(message);
+          }
           return;
         }
       }
@@ -402,12 +436,21 @@ function useInjectedSession(
       if (!changesCanvasPreview) echo.executing += 1;
       let result: ExecutionResult | void;
       try {
-        result = await persistence.execute(command, previewVersion);
+        const recoveredCreation =
+          command.kind === 'add-node' &&
+          uncertainCreationRef.current?.nodeId === command.nodeId &&
+          authoritativeRoadmapRef.current?.nodes.some((node) => node.id === command.nodeId);
+        result = recoveredCreation
+          ? { createdNodeId: command.nodeId }
+          : await persistence.execute(command, previewVersion);
         if (placement) {
           placementsRef.current.pending = placementsRef.current.pending.filter(
             (pending) => pending !== placement,
           );
           placementFailureRef.current = null;
+          if (command.kind === 'add-node') uncertainCreationRef.current = null;
+          placementsRef.current.blocked = false;
+          if (sessionAliveRef.current) setPlacementRecovery(null);
         }
       } catch (cause) {
         if (placement) {
@@ -419,17 +462,46 @@ function useInjectedSession(
             if (pending !== placement) pending.resolve({ applied: false });
         }
         const missed = settleOwnCommand(echo, !changesCanvasPreview);
+        if (
+          command.kind === 'add-node' &&
+          (cause instanceof UncertainNodeCreationError ||
+            uncertainCreationRef.current?.nodeId === command.nodeId)
+        ) {
+          if (!sessionAliveRef.current) return { applied: false, sessionEnded: true };
+          uncertainCreationRef.current = command;
+          placementFailureRef.current = uncertainCreationMessage;
+          setPlacementRecovery({ kind: 'uncertain-creation', message: uncertainCreationMessage });
+          const recovered = await refresh().catch(() => false);
+          if (
+            recovered &&
+            sessionAliveRef.current &&
+            authoritativeRoadmapRef.current?.nodes.some((node) => node.id === command.nodeId)
+          ) {
+            uncertainCreationRef.current = null;
+            placementsRef.current.blocked = false;
+            placementFailureRef.current = null;
+            setPlacementRecovery(null);
+            setError(null);
+            return { applied: true, createdNodeId: command.nodeId };
+          }
+          if (sessionAliveRef.current) setError(uncertainCreationMessage);
+          return sessionAliveRef.current
+            ? { applied: false, creationUncertain: true }
+            : { applied: false, sessionEnded: true };
+        }
         const failedPlacement = isPlacement(command);
         await reportFailure(cause, failedPlacement);
         if (missed && !failedPlacement && sessionAliveRef.current)
           void refresh().catch(() => false);
-        return { applied: false };
+        return sessionAliveRef.current
+          ? { applied: false }
+          : { applied: false, sessionEnded: true };
       }
       if (!changesCanvasPreview) {
         settleOwnCommand(echo, true);
         if (echo.heard === heard) echo.expectedUntil = Date.now() + OWN_ECHO_WINDOW_MS;
       }
-      if (!sessionAliveRef.current) return { applied: false };
+      if (!sessionAliveRef.current) return { applied: false, sessionEnded: true };
       const refreshed = () =>
         refresh().then(
           () => {
@@ -441,7 +513,19 @@ function useInjectedSession(
               setError(null);
           },
           (cause: unknown) => {
-            if (sessionAliveRef.current) setError(messageFor(cause, refreshFailure));
+            if (sessionAliveRef.current) {
+              setError(messageFor(cause, refreshFailure));
+              if (placement) {
+                placementsRef.current.blocked = true;
+                const discarded = placementsRef.current.pending;
+                placementsRef.current.pending = [];
+                for (const pending of discarded) pending.resolve({ applied: false });
+                setPlacementRecovery({
+                  kind: 'unsynchronized',
+                  message: unsynchronizedPlacement(refreshFailure),
+                });
+              }
+            }
           },
         );
       const update = entry.shownBeforeRefresh?.(command, result ?? {});
@@ -453,19 +537,25 @@ function useInjectedSession(
       const sessionAliveToAnnounceAppliedCommand = sessionAliveRef.current;
       const applied = sessionAliveToAnnounceAppliedCommand;
       if (applied && changesCanvasPreview) await loadCanvasPreview();
-      return { applied, ...result };
+      return { applied, ...result, ...(applied ? {} : { sessionEnded: true }) };
     },
     [loadCanvasPreview, persistence, refresh, reportFailure],
   );
 
   const execute = useCallback<CanvasCommandSession['execute']>(
     (command, previewVersion) => {
-      if (!sessionAliveRef.current) return Promise.resolve({ applied: false });
+      if (!sessionAliveRef.current) return Promise.resolve({ applied: false, sessionEnded: true });
       if (!isPlacement(command)) return executeCommand(command, previewVersion);
-      if (placementsRef.current.blocked) return Promise.resolve({ applied: false });
+      const retained = uncertainCreationRef.current;
+      const resending = command.kind === 'add-node' && retained?.nodeId === command.nodeId;
+      if (placementsRef.current.blocked && !resending) return Promise.resolve({ applied: false });
       return new Promise<PlacementOutcome>((resolve) => {
         const placements = placementsRef.current;
-        placements.pending.push({ command, previewVersion, resolve });
+        placements.pending.push({
+          command: resending ? retained : command,
+          previewVersion,
+          resolve,
+        });
         setRoadmap((current) =>
           current ? projectPlacements(current, placements.pending) : current,
         );
@@ -495,6 +585,9 @@ function useInjectedSession(
       roadmap,
       canvasPreviewRoadmap,
       error,
+      placementRecovery,
+      recoverPlacement: () => refresh().catch(() => false),
+      isActive,
       dismissError,
       accessLost,
       isClosed:

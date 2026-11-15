@@ -1,4 +1,5 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
+import { UncertainNodeCreationError } from './placement-recovery';
 import { roadmapUrl } from '@/features/roadmap/client';
 import {
   canvasCommandCatalog,
@@ -14,9 +15,10 @@ type RequestOptions = {
   readonly previewHeader?: string;
   readonly previewVersion?: string;
   readonly load?: 'roadmap' | 'canvas-preview';
+  readonly creation?: boolean;
 };
 
-async function failureError(response: Response, failure: string) {
+async function failureError(response: Response, failure: string, creation = false) {
   try {
     const body: unknown = await response.json();
     if (
@@ -28,13 +30,15 @@ async function failureError(response: Response, failure: string) {
       'message' in body.error &&
       typeof body.error.message === 'string'
     ) {
+      if (creation && (!('code' in body.error) || typeof body.error.code !== 'string'))
+        return new UncertainNodeCreationError();
       return 'code' in body.error && body.error.code === 'ROADMAP_CLOSED'
         ? new RoadmapClosedError(body.error.message)
         : new Error(body.error.message);
     }
     // eslint-disable-next-line no-empty -- Keep the user-facing failure message when a route has no JSON error body.
   } catch {}
-  return new Error(failure);
+  return creation ? new UncertainNodeCreationError() : new Error(failure);
 }
 
 export function createHttpRoadmapCanvasSessionPersistence(
@@ -43,21 +47,27 @@ export function createHttpRoadmapCanvasSessionPersistence(
   async function request(
     { method, path, body }: RouteRequest,
     failure: string,
-    { previewHeader, previewVersion, load }: RequestOptions = {},
+    { previewHeader, previewVersion, load, creation }: RequestOptions = {},
   ) {
     const json = body !== undefined && !(body instanceof FormData);
     const headers = {
       ...(json && { 'Content-Type': 'application/json' }),
       ...(previewHeader && previewVersion ? { [previewHeader]: previewVersion } : {}),
     };
-    const response = await fetch(roadmapUrl(identifier, path), {
-      ...(method && { method }),
-      ...(load && { cache: 'no-store' }),
-      ...(Object.keys(headers).length > 0 && { headers }),
-      ...(body && { body: json ? JSON.stringify(body) : body }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(roadmapUrl(identifier, path), {
+        ...(method && { method }),
+        ...(load && { cache: 'no-store' }),
+        ...(Object.keys(headers).length > 0 && { headers }),
+        ...(body && { body: json ? JSON.stringify(body) : body }),
+      });
+    } catch (cause) {
+      if (creation) throw new UncertainNodeCreationError();
+      throw cause;
+    }
     if (!response.ok) {
-      const error = await failureError(response, failure);
+      const error = await failureError(response, failure, creation);
       if (load === 'roadmap' && [401, 403, 404].includes(response.status))
         throw new RoadmapAccessLostError(error.message);
       throw error;
@@ -98,7 +108,11 @@ export function createHttpRoadmapCanvasSessionPersistence(
 
     async execute(command, previewVersion) {
       const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
-      const options = { previewHeader: entry.previewHeader, previewVersion };
+      const options = {
+        previewHeader: entry.previewHeader,
+        previewVersion,
+        creation: command.kind === 'add-node',
+      };
       const sent = await Promise.allSettled(
         [entry.requests(command)].flat().map((item) => request(item, entry.failure, options)),
       );
@@ -106,7 +120,19 @@ export function createHttpRoadmapCanvasSessionPersistence(
         if (result.status === 'rejected') throw result.reason;
         return result.value;
       });
-      return entry.result?.(responses);
+      try {
+        const result = await entry.result?.(responses);
+        if (
+          command.kind === 'add-node' &&
+          result?.createdNodeId?.toLowerCase() !== command.nodeId.toLowerCase()
+        )
+          throw new UncertainNodeCreationError();
+        if (command.kind === 'add-node') return { ...result, createdNodeId: command.nodeId };
+        return result;
+      } catch (cause) {
+        if (command.kind === 'add-node') throw new UncertainNodeCreationError();
+        throw cause;
+      }
     },
   };
 }
