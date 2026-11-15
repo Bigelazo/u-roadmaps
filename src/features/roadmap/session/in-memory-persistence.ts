@@ -1,4 +1,5 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
+import { nodesDisplacedByNewNode } from '@/features/roadmap/graph/node-collisions';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
   hasUnreviewedResources,
@@ -27,8 +28,12 @@ import {
   canvasCommandCatalog,
   type AnyCommandEntry,
   type RoadmapNodePlacement,
+  type NewNodePlacement,
 } from '@/features/roadmap/canvas/commands/commands';
-import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
+import type {
+  NewRoadmapNode,
+  RoadmapCanvasSessionPersistence,
+} from '@/features/roadmap/session/types';
 
 function copy<T>(value: T): T {
   return structuredClone(value);
@@ -36,6 +41,23 @@ function copy<T>(value: T): T {
 
 type AnyRoadmapNode = AnyRoadmapDto['nodes'][number];
 type NodeDraft = { readonly id: string };
+
+function positionedNodes(nodes: AnyRoadmapNode[], positions: readonly RoadmapNodePlacement[]) {
+  const nodeIds = new Set(nodes.map(({ id }) => id));
+  const targets = new Map<string, RoadmapNodePlacement['position']>();
+  for (const { nodeId, position } of positions) {
+    if (typeof nodeId !== 'string' || !nodeId.trim() || targets.has(nodeId))
+      throw new Error('Cada nodo debe tener una identidad válida y única.');
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y))
+      throw new Error('La posición debe contener números finitos.');
+    if (!nodeIds.has(nodeId)) throw new Error('El nodo no existe en este roadmap.');
+    targets.set(nodeId, position);
+  }
+  return nodes.map((node) => {
+    const position = targets.get(node.id);
+    return position ? { ...node, positionX: position.x, positionY: position.y } : node;
+  });
+}
 
 type SimulatedProgress = {
   readonly completedNodeIds: Set<string>;
@@ -110,6 +132,9 @@ export type PracticeRoadmap = {
   requireAvailableNodeType(nodeTypeId: string): void;
   decideNodeType(change: NodeTypeChange): void;
   placeNodes(positions: readonly RoadmapNodePlacement[]): void;
+  createNode(input: NewNodePlacement & { nodeId: string; node: NewRoadmapNode }): {
+    createdNodeId: string;
+  };
 };
 
 export function createInMemoryRoadmapSessionPersistence(
@@ -231,23 +256,53 @@ export function createInMemoryRoadmapSessionPersistence(
     placeNodes(positions) {
       if (practice.roadmap.roadmap.closedAt)
         throw new Error('Este roadmap está cerrado y es de sólo lectura.');
-      const nodeIds = new Set(practice.roadmap.nodes.map(({ id }) => id));
-      const targets = new Map<string, RoadmapNodePlacement['position']>();
-      for (const { nodeId, position } of positions) {
-        if (typeof nodeId !== 'string' || !nodeId.trim() || targets.has(nodeId))
-          throw new Error('Cada nodo debe tener una identidad válida y única.');
-        if (!Number.isFinite(position.x) || !Number.isFinite(position.y))
-          throw new Error('La posición debe contener números finitos.');
-        if (!nodeIds.has(nodeId)) throw new Error('El nodo no existe en este roadmap.');
-        targets.set(nodeId, position);
-      }
-      if (!targets.size) return;
-      practice.updateNodes((nodes) =>
-        nodes.map((node) => {
-          const position = targets.get(node.id);
-          return position ? { ...node, positionX: position.x, positionY: position.y } : node;
-        }),
-      );
+      if (!positions.length) return;
+      practice.updateNodes((nodes) => positionedNodes(nodes, positions));
+    },
+
+    createNode({ nodeId, node, position: requested, displaced }) {
+      if (practice.roadmap.roadmap.closedAt)
+        throw new Error('Este roadmap está cerrado y es de sólo lectura.');
+      if (typeof nodeId !== 'string' || !nodeId.trim())
+        throw new Error('El nodo debe tener una identidad válida.');
+      if (practice.roadmap.nodes.some(({ id }) => id === nodeId)) return { createdNodeId: nodeId };
+      practice.requireAvailableNodeType(node.nodeTypeId);
+      if (typeof node.isVisible !== 'boolean')
+        throw new Error('La visibilidad debe ser un valor booleano.');
+      if (!node.title.trim() || node.title.trim().length > 240)
+        throw new Error('El título debe ser un texto no vacío de hasta 240 caracteres.');
+      if (node.description && !node.description.trim())
+        throw new Error('La descripción debe ser un texto no vacío.');
+      if (!Number.isFinite(requested.x) || !Number.isFinite(requested.y))
+        throw new Error('La posición debe contener números finitos.');
+      positionedNodes(practice.roadmap.nodes, displaced);
+      const position = practice.createdNodePosition ?? requested;
+      const positions = practice.createdNodePosition
+        ? nodesDisplacedByNewNode(
+            practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
+              id,
+              title,
+              position: { x: positionX, y: positionY },
+            })),
+            { id: nodeId, title: node.title, position },
+          )
+        : displaced;
+      const placed = positionedNodes(practice.roadmap.nodes, positions);
+      practice.updateNodes(() => [
+        ...placed,
+        {
+          id: nodeId,
+          title: node.title.trim(),
+          description: node.description || null,
+          nodeTypeId: node.nodeTypeId,
+          positionX: position.x,
+          positionY: position.y,
+          isVisible: node.isVisible,
+          isTeacherBlocked: false,
+          resources: [],
+        },
+      ]);
+      return { createdNodeId: nodeId };
     },
   };
 

@@ -2,10 +2,13 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ApplicationError } from '@/shared/errors/types';
 
-const { saveRoadmapNodePositions, requireAuthenticatedUser } = vi.hoisted(() => ({
-  saveRoadmapNodePositions: vi.fn(),
-  requireAuthenticatedUser: vi.fn(),
-}));
+const { createRoadmapNode, saveRoadmapNodePositions, requireAuthenticatedUser } = vi.hoisted(
+  () => ({
+    createRoadmapNode: vi.fn(),
+    saveRoadmapNodePositions: vi.fn(),
+    requireAuthenticatedUser: vi.fn(),
+  }),
+);
 
 vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 vi.mock('@/shared/server/db', async () => {
@@ -13,9 +16,10 @@ vi.mock('@/shared/server/db', async () => {
   return { Prisma: { PrismaClientKnownRequestError } };
 });
 vi.mock('@/app/_adapters/auth', () => ({ requireAuthenticatedUser }));
-vi.mock('@/features/roadmap/server', () => ({ saveRoadmapNodePositions }));
+vi.mock('@/features/roadmap/server', () => ({ createRoadmapNode, saveRoadmapNodePositions }));
 
 import { PATCH } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/placement/route';
+import { POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/nodes/route';
 
 const positions = [
   { nodeId: '19ae313e-9c5f-4d20-a3ee-fd0d51738a73', position: { x: 40, y: 240 } },
@@ -84,4 +88,29 @@ test('an unauthenticated participant cannot submit placement', async () => {
   const response = await PATCH(request({ positions }), context as never);
   expect(response.status).toBe(401);
   expect(saveRoadmapNodePositions).not.toHaveBeenCalled();
+});
+
+test('creation transports its retained identity and complete displacements through authenticated HTTP', async () => {
+  const input = {
+    nodeId: '43d60763-88a6-48fb-9471-3eaf21d508d2',
+    title: 'Límites',
+    description: null,
+    nodeTypeId: '4a1b1ef9-60c2-4421-aa18-e0378e82d186',
+    positionX: 40,
+    positionY: 80,
+    displaced: positions,
+  };
+  const node = { id: input.nodeId, title: input.title };
+  createRoadmapNode.mockResolvedValue(node);
+  const response = await POST(request(input), context as never);
+  expect(response.status).toBe(201);
+  expect(await response.json()).toEqual({ node });
+  expect(createRoadmapNode).toHaveBeenCalledExactlyOnceWith(
+    {
+      userId: 'teacher-id',
+      identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
+      input,
+    },
+    {},
+  );
 });
