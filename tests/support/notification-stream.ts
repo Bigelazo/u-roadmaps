@@ -1,6 +1,10 @@
+import {
+  NOTIFICATION_STREAM_LIFETIME_MS,
+  NOTIFICATION_STREAM_ROTATION_LEAD_MS,
+} from '@/features/notifications/contracts/notification-stream';
+
 const READY_LATENCY_MS = 50;
 const BROWSER_RETRY_MS = 3000;
-const SERVER_LIFETIME_MS = 5 * 60_000;
 
 export class SimulatedNotificationStream extends EventTarget {
   static instances: SimulatedNotificationStream[] = [];
@@ -55,7 +59,12 @@ export class SimulatedNotificationStream extends EventTarget {
       if (session !== this.session || this.closed) return;
       this.readyState = 1;
       this.emit('ready', { userId: SimulatedNotificationStream.userId });
-      setTimeout(() => this.end(session), SERVER_LIFETIME_MS);
+      setTimeout(() => {
+        if (session === this.session) {
+          this.emit('rotate', { userId: SimulatedNotificationStream.userId });
+        }
+      }, NOTIFICATION_STREAM_LIFETIME_MS - NOTIFICATION_STREAM_ROTATION_LEAD_MS);
+      setTimeout(() => this.end(session), NOTIFICATION_STREAM_LIFETIME_MS);
     }, READY_LATENCY_MS);
   }
 

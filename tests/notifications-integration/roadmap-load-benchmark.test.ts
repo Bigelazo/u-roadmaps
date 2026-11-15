@@ -7,7 +7,7 @@ import { afterEach, describe, expect, onTestFinished, vi } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { noticesPort } from '@/app/_adapters/notice-change-port';
 import { synchronizeCourseOffering } from '@/features/roadmap/server';
-import { createMufasaUCampus } from '@/integrations/ucampus/server';
+import { createMufasaUCampus, forgetAcademicHistory } from '@/integrations/ucampus/server';
 import { openNotificationStream } from '@/features/notifications/infrastructure/sse';
 import { entryTargetSnapshots } from '@/features/notifications/infrastructure/notice-lifecycle';
 import { test, type IntegrationCourse } from './fixtures';
@@ -274,6 +274,8 @@ describe.skipIf(!output)('roadmap load benchmark', () => {
     async ({ course }) => {
       const mufasaCalls = mufasaResponses(course);
       const user = await prisma.user.findUniqueOrThrow({ where: { id: course.studentId } });
+      forgetAcademicHistory(user.rut);
+      onTestFinished(() => forgetAcademicHistory(user.rut));
       const port = noticesPort((persist) => persist());
       const signals = await offeringSignals(course);
       const take = countingQueries();
@@ -282,7 +284,7 @@ describe.skipIf(!output)('roadmap load benchmark', () => {
         take();
         const started = performance.now();
         const synchronized = await synchronizeCourseOffering(
-          { ...user, ucampus: createMufasaUCampus() },
+          { ...user, ucampus: createMufasaUCampus({ sharedAcademicHistory: true }) },
           course.identifier,
           port,
         );

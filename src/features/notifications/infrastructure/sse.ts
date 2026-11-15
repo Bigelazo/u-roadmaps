@@ -1,20 +1,24 @@
 import 'server-only';
 import { subscribeToPostgresSignals } from './postgres-signals';
-import { prisma } from '@/shared/server/db';
+import {
+  NOTIFICATION_STREAM_LIFETIME_MS,
+  NOTIFICATION_STREAM_ROTATION_LEAD_MS,
+} from '../contracts/notification-stream';
 
 export async function openNotificationStream(userId: string, signal: AbortSignal) {
   let unsubscribe: (() => void) | undefined;
   let stopped = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let lifetime: ReturnType<typeof setTimeout> | undefined;
+  let rotation: ReturnType<typeof setTimeout> | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const encoder = new TextEncoder();
-  const memberships = new Set<string>();
   const stop = () => {
     if (stopped) return;
     stopped = true;
     clearInterval(heartbeat);
     clearTimeout(lifetime);
+    clearTimeout(rotation);
     signal.removeEventListener('abort', stop);
     try {
       controller?.close();
@@ -32,32 +36,10 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
   signal.addEventListener('abort', stop, { once: true });
   try {
     unsubscribe = await subscribeToPostgresSignals({
+      userId,
       disconnected: stop,
-      receive(change) {
-        void (async () => {
-          if (stopped) return;
-          if (change.kind === 'roadmap' && (!change.userId || change.userId === userId)) {
-            const courseOfferingId = String(change.courseOfferingId);
-            if (change.userId !== userId && !memberships.has(courseOfferingId)) {
-              const participation = await prisma.participation.findFirst({
-                where: { userId, courseOfferingId },
-                select: { id: true },
-              });
-              if (!participation) return;
-              memberships.add(courseOfferingId);
-            }
-            const accessLost =
-              change.userId === userId &&
-              !(await prisma.participation.findFirst({
-                where: { userId, courseOfferingId, isActive: true },
-                select: { id: true },
-              }));
-            send('roadmap', { ...change, userId, ...(accessLost ? { accessLost: true } : {}) });
-          }
-        })().catch(() => {
-          console.warn('Roadmap live signal projection failed');
-          stop();
-        });
+      receive(roadmapSignal) {
+        send('roadmap', roadmapSignal);
       },
     });
     if (stopped) unsubscribe();
@@ -78,7 +60,10 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
         heartbeat = setInterval(() => {
           enqueue(': keepalive\n\n');
         }, 15_000);
-        lifetime = setTimeout(stop, 5 * 60_000);
+        rotation = setTimeout(() => {
+          send('rotate', { userId });
+        }, NOTIFICATION_STREAM_LIFETIME_MS - NOTIFICATION_STREAM_ROTATION_LEAD_MS);
+        lifetime = setTimeout(stop, NOTIFICATION_STREAM_LIFETIME_MS);
       },
       cancel: stop,
     }),

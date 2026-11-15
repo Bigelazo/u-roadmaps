@@ -10,6 +10,7 @@ import {
   startVtiLogin,
 } from '@/integrations/vti/server';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
+import { forgetAcademicHistory } from '@/integrations/ucampus/server';
 import { isHttps, siteUrl } from '@/shared/server/environment/site-url';
 import {
   applicationSessionCookie,
@@ -66,6 +67,7 @@ export function completeInstitutionalLogin(request: Request, rawToken: FormDataE
       asApplicationError,
     );
     const user = await reconcileInstitutionalUser(identity).catch(asApplicationError);
+    forgetAcademicHistory(user.rut);
     const sessionToken = await createApplicationSessionToken(user.id);
     if (!sessionToken) {
       throw new ApplicationError(

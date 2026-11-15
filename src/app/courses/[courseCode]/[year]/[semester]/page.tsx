@@ -35,7 +35,9 @@ export default async function CoursePage(
   const identifier = parseCourseOfferingIdentifier(params);
   if (!identifier) notFound();
 
-  const user = await resolveSessionUser(await getApplicationSession());
+  const user = await resolveSessionUser(await getApplicationSession(), {
+    sharedAcademicHistory: true,
+  });
   if (!user) redirect('/api/plogin/start');
   const { participation } = await synchronizeCourseOffering(user, identifier, roadmapChangePort);
   const courseOffering = await prisma.courseOffering.findUnique({
