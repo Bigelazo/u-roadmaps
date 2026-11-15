@@ -6,7 +6,7 @@ import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
-import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
+import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
 import { closeToast, findToast, queryToast } from '../../../support/toast';
@@ -165,6 +165,25 @@ describe('RoadmapCanvasSession', () => {
     const complete = await screen.findByRole('button', { name: 'Completar Límites' });
     await user.click(complete);
     expect(await findToast('Nodo completado.')).not.toBeNull();
+  });
+
+  test('a closed Roadmap refusal retains its content and makes completion read-only', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+    vi.spyOn(persistence, 'execute').mockRejectedValueOnce(
+      new RoadmapClosedError('Roadmap cerrado'),
+    );
+    renderSession(persistence, studentInput());
+
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    await user.click(await screen.findByRole('button', { name: 'Completar Límites' }));
+
+    expect(await findToast('Roadmap cerrado')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Límites' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Completar Límites' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(queryToast('Nodo completado.')).toBeNull();
   });
 
   test('keeps app-level success toasts and ignores a delayed response when the Course offering changes', async () => {

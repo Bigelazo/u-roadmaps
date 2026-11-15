@@ -2,6 +2,8 @@ import { type ReactNode } from 'react';
 import type { NodeProps } from '@xyflow/react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { NodeChangeCountsProvider } from '@/features/notifications/components/inbox-driver';
+import { roadmapRoutingScene } from '@/features/roadmap/graph/routing/libavoid';
 import { mockViewport } from '../../../support/viewport';
 import { RoadmapGraph, type RoadmapGraphEditing } from '@/features/roadmap/graph/RoadmapGraph';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
@@ -39,7 +41,14 @@ function nodeProps(node: RoadmapFlowNode): NodeProps<RoadmapFlowNode> {
 }
 
 vi.mock('@/features/roadmap/graph/routing/DependencyRouting', () => ({
-  DependencyRouting: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DependencyRouting: ({ nodes, edges, children }: ReactFlowMockProps) => (
+    <>
+      <output data-testid="routing-obstacles">
+        {JSON.stringify(roadmapRoutingScene(nodes ?? [], edges ?? []).obstacles)}
+      </output>
+      {children}
+    </>
+  ),
   useDependencyRoute: () => undefined,
   useRoutingEngineStatus: () => 'routed',
 }));
@@ -279,4 +288,27 @@ test('reopening a radial menu during its exit makes its actions available immedi
   } finally {
     vi.useRealTimers();
   }
+});
+
+test('reserves the notice badge obstacle for a changed Node mapped by the graph', async () => {
+  render(
+    <NodeChangeCountsProvider roadmapId="roadmap-1" enabled simulatedCounts={{ 'node-1': 3 }}>
+      <RoadmapGraph
+        projection={{ kind: 'student', roadmap: studentRoadmap }}
+        notificationsEnabled
+        {...commonProps}
+      />
+    </NodeChangeCountsProvider>,
+  );
+
+  expect(await screen.findByRole('img', { name: '3 cambios sin revisar' })).toBeTruthy();
+  expect(JSON.parse(screen.getByTestId('routing-obstacles').textContent ?? '[]')).toContainEqual({
+    id: 'node-1:notices',
+    nodeId: 'node-1',
+    body: false,
+    x: -10,
+    y: -10,
+    width: 40,
+    height: 24,
+  });
 });

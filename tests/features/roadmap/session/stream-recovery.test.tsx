@@ -6,11 +6,9 @@ import {
   NOTIFICATION_STREAM_ROTATION_LEAD_MS,
 } from '@/features/notifications/contracts/notification-stream';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
-import {
-  RoadmapCanvasSessionPersistenceProvider,
-  useRoadmapCanvasSession,
-} from '@/features/roadmap/session/session';
+import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import { SimulatedNotificationStream } from '../../../support/notification-stream';
 
 const identifier = { courseCode: 'CC1001', year: 2026, semester: 2 };
@@ -37,7 +35,7 @@ const teachingRoadmap: RoadmapDto = {
 };
 
 function TeachingCanvas() {
-  useRoadmapCanvasSession({
+  useTestCanvasSession({
     courseOffering: { identifier, title: 'Programación I' },
     experience: { kind: 'teaching', term: 'current' },
   });

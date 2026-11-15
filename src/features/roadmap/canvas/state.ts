@@ -1,9 +1,25 @@
+import type {
+  RoadmapViewport,
+  RoadmapViewportRestoration,
+} from '@/features/roadmap/graph/roadmap-graph-projection';
 import type { NodeEditorCommand } from '@/features/roadmap/editor/types';
 import type { StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
 
 export type CanvasPanel = 'editor' | 'student' | 'none';
 
+type CanvasPreviewReturnState = {
+  selectedNodeId: string | null;
+  isEditorOpen: boolean;
+  isStudentDetailOpen: boolean;
+  viewport: RoadmapViewport | null;
+};
+
+export type CanvasPreviewState =
+  | { kind: 'inactive'; viewportRestoration: RoadmapViewportRestoration | null }
+  | { kind: 'active'; returnState: CanvasPreviewReturnState };
+
 export type CanvasState = {
+  canvasPreview: CanvasPreviewState;
   selectedNodeId: string | null;
   isEditorOpen: boolean;
   isStudentDetailOpen: boolean;
@@ -18,13 +34,8 @@ export type CanvasStateAction =
   | { type: 'reconcileSelection'; removed: boolean; preserveEditorDraft?: boolean }
   | { type: 'closeSelectedNode'; panel: Exclude<CanvasPanel, 'none'> }
   | { type: 'closeTeacherPreview' }
-  | { type: 'prepareCanvasPreview' }
-  | {
-      type: 'restoreCanvasPreview';
-      selectedNodeId: string | null;
-      isEditorOpen: boolean;
-      isStudentDetailOpen: boolean;
-    }
+  | { type: 'enterCanvasPreview'; viewport: RoadmapViewport | null }
+  | { type: 'exitCanvasPreview'; viewportToken: string }
   | { type: 'openResourceComposer'; command: NodeEditorCommand }
   | { type: 'selectCreatedNode'; nodeId: string }
   | { type: 'selectNode'; nodeId: string; panel: CanvasPanel }
@@ -33,10 +44,10 @@ export type CanvasStateAction =
       node: StudentAccessibleRoadmapNode;
       focusReturn: () => void;
     }
-  | { type: 'completeTeacherPreview' }
-  | { type: 'toggleStudentDetail' };
+  | { type: 'completeTeacherPreview' };
 
 export const initialCanvasState: CanvasState = {
+  canvasPreview: { kind: 'inactive', viewportRestoration: null },
   selectedNodeId: null,
   isEditorOpen: false,
   isStudentDetailOpen: false,
@@ -76,9 +87,19 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
         isEditorOpen: true,
         teacherPreviewFocusReturn: null,
       };
-    case 'prepareCanvasPreview':
+    case 'enterCanvasPreview':
+      if (state.canvasPreview.kind === 'active') return state;
       return {
         ...state,
+        canvasPreview: {
+          kind: 'active',
+          returnState: {
+            selectedNodeId: state.selectedNodeId,
+            isEditorOpen: state.isEditorOpen,
+            isStudentDetailOpen: state.isStudentDetailOpen,
+            viewport: action.viewport,
+          },
+        },
         teacherPreviewNode: null,
         isTeacherPreviewCompleted: false,
         isStudentDetailOpen: false,
@@ -87,15 +108,20 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
         resourceComposerCommand: null,
         teacherPreviewFocusReturn: null,
       };
-    case 'restoreCanvasPreview':
+    case 'exitCanvasPreview': {
+      if (state.canvasPreview.kind === 'inactive') return state;
+      const { viewport, ...returnView } = state.canvasPreview.returnState;
       return {
         ...state,
-        selectedNodeId: action.selectedNodeId,
-        isEditorOpen: action.isEditorOpen,
-        isStudentDetailOpen: action.isStudentDetailOpen,
+        ...returnView,
+        canvasPreview: {
+          kind: 'inactive',
+          viewportRestoration: viewport ? { token: action.viewportToken, viewport } : null,
+        },
         resourceComposerCommand: null,
         teacherPreviewFocusReturn: null,
       };
+    }
     case 'openResourceComposer':
       return {
         ...state,
@@ -140,7 +166,5 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
       };
     case 'completeTeacherPreview':
       return { ...state, isTeacherPreviewCompleted: true };
-    case 'toggleStudentDetail':
-      return { ...state, isStudentDetailOpen: !state.isStudentDetailOpen };
   }
 }
