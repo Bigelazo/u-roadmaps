@@ -1,12 +1,73 @@
 import 'server-only';
 import { Client } from 'pg';
+import { prisma } from '@/shared/server/db';
 
 type Change = Record<string, unknown>;
-type Subscriber = { receive: (change: Change) => void; disconnected: () => void };
+export type RoadmapSignal = Change & { userId: string; accessLost?: true };
+type Subscriber = {
+  userId: string;
+  receive: (signal: RoadmapSignal) => void;
+  disconnected: () => void;
+};
+type Recipient = { subscriber: Subscriber; memberships: Set<string> };
 type SignalConnection = { subscribe: (subscriber: Subscriber) => () => void };
 const processSignals = globalThis as typeof globalThis & {
   roadmapSignalConnection?: Promise<SignalConnection>;
 };
+
+function deliver({ subscriber }: Recipient, change: Change, accessLost: boolean) {
+  try {
+    subscriber.receive({
+      ...change,
+      userId: subscriber.userId,
+      ...(accessLost ? { accessLost: true as const } : {}),
+    });
+  } catch {
+    console.warn('Roadmap live signal projection failed');
+    subscriber.disconnected();
+  }
+}
+
+async function dispatchRoadmapChange(
+  change: Change,
+  recipients: readonly Recipient[],
+  isSubscribed: (recipient: Recipient) => boolean,
+) {
+  const courseOfferingId = String(change.courseOfferingId);
+  const owner = change.userId;
+  const addressed = recipients.filter(({ subscriber }) => !owner || subscriber.userId === owner);
+  const pending = owner
+    ? addressed
+    : addressed.filter(({ memberships }) => !memberships.has(courseOfferingId));
+  for (const recipient of addressed) {
+    if (!pending.includes(recipient)) deliver(recipient, change, false);
+  }
+  if (!pending.length) return;
+  let participations: { userId: string; isActive: boolean }[];
+  try {
+    participations = await prisma.participation.findMany({
+      where: {
+        courseOfferingId,
+        userId: { in: [...new Set(pending.map(({ subscriber }) => subscriber.userId))] },
+      },
+      select: { userId: true, isActive: true },
+    });
+  } catch {
+    console.warn('Roadmap live signal projection failed');
+    for (const { subscriber } of pending) subscriber.disconnected();
+    return;
+  }
+  for (const recipient of pending) {
+    if (!isSubscribed(recipient)) continue;
+    const own = participations.filter(({ userId }) => userId === recipient.subscriber.userId);
+    if (owner) {
+      deliver(recipient, change, !own.some(({ isActive }) => isActive));
+    } else if (own.length) {
+      recipient.memberships.add(courseOfferingId);
+      deliver(recipient, change, false);
+    }
+  }
+}
 
 async function connect(): Promise<SignalConnection> {
   const client = new Client({
@@ -14,14 +75,14 @@ async function connect(): Promise<SignalConnection> {
     connectionTimeoutMillis: 5000,
     application_name: 'u-roadmaps-sse',
   });
-  const subscribers = new Set<Subscriber>();
+  const recipients = new Map<Subscriber, Recipient>();
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
     processSignals.roadmapSignalConnection = undefined;
-    for (const subscriber of [...subscribers]) subscriber.disconnected();
-    subscribers.clear();
+    for (const subscriber of [...recipients.keys()]) subscriber.disconnected();
+    recipients.clear();
     void client.end().catch(() => undefined);
   };
   client.on('error', () => {
@@ -30,14 +91,18 @@ async function connect(): Promise<SignalConnection> {
   });
   client.on('end', stop);
   client.on('notification', ({ payload }) => {
+    let change: unknown;
     try {
-      const change: unknown = JSON.parse(payload ?? '{}');
-      if (!change || typeof change !== 'object') return;
-      for (const subscriber of subscribers) subscriber.receive(change as Change);
+      change = JSON.parse(payload ?? '{}');
     } catch {
       console.warn('Roadmap live signal payload failed');
       stop();
+      return;
     }
+    if (!change || typeof change !== 'object' || (change as Change).kind !== 'roadmap') return;
+    void dispatchRoadmapChange(change as Change, [...recipients.values()], (recipient) =>
+      recipients.has(recipient.subscriber),
+    );
   });
   try {
     await client.connect();
@@ -50,10 +115,10 @@ async function connect(): Promise<SignalConnection> {
   return {
     subscribe(subscriber) {
       if (stopped) throw new Error('Signal connection closed');
-      subscribers.add(subscriber);
+      recipients.set(subscriber, { subscriber, memberships: new Set() });
       return () => {
-        subscribers.delete(subscriber);
-        if (!subscribers.size) stop();
+        recipients.delete(subscriber);
+        if (!recipients.size) stop();
       };
     },
   };

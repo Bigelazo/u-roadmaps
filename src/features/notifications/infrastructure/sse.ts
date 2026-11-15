@@ -1,6 +1,5 @@
 import 'server-only';
 import { subscribeToPostgresSignals } from './postgres-signals';
-import { prisma } from '@/shared/server/db';
 import {
   NOTIFICATION_STREAM_LIFETIME_MS,
   NOTIFICATION_STREAM_ROTATION_LEAD_MS,
@@ -14,7 +13,6 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
   let rotation: ReturnType<typeof setTimeout> | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const encoder = new TextEncoder();
-  const memberships = new Set<string>();
   const stop = () => {
     if (stopped) return;
     stopped = true;
@@ -38,32 +36,10 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
   signal.addEventListener('abort', stop, { once: true });
   try {
     unsubscribe = await subscribeToPostgresSignals({
+      userId,
       disconnected: stop,
-      receive(change) {
-        void (async () => {
-          if (stopped) return;
-          if (change.kind === 'roadmap' && (!change.userId || change.userId === userId)) {
-            const courseOfferingId = String(change.courseOfferingId);
-            if (change.userId !== userId && !memberships.has(courseOfferingId)) {
-              const participation = await prisma.participation.findFirst({
-                where: { userId, courseOfferingId },
-                select: { id: true },
-              });
-              if (!participation) return;
-              memberships.add(courseOfferingId);
-            }
-            const accessLost =
-              change.userId === userId &&
-              !(await prisma.participation.findFirst({
-                where: { userId, courseOfferingId, isActive: true },
-                select: { id: true },
-              }));
-            send('roadmap', { ...change, userId, ...(accessLost ? { accessLost: true } : {}) });
-          }
-        })().catch(() => {
-          console.warn('Roadmap live signal projection failed');
-          stop();
-        });
+      receive(roadmapSignal) {
+        send('roadmap', roadmapSignal);
       },
     });
     if (stopped) unsubscribe();
