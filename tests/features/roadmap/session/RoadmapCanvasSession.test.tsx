@@ -7,6 +7,7 @@ import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/sess
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
 import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
+import { UncertainNodeCreationError } from '@/features/roadmap/session/placement-recovery';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
 import { closeToast, findToast, queryToast } from '../../../support/toast';
@@ -528,7 +529,7 @@ describe('RoadmapCanvasSession', () => {
     persistence.execute = async (command, version) => {
       if (command.kind === 'add-node') {
         attempts.push(structuredClone(command));
-        if (attempts.length === 1) throw new Error('Response unavailable');
+        if (attempts.length === 1) throw new UncertainNodeCreationError();
       }
       return execute(command, version);
     };
@@ -537,10 +538,10 @@ describe('RoadmapCanvasSession', () => {
     await user.click(await screen.findByText('Crear nodo'));
     await user.type(screen.getByLabelText('Título'), 'Derivadas');
     await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
-    await screen.findByText('No se pudo crear el nodo. Tu borrador se mantiene; intenta de nuevo.');
+    await screen.findByRole('button', { name: 'Reenviar creación' });
     expect(attempts[0].nodeId).toEqual(expect.any(String));
     graphPlacement.x = 800;
-    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
+    await user.click(screen.getByRole('button', { name: 'Reenviar creación' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Crear nodo' })).toBeNull());
     expect(attempts[1]).toEqual(attempts[0]);
     expect((await persistence.load()).nodes).toContainEqual(
@@ -552,6 +553,36 @@ describe('RoadmapCanvasSession', () => {
     await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
     await waitFor(() => expect(attempts).toHaveLength(3));
     expect(attempts[2].nodeId).not.toBe(attempts[0].nodeId);
+  });
+
+  test('a definitive creation rejection permits a corrected draft with a fresh identity and current placement', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    const execute = persistence.execute.bind(persistence);
+    const attempts: Extract<CanvasCommand, { kind: 'add-node' }>[] = [];
+    persistence.execute = async (command, version) => {
+      if (command.kind === 'add-node') {
+        attempts.push(structuredClone(command));
+        if (attempts.length === 1) throw new Error('El tipo de nodo no es válido.');
+      }
+      return execute(command, version);
+    };
+    renderSession(persistence);
+    await user.click(await screen.findByRole('button', { name: 'Crear en el mapa' }));
+    await user.click(await screen.findByText('Crear nodo'));
+    await user.type(screen.getByLabelText('Título'), 'Primer borrador');
+    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
+    await screen.findByText('No se pudo crear el nodo. Tu borrador se mantiene; intenta de nuevo.');
+    await user.clear(screen.getByLabelText('Título'));
+    await user.type(screen.getByLabelText('Título'), 'Borrador corregido');
+    graphPlacement.x = 800;
+    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Crear nodo' })).toBeNull());
+    expect(attempts[1].nodeId).not.toBe(attempts[0].nodeId);
+    expect(attempts[1]).toMatchObject({
+      node: { title: 'Borrador corregido' },
+      position: { x: 800 },
+    });
   });
 });
 

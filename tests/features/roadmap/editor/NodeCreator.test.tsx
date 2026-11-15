@@ -10,6 +10,44 @@ const nodeTypes: RoadmapDto['nodeTypes'] = [
   { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
 ];
 
+test('an unresolved creation preserves its original draft and offers an explicit same-attempt resend', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn(async () => false);
+  const props = {
+    nodeTypes,
+    onSubmit,
+    onCreateNodeType: async () => false,
+    onUpdateNodeType: async () => false,
+    onRequestDeleteNodeType: () => undefined,
+  };
+  const view = render(<NodeCreator {...props} />);
+  await user.click(screen.getByRole('button', { name: 'Crear en el mapa' }));
+  await user.click(await screen.findByRole('menuitem', { name: 'Crear nodo' }));
+  const title = await screen.findByRole('textbox', { name: 'Título' });
+  await user.type(title, 'Mi borrador original');
+  view.rerender(
+    <NodeCreator
+      {...props}
+      creationRecovery={{
+        kind: 'uncertain-creation',
+        message: 'No se pudo confirmar si el nodo se creó.',
+      }}
+    />,
+  );
+  expect(title.matches(':disabled')).toBe(true);
+  expect(screen.getByRole('textbox', { name: /Contenido/ }).getAttribute('aria-disabled')).toBe(
+    'true',
+  );
+  expect(screen.getByRole('alert').textContent).toContain('No se pudo confirmar');
+  await user.type(title, 'cambio que no se debe ignorar');
+  await user.click(screen.getByRole('button', { name: 'Reenviar creación' }));
+  expect(onSubmit).toHaveBeenCalledWith(
+    expect.objectContaining({ title: 'Mi borrador original' }),
+    [],
+    expect.any(Function),
+  );
+});
+
 async function openCreator(onSubmit: ComponentProps<typeof NodeCreator>['onSubmit']) {
   const user = userEvent.setup();
   render(

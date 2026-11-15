@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CircleAlert, CirclePlus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import type { PlacementRecovery } from '@/features/roadmap/session/placement-recovery';
 import { Button } from '@/shared/ui/button';
 import { Spinner } from '@/shared/ui/spinner';
 import { SpeedDial } from '@/shared/ui/speed-dial';
@@ -49,6 +50,7 @@ function creatingLabel(progress: NodeCreationProgress | null) {
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
   nodes?: readonly { nodeTypeId: string }[];
+  creationRecovery?: PlacementRecovery | null;
   onSubmit: (
     node: NodeInput,
     resources: readonly StagedResource[],
@@ -62,6 +64,7 @@ type Props = {
 export function NodeCreator({
   nodeTypes,
   nodes,
+  creationRecovery,
   onSubmit,
   onCreateNodeType,
   onUpdateNodeType,
@@ -84,6 +87,7 @@ export function NodeCreator({
   const [creationFailure, setCreationFailure] = useState<string | null>(null);
   const hasNodeTypes = nodeTypes.length > 0;
   const titleError = isTitleMissing && !value.title.trim() ? MISSING_TITLE_ERROR : undefined;
+  const shownFailure = creationRecovery?.message ?? creationFailure;
 
   async function createNode() {
     if (isCreating || !selectedNodeTypeId) return;
@@ -172,57 +176,63 @@ export function NodeCreator({
             aria-busy={isCreating || undefined}
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 [--markdown-editor-max-height:min(24rem,45dvh)]"
           >
-            <FieldGroup>
-              <NodeContentFields
-                idPrefix="new-node"
-                nodeTypes={nodeTypes}
-                value={{ ...value, nodeTypeId: selectedNodeTypeId }}
-                onChange={(patch) => setValue((current) => ({ ...current, ...patch }))}
-                titlePlaceholder="Ej. Repasar límites"
-                titleError={titleError}
-                titleForm={CREATE_NODE_FORM_ID}
-                descriptionPlaceholder={NODE_CONTENT_PLACEHOLDER}
-                descriptionAction={
-                  <NodeFullscreenDialog
-                    title={value.title.trim() || 'Nuevo nodo'}
-                    triggerLabel="Editar contenido en pantalla completa"
-                  >
-                    <div className="[--markdown-editor-max-height:calc(100dvh-12.25rem+2px)] [--markdown-editor-min-height:calc(100dvh-12.25rem)]">
-                      <NodeDescriptionField
-                        idPrefix="new-node-fullscreen"
-                        value={{ ...value, nodeTypeId: selectedNodeTypeId }}
-                        onChange={(patch) => setValue((current) => ({ ...current, ...patch }))}
-                        placeholder={NODE_CONTENT_PLACEHOLDER}
-                      />
-                    </div>
-                  </NodeFullscreenDialog>
-                }
-              />
-              <StagedResources
-                resources={resources}
-                composer={resourceComposer}
-                disabled={isCreating}
-                onComposerChange={(composer) => {
-                  setResourceComposer(composer);
-                  if (!composerHasContent(composer)) setCreationFailure(null);
-                }}
-                onAdd={(resource) => {
-                  setResources((current) => [...current, resource]);
-                  setCreationFailure(null);
-                }}
-                onRemove={(resourceId) =>
-                  setResources((current) =>
-                    current.filter((resource) => resource.id !== resourceId),
-                  )
-                }
-              />
-              <StudentAccessField
-                idPrefix="new-node"
-                isVisible={value.isVisible}
-                disabled={isCreating}
-                onVisibleChange={(isVisible) => setValue((current) => ({ ...current, isVisible }))}
-              />
-            </FieldGroup>
+            <fieldset disabled={isCreating || Boolean(creationRecovery)} className="min-w-0">
+              <FieldGroup>
+                <NodeContentFields
+                  disabled={isCreating || Boolean(creationRecovery)}
+                  idPrefix="new-node"
+                  nodeTypes={nodeTypes}
+                  value={{ ...value, nodeTypeId: selectedNodeTypeId }}
+                  onChange={(patch) => setValue((current) => ({ ...current, ...patch }))}
+                  titlePlaceholder="Ej. Repasar límites"
+                  titleError={titleError}
+                  titleForm={CREATE_NODE_FORM_ID}
+                  descriptionPlaceholder={NODE_CONTENT_PLACEHOLDER}
+                  descriptionAction={
+                    <NodeFullscreenDialog
+                      title={value.title.trim() || 'Nuevo nodo'}
+                      triggerLabel="Editar contenido en pantalla completa"
+                    >
+                      <div className="[--markdown-editor-max-height:calc(100dvh-12.25rem+2px)] [--markdown-editor-min-height:calc(100dvh-12.25rem)]">
+                        <NodeDescriptionField
+                          disabled={isCreating || Boolean(creationRecovery)}
+                          idPrefix="new-node-fullscreen"
+                          value={{ ...value, nodeTypeId: selectedNodeTypeId }}
+                          onChange={(patch) => setValue((current) => ({ ...current, ...patch }))}
+                          placeholder={NODE_CONTENT_PLACEHOLDER}
+                        />
+                      </div>
+                    </NodeFullscreenDialog>
+                  }
+                />
+                <StagedResources
+                  resources={resources}
+                  composer={resourceComposer}
+                  disabled={isCreating}
+                  onComposerChange={(composer) => {
+                    setResourceComposer(composer);
+                    if (!composerHasContent(composer)) setCreationFailure(null);
+                  }}
+                  onAdd={(resource) => {
+                    setResources((current) => [...current, resource]);
+                    setCreationFailure(null);
+                  }}
+                  onRemove={(resourceId) =>
+                    setResources((current) =>
+                      current.filter((resource) => resource.id !== resourceId),
+                    )
+                  }
+                />
+                <StudentAccessField
+                  idPrefix="new-node"
+                  isVisible={value.isVisible}
+                  disabled={isCreating}
+                  onVisibleChange={(isVisible) =>
+                    setValue((current) => ({ ...current, isVisible }))
+                  }
+                />
+              </FieldGroup>
+            </fieldset>
             {!hasNodeTypes && (
               <p className="mt-4 text-sm text-destructive">
                 Crea primero un tipo de nodo para poder agregar contenido.
@@ -248,15 +258,21 @@ export function NodeCreator({
                 {isCreating ? (
                   <Spinner aria-hidden="true" data-icon="inline-start" role={undefined} />
                 ) : null}
-                {isCreating ? creatingLabel(progress) : 'Crear nodo'}
+                {isCreating
+                  ? creatingLabel(progress)
+                  : creationRecovery?.kind === 'uncertain-creation'
+                    ? 'Reenviar creación'
+                    : creationRecovery
+                      ? 'Continuar creación'
+                      : 'Crear nodo'}
               </Button>
-              {creationFailure ? (
+              {shownFailure ? (
                 <p
                   role="alert"
                   className="flex items-start gap-1.5 text-sm text-destructive sm:order-first sm:mr-auto"
                 >
                   <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                  {creationFailure}
+                  {shownFailure}
                 </p>
               ) : null}
             </DialogFooter>

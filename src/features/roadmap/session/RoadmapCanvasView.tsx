@@ -41,7 +41,10 @@ import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/stud
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
-import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
+import {
+  canvasConfirmation,
+  type CanvasCommands,
+} from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { useUnlockSchedule } from '@/features/roadmap/canvas/commands/use-unlock-schedule';
 import type {
   RoadmapDto,
@@ -154,12 +157,20 @@ function useRoadmapCanvasController({ input }: Props) {
     canvasPreviewWorkflow,
     accessResource,
     isClosed,
+    placementRecovery,
+    recoverPlacement,
+    isActive,
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
     onCommandApplied: followAppliedCommand,
     canvas: { state: canvasState, dispatch: dispatchCanvas },
   });
-  useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
+  useStateToast(
+    'error',
+    'roadmap-session-error',
+    roadmap && !placementRecovery ? error : null,
+    dismissError,
+  );
 
   const { request } = canvasCommands;
   const performEditorEffect = useCallback(
@@ -341,6 +352,9 @@ function useRoadmapCanvasController({ input }: Props) {
     guardEditorDraft,
     roadmap,
     error,
+    placementRecovery,
+    recoverPlacement,
+    isActive,
     dismissError,
     accessLost,
     canvasCommands,
@@ -419,13 +433,25 @@ export function RoadmapCanvasView({ input }: Props) {
       node,
       ...placeNewNode(node.title),
     }));
+    let rejected = false;
+    const run: CanvasCommands['run'] = async (command, options) => {
+      const result = await canvasCommands.run(command, options);
+      if (command.kind === 'add-node')
+        rejected = !result.applied && !result.creationUncertain && !result.sessionEnded;
+      return result;
+    };
     const outcome = await createNodeWithResources(
-      canvasCommands.run,
+      run,
       creation,
       resources,
       onProgress,
+      model.isActive,
     );
-    if (!outcome) return false;
+    if (!model.isActive()) return false;
+    if (!outcome) {
+      if (rejected) pendingCreationRef.current = null;
+      return false;
+    }
     pendingCreationRef.current = null;
     const summary = nodeCreationSummary(resources.length, outcome.failed);
     if (summary?.tone === 'error') {
@@ -723,6 +749,23 @@ function RoadmapCanvasGraph({
     closeSelectedNode,
   } = model;
   const isCompactLayout = useCompactCanvasLayout();
+  const recoveryNotice =
+    model.placementRecovery && !isCanvasPreview ? (
+      <Alert variant="destructive" className="pointer-events-auto mt-4 max-w-sm">
+        <CircleAlert aria-hidden="true" />
+        <AlertDescription>
+          <p>{model.placementRecovery.message}</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2"
+            onClick={() => void model.recoverPlacement()}
+          >
+            Comprobar guardado
+          </Button>
+        </AlertDescription>
+      </Alert>
+    ) : null;
   return (
     <RoadmapGraph
       projection={graphProjection}
@@ -785,6 +828,11 @@ function RoadmapCanvasGraph({
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
                 nodes={roadmap.nodes}
+                creationRecovery={
+                  model.placementRecovery?.kind === 'unsynchronized'
+                    ? null
+                    : model.placementRecovery
+                }
                 onSubmit={(node, resources, onProgress) =>
                   addNodeAtOpenPosition(node, resources, placeNewNode, onProgress)
                 }
@@ -803,15 +851,18 @@ function RoadmapCanvasGraph({
       }
       overlaySlots={{
         topLeft: (
-          <RoadmapCanvasHeader
-            title={title}
-            courseCode={courseCode}
-            year={year}
-            semester={semester}
-            isCanvasPreview={isCanvasPreview}
-            isEditing={canvasMode.isEditing}
-            showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
-          />
+          <>
+            <RoadmapCanvasHeader
+              title={title}
+              courseCode={courseCode}
+              year={year}
+              semester={semester}
+              isCanvasPreview={isCanvasPreview}
+              isEditing={canvasMode.isEditing}
+              showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
+            />
+            {recoveryNotice}
+          </>
         ),
         topCenter: isCanvasPreview ? (
           <CanvasPreviewToolbar

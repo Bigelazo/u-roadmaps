@@ -37,7 +37,10 @@ type CanvasCommandsOptions = {
   report?: (action: PracticeCanvasAction) => void;
 };
 
-export type CommandRun = { readonly applied: boolean; readonly createdNodeId?: string };
+export type CommandRun = { readonly applied: boolean } & Pick<
+  ExecutionResult,
+  'createdNodeId' | 'creationUncertain' | 'sessionEnded'
+>;
 
 export type CanvasCommands = {
   pending: PendingConfirmation | null;
@@ -138,7 +141,12 @@ export function useCanvasCommands({
     async function perform(command: CanvasCommand, announce = true): Promise<CommandRun> {
       const { applied, ...result } = await session.execute(command);
       if (applied) announceApplied(command, result, undefined, announce);
-      return { applied, createdNodeId: result.createdNodeId };
+      return {
+        applied,
+        createdNodeId: result.createdNodeId,
+        ...(result.creationUncertain && { creationUncertain: true }),
+        ...(result.sessionEnded && { sessionEnded: true }),
+      };
     }
 
     async function applyConfirmed(
