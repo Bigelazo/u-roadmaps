@@ -102,3 +102,43 @@ test('going offline closes the tab stream and returning online opens a real repl
   act(() => window.dispatchEvent(new Event('online')));
   expect(BrowserStream.instances).toHaveLength(2);
 });
+
+test('a rotation hands off to a ready successor without requesting recovery', () => {
+  const recovered = vi.fn();
+  const changed = vi.fn();
+  const stopRecovery = subscribeToRoadmapRecovery(recovered);
+  window.addEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
+  render(<OwnInboxRealtime userId="teacher" />);
+  const [first] = BrowserStream.instances;
+  act(() => first.receive('ready', { userId: 'teacher' }));
+  recovered.mockClear();
+  act(() => first.receive('rotate', { userId: 'teacher' }));
+  act(() => first.receive('rotate', { userId: 'teacher' }));
+  expect(BrowserStream.instances).toHaveLength(2);
+  const [, successor] = BrowserStream.instances;
+  act(() => first.receive('roadmap', { ...change, userId: 'teacher' }));
+  act(() => successor.receive('ready', { userId: 'teacher' }));
+  expect(first.closed).toBe(true);
+  expect(recovered).not.toHaveBeenCalled();
+  act(() => successor.receive('roadmap', { ...change, userId: 'teacher' }));
+  expect(changed).toHaveBeenCalledTimes(2);
+  stopRecovery();
+  window.removeEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
+});
+
+test('a stream lost during a rotation requests recovery once its successor is ready', () => {
+  const recovered = vi.fn();
+  const stopRecovery = subscribeToRoadmapRecovery(recovered);
+  render(<OwnInboxRealtime userId="teacher" />);
+  const [first] = BrowserStream.instances;
+  act(() => first.receive('ready', { userId: 'teacher' }));
+  act(() => first.receive('rotate', { userId: 'teacher' }));
+  recovered.mockClear();
+  Object.defineProperty(first, 'readyState', { value: 0 });
+  act(() => first.dispatchEvent(new Event('error')));
+  expect(first.closed).toBe(true);
+  act(() => BrowserStream.instances[1].receive('ready', { userId: 'teacher' }));
+  expect(recovered).toHaveBeenCalledTimes(1);
+  expect(BrowserStream.instances).toHaveLength(2);
+  stopRecovery();
+});

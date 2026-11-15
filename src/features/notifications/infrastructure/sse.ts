@@ -1,12 +1,17 @@
 import 'server-only';
 import { subscribeToPostgresSignals } from './postgres-signals';
 import { prisma } from '@/shared/server/db';
+import {
+  NOTIFICATION_STREAM_LIFETIME_MS,
+  NOTIFICATION_STREAM_ROTATION_LEAD_MS,
+} from '../contracts/notification-stream';
 
 export async function openNotificationStream(userId: string, signal: AbortSignal) {
   let unsubscribe: (() => void) | undefined;
   let stopped = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let lifetime: ReturnType<typeof setTimeout> | undefined;
+  let rotation: ReturnType<typeof setTimeout> | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const encoder = new TextEncoder();
   const memberships = new Set<string>();
@@ -15,6 +20,7 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
     stopped = true;
     clearInterval(heartbeat);
     clearTimeout(lifetime);
+    clearTimeout(rotation);
     signal.removeEventListener('abort', stop);
     try {
       controller?.close();
@@ -78,7 +84,10 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
         heartbeat = setInterval(() => {
           enqueue(': keepalive\n\n');
         }, 15_000);
-        lifetime = setTimeout(stop, 5 * 60_000);
+        rotation = setTimeout(() => {
+          send('rotate', { userId });
+        }, NOTIFICATION_STREAM_LIFETIME_MS - NOTIFICATION_STREAM_ROTATION_LEAD_MS);
+        lifetime = setTimeout(stop, NOTIFICATION_STREAM_LIFETIME_MS);
       },
       cancel: stop,
     }),
