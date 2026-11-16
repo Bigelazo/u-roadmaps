@@ -4,13 +4,13 @@ import type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import type { NodeEditorCommand } from '@/features/roadmap/editor/types';
 import type { StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
+import type { NodeSelectionPanel } from './node-selection';
 
-export type CanvasPanel = 'editor' | 'student' | 'none';
+type RestorablePanel = { kind: 'closed' } | { kind: 'editor' } | { kind: 'student-detail' };
 
 type CanvasPreviewReturnState = {
   selectedNodeId: string | null;
-  isEditorOpen: boolean;
-  isStudentDetailOpen: boolean;
+  panel: RestorablePanel;
   viewport: RoadmapViewport | null;
 };
 
@@ -21,41 +21,44 @@ export type CanvasPreviewState =
 export type CanvasState = {
   canvasPreview: CanvasPreviewState;
   selectedNodeId: string | null;
-  isEditorOpen: boolean;
-  isStudentDetailOpen: boolean;
-  teacherPreviewNode: StudentAccessibleRoadmapNode | null;
-  isTeacherPreviewCompleted: boolean;
-  resourceComposerCommand: NodeEditorCommand | null;
-  teacherPreviewFocusReturn: (() => void) | null;
+  panel: NodeSelectionPanel;
 };
 
 export type CanvasStateAction =
   | { type: 'closeEditor' }
   | { type: 'reconcileSelection'; removed: boolean; preserveEditorDraft?: boolean }
-  | { type: 'closeSelectedNode'; panel: Exclude<CanvasPanel, 'none'> }
-  | { type: 'closeTeacherPreview' }
+  | { type: 'closeSelectedNode' }
+  | { type: 'closeNodeInformationPreview' }
   | { type: 'enterCanvasPreview'; viewport: RoadmapViewport | null }
   | { type: 'exitCanvasPreview'; viewportToken: string }
   | { type: 'openResourceComposer'; command: NodeEditorCommand }
   | { type: 'selectCreatedNode'; nodeId: string }
-  | { type: 'selectNode'; nodeId: string; panel: CanvasPanel }
+  | { type: 'selectNode'; nodeId: string; panel: 'editor' | 'student-detail' | 'none' }
   | {
-      type: 'showTeacherPreview';
+      type: 'showNodeInformationPreview';
       node: StudentAccessibleRoadmapNode;
       focusReturn: () => void;
     }
-  | { type: 'completeTeacherPreview' };
+  | { type: 'completeNodeInformationPreview' };
+
+const closedPanel: NodeSelectionPanel = { kind: 'closed' };
+const editorPanel: NodeSelectionPanel = { kind: 'editor' };
 
 export const initialCanvasState: CanvasState = {
   canvasPreview: { kind: 'inactive', viewportRestoration: null },
   selectedNodeId: null,
-  isEditorOpen: false,
-  isStudentDetailOpen: false,
-  teacherPreviewNode: null,
-  isTeacherPreviewCompleted: false,
-  resourceComposerCommand: null,
-  teacherPreviewFocusReturn: null,
+  panel: closedPanel,
 };
+
+function restorablePanelOf(panel: NodeSelectionPanel): RestorablePanel {
+  if (panel.kind === 'editor') return { kind: 'editor' };
+  if (panel.kind === 'node-information-preview') return { kind: 'closed' };
+  return panel;
+}
+
+function withoutResourceComposer(panel: NodeSelectionPanel): NodeSelectionPanel {
+  return panel.kind === 'editor' && panel.resourceComposerCommand ? editorPanel : panel;
+}
 
 export function canvasStateReducer(state: CanvasState, action: CanvasStateAction): CanvasState {
   switch (action.type) {
@@ -63,30 +66,15 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
       return {
         ...state,
         selectedNodeId: action.removed ? null : state.selectedNodeId,
-        isStudentDetailOpen: false,
-        isEditorOpen: action.preserveEditorDraft ? state.isEditorOpen : false,
-        teacherPreviewNode: null,
+        panel:
+          action.preserveEditorDraft && state.panel.kind === 'editor' ? state.panel : closedPanel,
       };
     case 'closeEditor':
-      return { ...state, isEditorOpen: false };
+      return state.panel.kind === 'editor' ? { ...state, panel: closedPanel } : state;
     case 'closeSelectedNode':
-      return {
-        ...state,
-        selectedNodeId: null,
-        teacherPreviewNode: null,
-        isTeacherPreviewCompleted: false,
-        resourceComposerCommand: null,
-        teacherPreviewFocusReturn: null,
-        ...(action.panel === 'editor' ? { isEditorOpen: false } : { isStudentDetailOpen: false }),
-      };
-    case 'closeTeacherPreview':
-      return {
-        ...state,
-        teacherPreviewNode: null,
-        isTeacherPreviewCompleted: false,
-        isEditorOpen: true,
-        teacherPreviewFocusReturn: null,
-      };
+      return { ...state, selectedNodeId: null, panel: closedPanel };
+    case 'closeNodeInformationPreview':
+      return { ...state, panel: editorPanel };
     case 'enterCanvasPreview':
       if (state.canvasPreview.kind === 'active') return state;
       return {
@@ -95,76 +83,62 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
           kind: 'active',
           returnState: {
             selectedNodeId: state.selectedNodeId,
-            isEditorOpen: state.isEditorOpen,
-            isStudentDetailOpen: state.isStudentDetailOpen,
+            panel: restorablePanelOf(state.panel),
             viewport: action.viewport,
           },
         },
-        teacherPreviewNode: null,
-        isTeacherPreviewCompleted: false,
-        isStudentDetailOpen: false,
-        isEditorOpen: false,
         selectedNodeId: null,
-        resourceComposerCommand: null,
-        teacherPreviewFocusReturn: null,
+        panel: closedPanel,
       };
     case 'exitCanvasPreview': {
       if (state.canvasPreview.kind === 'inactive') return state;
-      const { viewport, ...returnView } = state.canvasPreview.returnState;
+      const { viewport, selectedNodeId, panel } = state.canvasPreview.returnState;
       return {
         ...state,
-        ...returnView,
+        selectedNodeId,
+        panel,
         canvasPreview: {
           kind: 'inactive',
           viewportRestoration: viewport ? { token: action.viewportToken, viewport } : null,
         },
-        resourceComposerCommand: null,
-        teacherPreviewFocusReturn: null,
       };
     }
     case 'openResourceComposer':
       return {
         ...state,
         selectedNodeId: action.command.nodeId,
-        isEditorOpen: true,
-        teacherPreviewNode: null,
-        isTeacherPreviewCompleted: false,
-        resourceComposerCommand: action.command,
-        teacherPreviewFocusReturn: null,
+        panel: { kind: 'editor', resourceComposerCommand: action.command },
       };
     case 'selectCreatedNode':
-      return { ...state, selectedNodeId: action.nodeId, resourceComposerCommand: null };
-    case 'selectNode':
-      if (action.panel === 'student') {
-        return {
-          ...state,
-          selectedNodeId: action.nodeId,
-          isStudentDetailOpen: true,
-          resourceComposerCommand: null,
-        };
-      }
-      if (action.panel === 'editor') {
-        return {
-          ...state,
-          selectedNodeId: action.nodeId,
-          teacherPreviewNode: null,
-          isTeacherPreviewCompleted: false,
-          isEditorOpen: true,
-          resourceComposerCommand: null,
-          teacherPreviewFocusReturn: null,
-        };
-      }
-      return { ...state, selectedNodeId: action.nodeId, resourceComposerCommand: null };
-    case 'showTeacherPreview':
       return {
         ...state,
-        teacherPreviewNode: action.node,
-        isTeacherPreviewCompleted: false,
-        isEditorOpen: false,
-        resourceComposerCommand: null,
-        teacherPreviewFocusReturn: action.focusReturn,
+        selectedNodeId: action.nodeId,
+        panel: withoutResourceComposer(state.panel),
       };
-    case 'completeTeacherPreview':
-      return { ...state, isTeacherPreviewCompleted: true };
+    case 'selectNode':
+      return {
+        ...state,
+        selectedNodeId: action.nodeId,
+        panel:
+          action.panel === 'student-detail'
+            ? { kind: 'student-detail' }
+            : action.panel === 'editor'
+              ? editorPanel
+              : withoutResourceComposer(state.panel),
+      };
+    case 'showNodeInformationPreview':
+      return {
+        ...state,
+        panel: {
+          kind: 'node-information-preview',
+          node: action.node,
+          isCompleted: false,
+          focusReturn: action.focusReturn,
+        },
+      };
+    case 'completeNodeInformationPreview':
+      return state.panel.kind === 'node-information-preview'
+        ? { ...state, panel: { ...state.panel, isCompleted: true } }
+        : state;
   }
 }

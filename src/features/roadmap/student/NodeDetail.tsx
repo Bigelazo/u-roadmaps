@@ -32,7 +32,7 @@ type ContentProps = {
   isReadOnly?: boolean;
   isModal?: boolean;
   isSidebar?: boolean;
-  isTeacherPreview?: boolean;
+  isNodeInformationPreview?: boolean;
   nodeType?: NodeType;
 };
 
@@ -45,22 +45,22 @@ function StudentNodeDetailContent({
   isReadOnly = false,
   isModal = false,
   isSidebar = false,
-  isTeacherPreview = false,
+  isNodeInformationPreview = false,
   nodeType,
 }: ContentProps) {
   const blocked = isStudentBlockedNode(node);
   const [previewReviewedIds, setPreviewReviewedIds] = useState<ReadonlySet<string>>(new Set());
   const resources = blocked ? [] : node.resources;
   const isReviewed = (resource: Resource) =>
-    isTeacherPreview ? previewReviewedIds.has(resource.id) : Boolean(resource.isReviewed);
+    isNodeInformationPreview ? previewReviewedIds.has(resource.id) : Boolean(resource.isReviewed);
   const accessResource = (resource: Resource) => {
-    if (isTeacherPreview) setPreviewReviewedIds((ids) => new Set(ids).add(resource.id));
+    if (isNodeInformationPreview) setPreviewReviewedIds((ids) => new Set(ids).add(resource.id));
     else onResourceAccess?.(resource);
   };
 
   return (
     <>
-      {isTeacherPreview ? (
+      {isNodeInformationPreview ? (
         <div className="flex shrink-0 items-center justify-between gap-3 bg-primary py-2 pr-3 pl-6 text-sm font-semibold text-primary-foreground">
           <p className="flex min-w-0 items-center gap-2">
             <Eye aria-hidden="true" className="size-4 shrink-0" />
@@ -207,7 +207,7 @@ export function StudentNodeDetail({
   onComplete,
   onResourceAccess,
   isReadOnly,
-  isTeacherPreview,
+  isNodeInformationPreview,
   nodeTypes,
   panelWidth = 426,
   onPanelWidthChange,
@@ -221,7 +221,7 @@ export function StudentNodeDetail({
     onComplete,
     onResourceAccess,
     isReadOnly,
-    isTeacherPreview,
+    isNodeInformationPreview,
     nodeType: nodeTypes?.find((type) => type.id === node.nodeTypeId),
   };
   if (isCompact) {

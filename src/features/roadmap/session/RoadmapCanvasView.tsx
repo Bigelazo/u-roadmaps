@@ -532,18 +532,18 @@ function RoadmapStudentPanel({
     studentPanel,
   } = model;
   const nodeInformationPreview = panel.kind === 'node-information-preview' ? panel : null;
-  const teacherPreviewNode = nodeInformationPreview?.node;
+  const nodeInformationPreviewNode = nodeInformationPreview?.node;
   const isStudentDetailOpen = panel.kind === 'student-detail';
   return (
     <>
-      {(isStudentExperience || teacherPreviewNode) && (
+      {(isStudentExperience || nodeInformationPreviewNode) && (
         <StudentNodeDetail
           node={
-            teacherPreviewNode ??
+            nodeInformationPreviewNode ??
             (isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined)
           }
           status={
-            teacherPreviewNode
+            nodeInformationPreviewNode
               ? nodeInformationPreview.isCompleted
                 ? 'completed'
                 : 'available'
@@ -552,21 +552,23 @@ function RoadmapStudentPanel({
                 : null
           }
           onClose={
-            teacherPreviewNode
+            nodeInformationPreviewNode
               ? nodeSelection.closeNodeInformationPreview
               : () => void nodeSelection.closeSelectedNode()
           }
           onComplete={(node) => {
             if (canvasPreviewWorkflow.completeNode(node.id)) return;
-            if (teacherPreviewNode) nodeSelection.completeNodeInformationPreview();
+            if (nodeInformationPreviewNode) nodeSelection.completeNodeInformationPreview();
             else void canvasCommands.request({ kind: 'complete-node', nodeId: node.id });
           }}
           onResourceAccess={accessResource}
-          isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
-          isTeacherPreview={Boolean(teacherPreviewNode)}
+          isReadOnly={isHistoricalRoadmap && !nodeInformationPreviewNode}
+          isNodeInformationPreview={Boolean(nodeInformationPreviewNode)}
           nodeTypes={roadmap.nodeTypes}
-          panelWidth={teacherPreviewNode ? editorPanel.width : studentPanel.width}
-          onPanelWidthChange={teacherPreviewNode ? editorPanel.setWidth : studentPanel.setWidth}
+          panelWidth={nodeInformationPreviewNode ? editorPanel.width : studentPanel.width}
+          onPanelWidthChange={
+            nodeInformationPreviewNode ? editorPanel.setWidth : studentPanel.setWidth
+          }
         />
       )}
     </>

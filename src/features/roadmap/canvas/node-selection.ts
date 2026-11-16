@@ -33,24 +33,6 @@ export type NodeSelectionOptions = {
   reportPracticeAction?: (action: PracticeCanvasAction) => void;
 };
 
-function panelOf(state: CanvasState): NodeSelectionPanel {
-  if (state.teacherPreviewNode) {
-    return {
-      kind: 'node-information-preview',
-      node: state.teacherPreviewNode,
-      isCompleted: state.isTeacherPreviewCompleted,
-      focusReturn: state.teacherPreviewFocusReturn ?? (() => {}),
-    };
-  }
-  if (state.isEditorOpen) {
-    return state.resourceComposerCommand
-      ? { kind: 'editor', resourceComposerCommand: state.resourceComposerCommand }
-      : { kind: 'editor' };
-  }
-  if (state.isStudentDetailOpen) return { kind: 'student-detail' };
-  return { kind: 'closed' };
-}
-
 function useFocusReturn() {
   const [focusReturn, setFocusReturn] = useState<NodeSelectionFocusReturn | null>(null);
   const nextTokenRef = useRef(0);
@@ -70,7 +52,8 @@ export function useNodeSelection({
 }: NodeSelectionOptions) {
   const { isStudentExperience, isEditing } = mode;
   const { canEditRoadmap } = mode.capabilities;
-  const { selectedNodeId } = state;
+  const { selectedNodeId, panel } = state;
+  const isStudentDetailOpen = panel.kind === 'student-detail';
   const { focusReturn, requestFocusReturn } = useFocusReturn();
   const [notice, setNotice] = useState<NodeSelectionNotice | null>(null);
   const dismissNotice = useCallback(() => setNotice(null), []);
@@ -84,7 +67,7 @@ export function useNodeSelection({
     const selected = nodes.find((node) => node.id === selectedNodeId);
     const blocked = isStudentExperience && isStudentBlockedNode(selected);
     if (selected && !blocked) return;
-    if (blocked && !state.isStudentDetailOpen) return;
+    if (blocked && !isStudentDetailOpen) return;
     dispatch({
       type: 'reconcileSelection',
       removed: !selected,
@@ -98,8 +81,8 @@ export function useNodeSelection({
     isStudentExperience,
     nodes,
     requestFocusReturn,
+    isStudentDetailOpen,
     selectedNodeId,
-    state.isStudentDetailOpen,
   ]);
 
   const selectNode = useCallback(
@@ -112,7 +95,7 @@ export function useNodeSelection({
         dispatch({
           type: 'selectNode',
           nodeId,
-          panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
+          panel: isStudentExperience ? 'student-detail' : canEditRoadmap ? 'editor' : 'none',
         });
       };
       if (isEditing && selectedNodeId && selectedNodeId !== nodeId) {
@@ -136,9 +119,9 @@ export function useNodeSelection({
   );
 
   const closeSelectedNodeNow = useCallback(() => {
-    dispatch({ type: 'closeSelectedNode', panel: isStudentExperience ? 'student' : 'editor' });
+    dispatch({ type: 'closeSelectedNode' });
     requestFocusReturn('node');
-  }, [dispatch, isStudentExperience, requestFocusReturn]);
+  }, [dispatch, requestFocusReturn]);
 
   const closeSelectedNode = useCallback(
     (options: { guardDraft?: boolean } = {}) => {
@@ -183,45 +166,39 @@ export function useNodeSelection({
   );
 
   const closeNodeInformationPreview = useCallback(() => {
-    const focusReturn = state.teacherPreviewFocusReturn;
-    dispatch({ type: 'closeTeacherPreview' });
-    requestAnimationFrame(() => focusReturn?.());
-  }, [dispatch, state.teacherPreviewFocusReturn]);
+    if (panel.kind !== 'node-information-preview') return;
+    const { focusReturn } = panel;
+    dispatch({ type: 'closeNodeInformationPreview' });
+    requestAnimationFrame(() => focusReturn());
+  }, [dispatch, panel]);
 
   const showNodeInformationPreview = useCallback(
     (node: StudentAccessibleRoadmapNode, focusReturn: () => void) =>
-      dispatch({ type: 'showTeacherPreview', node, focusReturn }),
+      dispatch({ type: 'showNodeInformationPreview', node, focusReturn }),
     [dispatch],
   );
 
   const completeNodeInformationPreview = useCallback(
-    () => dispatch({ type: 'completeTeacherPreview' }),
+    () => dispatch({ type: 'completeNodeInformationPreview' }),
     [dispatch],
   );
 
   const dismissTopmostPanel = useCallback(() => {
     if (!canEditRoadmap) return false;
-    if (state.teacherPreviewNode) {
+    if (panel.kind === 'node-information-preview') {
       closeNodeInformationPreview();
       return true;
     }
-    if (state.isEditorOpen && isEditing) {
+    if (panel.kind === 'editor' && isEditing) {
       dispatch({ type: 'closeEditor' });
       return true;
     }
     return false;
-  }, [
-    canEditRoadmap,
-    closeNodeInformationPreview,
-    dispatch,
-    isEditing,
-    state.isEditorOpen,
-    state.teacherPreviewNode,
-  ]);
+  }, [canEditRoadmap, closeNodeInformationPreview, dispatch, isEditing, panel.kind]);
 
   return {
     selectedNodeId,
-    panel: panelOf(state),
+    panel,
     notice,
     focusReturn,
     selectNode,
