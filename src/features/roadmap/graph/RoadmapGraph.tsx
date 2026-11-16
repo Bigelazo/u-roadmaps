@@ -113,8 +113,6 @@ export type {
   RoadmapGraphEditing,
   RoadmapGraphProjection,
   NewNodePlacement,
-  RoadmapNodePlacement,
-  RoadmapNodePosition,
   RoadmapViewport,
   RoadmapViewportRestoration,
 } from '@/features/roadmap/graph/roadmap-graph-projection';

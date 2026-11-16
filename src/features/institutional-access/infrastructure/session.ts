@@ -6,7 +6,7 @@ import { isHttps } from '@/shared/server/environment/site-url';
 
 export const applicationSessionMaxAge = 30 * 24 * 60 * 60;
 
-export function applicationSessionCookieName(request: Request) {
+function applicationSessionCookieName(request: Request) {
   return isHttps(request) ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
 }
 

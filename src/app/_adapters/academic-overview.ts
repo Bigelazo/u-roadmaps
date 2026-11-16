@@ -39,10 +39,6 @@ export async function getAcademicOverviewApi(user: OverviewUser) {
   return projectApi(user, await overviewSources(user));
 }
 
-export async function getAcademicOverviewPage(user: OverviewUser) {
-  return projectPage(user, await overviewSources(user));
-}
-
 export async function getAcademicOverviewBrowser(
   user: OverviewUser,
   synchronize: boolean,
