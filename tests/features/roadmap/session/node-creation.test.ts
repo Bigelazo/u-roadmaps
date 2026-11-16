@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import type { StagedResource } from '@/features/roadmap/editor/types';
 import {
   createNodeWithResources,

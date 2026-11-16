@@ -1,16 +1,18 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import type {
+  CanvasCommand,
+  ChangeImpactCommand,
+  ReadChangeImpactOf,
+} from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   canvasCommandCatalog,
   type AnyCommandEntry,
-  type CanvasCommand,
-  type ChangeImpactCommand,
   type CommandOutcome,
   type ConfirmationContext,
   type ConfirmationInput,
   type PendingConfirmation,
-  type ReadChangeImpactOf,
 } from '@/features/roadmap/canvas/commands/commands';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {

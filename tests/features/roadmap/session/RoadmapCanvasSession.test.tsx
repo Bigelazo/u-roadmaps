@@ -12,7 +12,7 @@ import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
 import { closeToast, findToast, queryToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 
 const graphPlacement = vi.hoisted(() => ({ x: 480, y: 240 }));
 

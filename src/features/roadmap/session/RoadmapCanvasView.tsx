@@ -40,7 +40,7 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   canvasConfirmation,
   type CanvasCommands,

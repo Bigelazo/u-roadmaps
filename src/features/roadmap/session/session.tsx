@@ -17,9 +17,11 @@ import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-previ
 import {
   canvasCommandCatalog,
   type AnyCommandEntry,
-  type CanvasCommand,
-  type RoadmapNodePlacement,
 } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  CanvasCommand,
+  RoadmapNodePlacement,
+} from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   useCanvasCommands,
   type CanvasCommands,
