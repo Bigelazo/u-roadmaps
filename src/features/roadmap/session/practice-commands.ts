@@ -31,10 +31,6 @@ function positionedNodes(nodes: AnyRoadmapNode[], positions: readonly RoadmapNod
   const nodeIds = new Set(nodes.map(({ id }) => id));
   const targets = new Map<string, RoadmapNodePlacement['position']>();
   for (const { nodeId, position } of positions) {
-    if (typeof nodeId !== 'string' || !nodeId.trim() || targets.has(nodeId))
-      throw new Error('Cada nodo debe tener una identidad válida y única.');
-    if (!Number.isFinite(position.x) || !Number.isFinite(position.y))
-      throw new Error('La posición debe contener números finitos.');
     if (!nodeIds.has(nodeId)) throw new Error('El nodo no existe en este roadmap.');
     targets.set(nodeId, position);
   }
@@ -114,8 +110,6 @@ const scheduleUnlock = (
 };
 
 const moveNodes = (practice: PracticeRoadmap, positions: readonly RoadmapNodePlacement[]) => {
-  if (practice.roadmap.roadmap.closedAt)
-    throw new Error('Este roadmap está cerrado y es de sólo lectura.');
   if (!positions.length) return;
   practice.updateNodes((nodes) => positionedNodes(nodes, positions));
 };
@@ -124,21 +118,8 @@ const createNode: PracticeCommand<CanvasCommandOf<'add-node'>> = (
   practice,
   { nodeId, node, position: requested, displaced },
 ) => {
-  if (practice.roadmap.roadmap.closedAt)
-    throw new Error('Este roadmap está cerrado y es de sólo lectura.');
-  if (typeof nodeId !== 'string' || !nodeId.trim())
-    throw new Error('El nodo debe tener una identidad válida.');
   if (practice.roadmap.nodes.some(({ id }) => id === nodeId)) return { createdNodeId: nodeId };
   practice.requireAvailableNodeType(node.nodeTypeId);
-  if (typeof node.isVisible !== 'boolean')
-    throw new Error('La visibilidad debe ser un valor booleano.');
-  if (!node.title.trim() || node.title.trim().length > 240)
-    throw new Error('El título debe ser un texto no vacío de hasta 240 caracteres.');
-  if (node.description && !node.description.trim())
-    throw new Error('La descripción debe ser un texto no vacío.');
-  if (!Number.isFinite(requested.x) || !Number.isFinite(requested.y))
-    throw new Error('La posición debe contener números finitos.');
-  positionedNodes(practice.roadmap.nodes, displaced);
   const position = practice.createdNodePosition ?? requested;
   const positions = practice.createdNodePosition
     ? nodesDisplacedByNewNode(
