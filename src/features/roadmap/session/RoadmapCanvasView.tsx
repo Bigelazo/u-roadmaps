@@ -43,7 +43,7 @@ import {
   type RoadmapGraphProps,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
-import { studentNodeStatus } from '@/features/roadmap/student/node-status';
+import { studentNodeStatus, type StudentNodeStatus } from '@/features/roadmap/student/node-status';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
@@ -525,6 +525,31 @@ function RoadmapNodeEditorPanel({
   );
 }
 
+function studentPanelContent(
+  panel: NodeSelectionPanel,
+  selectedNode: RoadmapNode | StudentRoadmapNode | undefined,
+): {
+  node: StudentRoadmapNode | undefined;
+  status: StudentNodeStatus | null;
+  isNodeInformationPreview: boolean;
+} {
+  if (panel.kind === 'node-information-preview') {
+    return {
+      node: panel.node,
+      status: panel.isCompleted ? 'completed' : 'available',
+      isNodeInformationPreview: true,
+    };
+  }
+  if (panel.kind === 'student-detail' && selectedNode) {
+    return {
+      node: selectedNode as StudentRoadmapNode,
+      status: studentNodeStatus(selectedNode),
+      isNodeInformationPreview: false,
+    };
+  }
+  return { node: undefined, status: null, isNodeInformationPreview: false };
+}
+
 function RoadmapStudentPanel({
   panel,
   selectedNode,
@@ -550,31 +575,20 @@ function RoadmapStudentPanel({
   onComplete: (nodeId: string) => void;
   onResourceAccess: (resource: Resource) => void;
 }) {
-  const nodeInformationPreview = panel.kind === 'node-information-preview' ? panel : null;
-  const nodeInformationPreviewNode = nodeInformationPreview?.node;
-  const isStudentDetailOpen = panel.kind === 'student-detail';
+  const content = studentPanelContent(panel, selectedNode);
   return (
     <>
-      {(isStudentExperience || nodeInformationPreviewNode) && (
+      {(isStudentExperience || content.isNodeInformationPreview) && (
         <StudentNodeDetail
-          node={
-            nodeInformationPreviewNode ??
-            (isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined)
+          node={content.node}
+          status={content.status}
+          onClose={
+            content.isNodeInformationPreview ? onCloseNodeInformationPreview : onCloseSelectedNode
           }
-          status={
-            nodeInformationPreviewNode
-              ? nodeInformationPreview.isCompleted
-                ? 'completed'
-                : 'available'
-              : isStudentDetailOpen && selectedNode
-                ? studentNodeStatus(selectedNode)
-                : null
-          }
-          onClose={nodeInformationPreviewNode ? onCloseNodeInformationPreview : onCloseSelectedNode}
           onComplete={(node) => onComplete(node.id)}
           onResourceAccess={onResourceAccess}
-          isReadOnly={isHistorical && !nodeInformationPreviewNode}
-          isNodeInformationPreview={Boolean(nodeInformationPreviewNode)}
+          isReadOnly={isHistorical && !content.isNodeInformationPreview}
+          isNodeInformationPreview={content.isNodeInformationPreview}
           nodeTypes={nodeTypes}
           panelWidth={width}
           onPanelWidthChange={onWidthChange}

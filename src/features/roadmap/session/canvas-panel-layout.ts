@@ -6,7 +6,7 @@ import { isStudentBlockedNode } from '@/features/roadmap/student/node-status';
 import type { RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 
-export type OpenCanvasPanel = 'editor' | 'student-detail' | 'node-information-preview';
+export type OpenCanvasPanel = Exclude<NodeSelectionPanel['kind'], 'closed'>;
 
 export type CanvasPanelLayout = {
   openPanel: OpenCanvasPanel | null;
