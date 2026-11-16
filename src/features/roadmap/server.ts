@@ -46,6 +46,7 @@ export {
 } from '@/features/roadmap/application/queries';
 
 export {
+  enterCourseOffering,
   synchronizeAcademicHistory,
   synchronizeCourseOffering,
 } from './application/academic-participation';

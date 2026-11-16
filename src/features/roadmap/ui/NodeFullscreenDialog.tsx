@@ -5,7 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import type { ReactNode } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { NodeDescription } from './NodeDescription';
+import { NodeDescription } from './LazyNodeDescription';
 import {
   Dialog,
   DialogClose,

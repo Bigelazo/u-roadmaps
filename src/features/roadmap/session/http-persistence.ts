@@ -13,6 +13,7 @@ type RequestOptions = {
   readonly previewHeader?: string;
   readonly previewVersion?: string;
   readonly load?: 'roadmap' | 'canvas-preview';
+  readonly signal?: AbortSignal;
 };
 
 async function failureError(response: Response, failure: string) {
@@ -42,7 +43,7 @@ export function createHttpRoadmapCanvasSessionPersistence(
   async function request(
     { method, path, body }: RouteRequest,
     failure: string,
-    { previewHeader, previewVersion, load }: RequestOptions = {},
+    { previewHeader, previewVersion, load, signal }: RequestOptions = {},
   ) {
     const json = body !== undefined && !(body instanceof FormData);
     const headers = {
@@ -52,6 +53,7 @@ export function createHttpRoadmapCanvasSessionPersistence(
     const response = await fetch(roadmapUrl(identifier, path), {
       ...(method && { method }),
       ...(load && { cache: 'no-store' }),
+      ...(signal && { signal }),
       ...(Object.keys(headers).length > 0 && { headers }),
       ...(body && { body: json ? JSON.stringify(body) : body }),
     });
@@ -79,8 +81,10 @@ export function createHttpRoadmapCanvasSessionPersistence(
       return { countsAccess: true };
     },
 
-    load: async () =>
-      (await request({ path: '' }, 'No se pudo cargar el roadmap.', { load: 'roadmap' })).json(),
+    load: async (signal) =>
+      (
+        await request({ path: '' }, 'No se pudo cargar el roadmap.', { load: 'roadmap', signal })
+      ).json(),
 
     loadCanvasPreview: async () =>
       (

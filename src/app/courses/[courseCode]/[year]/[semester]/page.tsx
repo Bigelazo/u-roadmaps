@@ -1,16 +1,31 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { randomUUID } from 'node:crypto';
 import {
-  parseCourseOfferingIdentifier,
   PostCreationInvitationDialog,
   RoadmapCanvasSession,
+  type AnyRoadmapDto,
 } from '@/features/roadmap';
-import { readPostCreationInvitation, synchronizeCourseOffering } from '@/features/roadmap/server';
+import {
+  readPostCreationInvitation,
+  enterCourseOffering,
+  readRoadmapForParticipant,
+} from '@/features/roadmap/server';
+import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapEntryNotices } from '@/app/_components/RoadmapEntryNotices';
+import { RefreshOnParticipationChange } from '@/app/_components/RefreshOnParticipationChange';
+
+function readRoadmapAsTheApiSendsIt(
+  participant: Parameters<typeof readRoadmapForParticipant>[0],
+): Promise<AnyRoadmapDto | null> {
+  return readRoadmapForParticipant(participant).then(
+    (roadmap) => JSON.parse(JSON.stringify(roadmap)) as AnyRoadmapDto,
+    () => null,
+  );
+}
 
 async function readCourseCreationInvitation({
   userId,
@@ -39,7 +54,11 @@ export default async function CoursePage(
     sharedAcademicHistory: true,
   });
   if (!user) redirect('/api/plogin/start');
-  const { participation } = await synchronizeCourseOffering(user, identifier, roadmapChangePort);
+  const { participation, participationChanged } = await enterCourseOffering(
+    user,
+    identifier,
+    roadmapChangePort,
+  );
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
     select: {
@@ -52,6 +71,10 @@ export default async function CoursePage(
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
+  const entryRoadmap =
+    courseOffering.roadmap && participation
+      ? readRoadmapAsTheApiSendsIt({ userId: user.id, identifier })
+      : undefined;
   const invitation = await readCourseCreationInvitation({
     userId: user.id,
     roadmapId: courseOffering.roadmap?.id,
@@ -65,6 +88,7 @@ export default async function CoursePage(
         <RoadmapCanvasSession
           notificationsEnabled
           roadmapEntryKey={roadmapEntryKey}
+          entryRoadmap={entryRoadmap}
           courseOffering={{ identifier, title: courseName }}
           experience={{
             kind: isTeaching ? 'teaching' : 'student',
@@ -72,6 +96,9 @@ export default async function CoursePage(
           }}
         />
       </RoadmapEntryNotices>
+      {participationChanged ? (
+        <RefreshOnParticipationChange changed={participationChanged} />
+      ) : null}
       {invitation ? (
         <PostCreationInvitationDialog
           wording={invitation.wording}

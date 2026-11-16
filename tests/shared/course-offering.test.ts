@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { parseCourseOfferingIdentifier } from '@/features/roadmap/domain/course-offering-identifier';
+import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
 
 test('parses a Course offering identifier without changing its Course code', () => {
   expect(

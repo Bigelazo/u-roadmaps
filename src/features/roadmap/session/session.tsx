@@ -70,6 +70,22 @@ function absorbsOwnEcho(echo: OwnEcho) {
   echo.expectedUntil = 0;
   return true;
 }
+const claimedEntryRoadmaps = new WeakSet<Promise<AnyRoadmapDto | null>>();
+
+function entryRoadmapForThisMount(entryRoadmap: Promise<AnyRoadmapDto | null> | undefined) {
+  if (!entryRoadmap || claimedEntryRoadmaps.has(entryRoadmap)) return undefined;
+  queueMicrotask(() => claimedEntryRoadmaps.add(entryRoadmap));
+  return entryRoadmap;
+}
+
+async function settledEntryRoadmap(streamedThenable: PromiseLike<AnyRoadmapDto | null>) {
+  try {
+    return await streamedThenable;
+  } catch {
+    return null;
+  }
+}
+
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
 
@@ -136,21 +152,28 @@ function useInjectedSession(
   const semester = input.courseOffering.identifier.semester;
   const experienceKind = input.experience.kind;
   const experienceTerm = input.experience.term;
-  const loadRoadmap = useCallback(async () => {
-    const loading = persistence.load();
-    latestLoadRef.current = {
-      startedAt: Date.now(),
-      succeeded: loading.then(
-        () => true,
-        () => false,
-      ),
-    };
-    const loadedRoadmap = await loading;
-    if (!matchesExperience(loadedRoadmap, experienceKind)) {
-      throw new Error(loadFailure);
-    }
-    return loadedRoadmap;
-  }, [experienceKind, persistence]);
+  const entryRoadmap = input.entryRoadmap;
+  const loadRoadmap = useCallback(
+    async (signal?: AbortSignal, readBeforeEntry?: Promise<AnyRoadmapDto | null>) => {
+      const loadNow = () => persistence.load(signal);
+      const loading = readBeforeEntry
+        ? settledEntryRoadmap(readBeforeEntry).then((entered) => entered ?? loadNow())
+        : loadNow();
+      latestLoadRef.current = {
+        startedAt: readBeforeEntry ? 0 : Date.now(),
+        succeeded: loading.then(
+          () => true,
+          () => false,
+        ),
+      };
+      const loadedRoadmap = await loading;
+      if (!matchesExperience(loadedRoadmap, experienceKind)) {
+        throw new Error(loadFailure);
+      }
+      return loadedRoadmap;
+    },
+    [experienceKind, persistence],
+  );
 
   const refresh = useCallback(
     async (applyProjection = true) => {
@@ -235,13 +258,14 @@ function useInjectedSession(
   useEffect(() => {
     sessionAliveRef.current = true;
     const requestVersion = ++requestVersionRef.current;
-    void loadRoadmap().then(
+    const entry = new AbortController();
+    void loadRoadmap(entry.signal, entryRoadmapForThisMount(entryRoadmap)).then(
       (loadedRoadmap) => {
         if (requestVersion !== requestVersionRef.current) return;
         setRoadmap(loadedRoadmap);
       },
       (cause: unknown) => {
-        if (requestVersion !== requestVersionRef.current) return;
+        if (entry.signal.aborted || requestVersion !== requestVersionRef.current) return;
         if (cause instanceof RoadmapAccessLostError) {
           setRoadmap(null);
           setAccessLost(true);
@@ -250,10 +274,11 @@ function useInjectedSession(
       },
     );
     return () => {
+      entry.abort();
       sessionAliveRef.current = false;
       canvasPreviewVersionRef.current += 1;
     };
-  }, [loadRoadmap]);
+  }, [entryRoadmap, loadRoadmap]);
 
   const dismissError = useCallback(() => {
     setError(null);

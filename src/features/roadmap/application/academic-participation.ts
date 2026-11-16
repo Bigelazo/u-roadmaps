@@ -235,6 +235,63 @@ export async function synchronizeCourseOffering(
   return { status: 'complete', position: effectivePosition(access.positions), participation };
 }
 
+export type CourseOfferingEntry = Readonly<{
+  participation: ActiveParticipation;
+  participationChanged?: Promise<boolean>;
+}>;
+
+export async function enterCourseOffering(
+  user: AcademicUser,
+  identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
+): Promise<CourseOfferingEntry> {
+  const synchronized = synchronizeCourseOffering(user, identifier, changePort).then(
+    ({ participation }) => participation,
+  );
+  const stored = await readActiveParticipation(user, identifier).catch(() => null);
+  if (!stored) return { participation: await synchronized };
+  return {
+    participation: stored,
+    participationChanged: synchronized.then(
+      (current) => current?.role !== stored.role,
+      (error: unknown) => {
+        console.error('[course entry] no se pudo sincronizar con U-Campus', error);
+        return false;
+      },
+    ),
+  };
+}
+
+function alreadyMaterialized(
+  stored: StoredParticipation | undefined,
+  access: CourseAccess,
+  materialization: Materialization,
+) {
+  const institutionalPosition = effectivePosition(access.positions);
+  return (
+    !institutionalPosition ||
+    keepsStoredParticipation(stored, materialization, institutionalPosition)
+  );
+}
+
+async function storedParticipationsByOffering(user: AcademicUser) {
+  const stored = await prisma.participation.findMany({
+    where: { userId: user.id },
+    select: {
+      role: true,
+      institutionalPosition: true,
+      isActive: true,
+      courseOffering: { select: { courseCode: true, year: true, semester: true } },
+    },
+  });
+  return new Map(
+    stored.map(({ courseOffering, ...participation }) => [
+      offeringKey(courseOffering),
+      participation,
+    ]),
+  );
+}
+
 export async function synchronizeAcademicHistory(
   user: AcademicUser,
   changePort: RoadmapChangePort,
@@ -243,8 +300,11 @@ export async function synchronizeAcademicHistory(
   if (history.status === 'unavailable') return history;
   const offerings = reportedOfferings(history.courses);
   const materialization = history.status === 'complete' ? 'replace' : 'promote';
-  for (const access of offerings.values())
+  const stored = await storedParticipationsByOffering(user);
+  for (const [key, access] of offerings) {
+    if (alreadyMaterialized(stored.get(key), access, materialization)) continue;
     await materializeParticipation(user, access, changePort, materialization);
+  }
   if (history.status === 'partial') return history;
   await deactivateParticipations(
     user,

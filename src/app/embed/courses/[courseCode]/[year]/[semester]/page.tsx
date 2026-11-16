@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
-import { parseCourseOfferingIdentifier } from '@/features/roadmap';
+import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { EmbeddedSessionConnection } from '@/app/_components/EmbeddedSessionConnection';

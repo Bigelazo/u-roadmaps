@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cache } from 'react';
 import type { Session } from 'next-auth';
 import { getApplicationSession } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
@@ -8,13 +9,17 @@ import { ApplicationError } from '@/shared/errors/server';
 import { readFixtureParticipantNames } from '@/development/server';
 import { createMufasaUCampus, localFixtureUCampus } from '@/integrations/ucampus/server';
 
+const readUserOncePerRequest = cache((userId: string) =>
+  prisma.user.findUnique({ where: { id: userId } }),
+);
+
 export async function resolveSessionUser(
   session: Session | null,
   { sharedAcademicHistory = false }: { sharedAcademicHistory?: boolean } = {},
 ) {
   const userId = session?.user?.id;
   if (!isUuid(userId)) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await readUserOncePerRequest(userId);
   return (
     user && {
       ...user,

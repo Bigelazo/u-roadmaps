@@ -3,23 +3,11 @@
 import 'driver.js/dist/driver.css';
 import './tutorial.css';
 
-import { driver, type Driver } from 'driver.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
-import {
-  startTutorialSession,
-  tutorialDriverConfig,
-  type TutorialDescriptionPortal,
-} from './tutorial-session';
-import {
-  clearTutorialClosingPopover,
-  readTutorialClosingPopover,
-  TUTORIAL_TRIGGER_ATTRIBUTE,
-  waitForElement,
-  type TutorialActions,
-  type TutorialStep,
-} from './tutorial-support';
+import { startTutorialSession, type TutorialDescriptionPortal } from './tutorial-session';
+import { type TutorialActions, type TutorialStep } from './tutorial-support';
 
 export function RoadmapTutorial<Action = never>({
   steps,
@@ -91,38 +79,4 @@ export function RoadmapTutorial<Action = never>({
       />
     </>
   );
-}
-
-export function TutorialClosingPopover() {
-  useEffect(() => {
-    if (!readTutorialClosingPopover()) return;
-    const selector = `[${TUTORIAL_TRIGGER_ATTRIBUTE}]`;
-    let tour: Driver | null = null;
-    let cancelled = false;
-    void waitForElement(selector).then(() => {
-      if (cancelled || !document.querySelector(selector)) return;
-      tour = driver({
-        ...tutorialDriverConfig,
-        showButtons: ['next', 'close'],
-        doneBtnText: 'Entendido',
-      });
-      tour.highlight({
-        element: selector,
-        popover: {
-          title: 'Tutorial',
-          description: 'Puedes repetir el tutorial cuando quieras desde este ícono.',
-          side: 'bottom',
-          showButtons: ['next', 'close'],
-          nextBtnText: 'Entendido',
-          onNextClick: () => tour?.destroy(),
-        },
-      });
-      clearTutorialClosingPopover();
-    });
-    return () => {
-      cancelled = true;
-      tour?.destroy();
-    };
-  }, []);
-  return null;
 }

@@ -7,7 +7,11 @@ import {
   integrationClient,
   integrationDatabaseUrl,
 } from '../../../notifications-integration/database';
-import { synchronizeAcademicHistory, synchronizeCourseOffering } from '@/features/roadmap/server';
+import {
+  enterCourseOffering,
+  synchronizeAcademicHistory,
+  synchronizeCourseOffering,
+} from '@/features/roadmap/server';
 import { requireRoadmapCreationAccess } from '@/features/roadmap/application/participation';
 import {
   localFixtureUCampus,
@@ -400,4 +404,54 @@ test('a partial whole history materializes what it reports and deactivates nothi
     ]),
   );
   expect(await activeOfferings(course.studentId)).toHaveLength(before.length + 1);
+});
+
+function userAwaitingUCampus(id: string) {
+  let answer: (history: AcademicHistory) => void = () => undefined;
+  const history = new Promise<AcademicHistory>((resolve) => {
+    answer = resolve;
+  });
+  return {
+    user: {
+      ...userWith(id, { status: 'unavailable' }),
+      ucampus: { ...localFixtureUCampus, getAcademicHistory: () => history },
+    },
+    answer,
+  };
+}
+
+test('entering with a stored Participation does not wait for U-Campus', async ({ course }) => {
+  const { user, answer } = userAwaitingUCampus(course.studentId);
+  const entry = await enterCourseOffering(user, course.identifier, recordingChangePort().port);
+  expect(entry.participation).toMatchObject({ id: course.participationId, role: 'STUDENT' });
+  answer(complete(course.identifier));
+  expect(await entry.participationChanged).toBe(false);
+});
+
+test('entering reports the change once U-Campus omits the stored offering', async ({ course }) => {
+  const { user, answer } = userAwaitingUCampus(course.studentId);
+  const entry = await enterCourseOffering(user, course.identifier, recordingChangePort().port);
+  answer(complete(earlier(course)));
+  expect(await entry.participationChanged).toBe(true);
+  expect(await storedActive(course.studentId, course)).toBeNull();
+});
+
+test('entering reports the change once U-Campus promotes the stored role', async ({ course }) => {
+  const { user, answer } = userAwaitingUCampus(course.studentId);
+  const entry = await enterCourseOffering(user, course.identifier, recordingChangePort().port);
+  answer(complete({ ...course.identifier, institutionalPosition: 'TEACHING_ASSISTANT' }));
+  expect(await entry.participationChanged).toBe(true);
+});
+
+test('entering without a stored Participation waits for U-Campus to materialize it', async ({
+  course,
+}) => {
+  const identifier = earlier(course);
+  const entry = await enterCourseOffering(
+    userWith(course.studentId, complete(identifier)),
+    identifier,
+    recordingChangePort().port,
+  );
+  expect(entry.participation).toMatchObject({ role: 'STUDENT', isActive: true });
+  expect(entry.participationChanged).toBeUndefined();
 });

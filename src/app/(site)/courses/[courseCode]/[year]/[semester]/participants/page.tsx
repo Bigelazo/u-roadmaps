@@ -1,7 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
-import { CourseParticipants, parseCourseOfferingIdentifier } from '@/features/roadmap';
+import { CourseParticipants } from '@/features/roadmap';
 import { readCourseParticipants, synchronizeCourseOffering } from '@/features/roadmap/server';
+import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
 import { ApplicationError } from '@/shared/errors/server';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';

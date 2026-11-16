@@ -4,7 +4,7 @@ import {
   parseCourseOfferingIdentifier,
   type CourseOfferingIdentifier,
   type CourseOfferingIdentifierParams,
-} from '@/features/roadmap';
+} from '@/shared/course-offering';
 
 export function requireCourseOfferingIdentifier(
   params: CourseOfferingIdentifierParams,

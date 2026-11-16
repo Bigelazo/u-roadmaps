@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { parseCourseOfferingIdentifier } from '@/features/roadmap';
+import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
 
 export default async function CourseOfferingLayout({
   children,
