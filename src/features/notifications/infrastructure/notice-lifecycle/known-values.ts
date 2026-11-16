@@ -170,6 +170,32 @@ export async function setKnownValue(
   });
 }
 
+export type KnownValueUpdate = Readonly<{
+  target: NoticeTargetRef;
+  knownValue: string;
+  context: TargetContext;
+}>;
+
+export async function setKnownValues(
+  transaction: Prisma.TransactionClient,
+  identity: RecipientRoadmap,
+  values: readonly KnownValueUpdate[],
+) {
+  if (!values.length) return;
+  await transaction.$executeRaw`
+    INSERT INTO "NoticeKnownValue" (${knownValueColumns()}, "context")
+    SELECT ${identity.recipientId}::uuid, ${identity.roadmapId}::uuid, target_key, notice_target,
+      node, known, context::jsonb
+    FROM unnest(
+      ${values.map(({ target }) => target.targetKey)}::text[],
+      ${values.map(({ target }) => target.noticeTarget)}::text[],
+      ${values.map(({ target }) => target.nodeId)}::uuid[],
+      ${values.map(({ knownValue }) => knownValue)}::text[],
+      ${values.map(({ context }) => JSON.stringify(context))}::text[]
+    ) AS value(target_key, notice_target, node, known, context)
+    ${onKnownValueConflict()} DO UPDATE SET "knownValue" = EXCLUDED."knownValue", "context" = EXCLUDED."context"`;
+}
+
 export async function forgetDeletedNode(
   transaction: Prisma.TransactionClient,
   roadmapId: string,

@@ -2,7 +2,8 @@ import { act, render } from '@testing-library/react';
 import type { Config, DriveStep } from 'driver.js';
 import { StrictMode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RoadmapTutorial, TutorialClosingPopover } from '@/shared/client/tutorial/tutorial';
+import { RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
+import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial-closing-popover';
 import {
   markTutorialClosingPopover,
   readTutorialClosingPopover,
@@ -241,6 +242,7 @@ it('shows the closing popover under StrictMode and forgets it once shown', async
       <TutorialClosingPopover />
     </StrictMode>,
   );
+  await vi.waitFor(() => expect(mock.highlight).toHaveBeenCalledOnce());
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });

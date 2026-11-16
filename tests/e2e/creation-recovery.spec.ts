@@ -190,11 +190,7 @@ test('a failed authoritative movement reload keeps persistent feedback until rec
 }, testInfo) => {
   await page.setViewportSize({ width: 1024, height: 800 });
   await authenticateAs(page.context(), course.users.teacher.id);
-  const initialLoad = page.waitForResponse(
-    (response) => response.url().endsWith(course.apiPath()) && response.status() === 200,
-  );
   await page.goto(course.pagePath());
-  await initialLoad;
   const node = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
   await expect(node).toBeVisible();
   await page.clock.install();

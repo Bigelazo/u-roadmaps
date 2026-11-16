@@ -1,7 +1,12 @@
+import { gzipSync } from 'node:zlib';
+import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import type { CourseOfferingIdentifier, CourseOfferingIdentifierParams } from '@/features/roadmap';
+import type {
+  CourseOfferingIdentifier,
+  CourseOfferingIdentifierParams,
+} from '@/shared/course-offering';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
@@ -19,10 +24,43 @@ export function applicationErrorResponse(error: ApplicationError): NextResponse 
   );
 }
 
-export function handleApplicationResult<Success extends Response>(
+const smallestJsonWorthCompressing = 1024;
+
+async function requestInScopeAcceptsGzip() {
+  try {
+    return /\bgzip\b/.test((await headers()).get('accept-encoding') ?? '');
+  } catch {
+    return false;
+  }
+}
+
+async function gzippedWhenLargeJson(response: Response): Promise<Response> {
+  if (
+    !response.body ||
+    response.headers.has('content-encoding') ||
+    !response.headers.get('content-type')?.startsWith('application/json') ||
+    !(await requestInScopeAcceptsGzip())
+  )
+    return response;
+  const json = Buffer.from(await response.clone().arrayBuffer());
+  if (json.byteLength < smallestJsonWorthCompressing) return response;
+  const compressedHeaders = new Headers(response.headers);
+  compressedHeaders.set('Content-Encoding', 'gzip');
+  compressedHeaders.append('Vary', 'Accept-Encoding');
+  compressedHeaders.delete('Content-Length');
+  return new Response(gzipSync(json), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: compressedHeaders,
+  });
+}
+
+export async function handleApplicationResult<Success extends Response>(
   operation: () => Promise<Success>,
 ): Promise<Response> {
-  return applicationResult(operation).match((response) => response, applicationErrorResponse);
+  return gzippedWhenLargeJson(
+    await applicationResult(operation).match((response) => response, applicationErrorResponse),
+  );
 }
 
 export async function parseJsonObject(request: Request): Promise<JsonObject> {
