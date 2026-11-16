@@ -7,7 +7,6 @@ export { backfillResourceFileSizes } from './infrastructure/resources/file-sizes
 export {
   changeTeacherBlock,
   createRoadmapDependency,
-  createRoadmapNode,
   createRoadmapNodeType,
   deleteRoadmapDependency,
   deleteRoadmapDependencies,
@@ -66,3 +65,4 @@ export {
 } from './application/tutorial-invitation';
 export { isFirstVisitInvitationDue } from './application/first-visit-invitation';
 export { isPracticeExperience, isTutorialInvitation } from './types';
+export { createRoadmapNode, saveRoadmapNodePositions } from './application/placement';

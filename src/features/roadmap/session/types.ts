@@ -33,6 +33,8 @@ export type ScheduledUnlockOutcome = {
 
 export type ExecutionResult = {
   readonly createdNodeId?: string;
+  readonly creationUncertain?: true;
+  readonly sessionEnded?: true;
   readonly dependency?: RoadmapDependency;
   readonly teacherBlockedNodeIds?: readonly string[];
   readonly scheduledUnlock?: ScheduledUnlockOutcome;

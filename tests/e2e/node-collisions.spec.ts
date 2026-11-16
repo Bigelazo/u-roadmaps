@@ -42,17 +42,17 @@ test('dropping a Node on another pushes it two grid cells away, saves both and d
   const node = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
   const from = (await node(dragged).boundingBox())!;
   const to = (await node(occupied).boundingBox())!;
-  const saved = (id: string) =>
+  const saved = () =>
     page.waitForResponse(
       (response) =>
-        response.request().method() === 'PATCH' && response.url().endsWith(`/nodes/${id}`),
+        response.request().method() === 'PATCH' && response.url().endsWith('/placement'),
     );
-  const savedDragged = saved(dragged);
+  const savedDragged = saved();
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 + gridCell, { steps: 12 });
   await page.mouse.up();
-  expect((await savedDragged).status()).toBe(200);
+  expect((await savedDragged).status()).toBe(204);
 
   const separated = async () => {
     const nodes: { id: string; positionX: number; positionY: number; title: string }[] = (

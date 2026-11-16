@@ -197,18 +197,6 @@ export function createInMemoryRoadmapSessionPersistence(
       const decision = decideNodeTypeChange({ nodeTypes, nodes, change });
       if (decision.kind === 'REJECTED') throw new Error(decision.message);
     },
-
-    settleEach(items, apply) {
-      const failures: unknown[] = [];
-      for (const item of items) {
-        try {
-          apply(item);
-        } catch (cause) {
-          failures.push(cause);
-        }
-      }
-      if (failures.length > 0) throw failures[0];
-    },
   };
 
   return {

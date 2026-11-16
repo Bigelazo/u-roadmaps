@@ -45,7 +45,7 @@ type CanvasCommandPayloads = {
   'delete-dependencies': { dependencyIds: readonly string[] };
   'move-nodes': { positions: readonly RoadmapNodePlacement[] };
   'apply-automatic-layout': { layouts: AutomaticLayouts; direction?: RoadmapLayoutDirection };
-  'add-node': { node: NewRoadmapNode } & NewNodePlacement;
+  'add-node': { nodeId: string; node: NewRoadmapNode } & NewNodePlacement;
   'update-node': { nodeId: string; value: NodeUpdate };
   'add-resource': { nodeId: string; resource: ResourceInput };
   'upload-resource': { nodeId: string; file: File };

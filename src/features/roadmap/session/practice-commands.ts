@@ -27,6 +27,23 @@ import type { AnyRoadmapDto, Resource, RoadmapNode } from '@/features/roadmap/ty
 type AnyRoadmapNode = AnyRoadmapDto['nodes'][number];
 type NodeDraft = { readonly id: string };
 
+function positionedNodes(nodes: AnyRoadmapNode[], positions: readonly RoadmapNodePlacement[]) {
+  const nodeIds = new Set(nodes.map(({ id }) => id));
+  const targets = new Map<string, RoadmapNodePlacement['position']>();
+  for (const { nodeId, position } of positions) {
+    if (typeof nodeId !== 'string' || !nodeId.trim() || targets.has(nodeId))
+      throw new Error('Cada nodo debe tener una identidad válida y única.');
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y))
+      throw new Error('La posición debe contener números finitos.');
+    if (!nodeIds.has(nodeId)) throw new Error('El nodo no existe en este roadmap.');
+    targets.set(nodeId, position);
+  }
+  return nodes.map((node) => {
+    const position = targets.get(node.id);
+    return position ? { ...node, positionX: position.x, positionY: position.y } : node;
+  });
+}
+
 export type SimulatedProgress = {
   readonly completedNodeIds: Set<string>;
   readonly reviewedResourceIds: Set<string>;
@@ -49,7 +66,6 @@ export type PracticeRoadmap = {
   ): { readonly blockedNodeIds: readonly string[] };
   requireAvailableNodeType(nodeTypeId: string): void;
   decideNodeType(change: NodeTypeChange): void;
-  settleEach<Item>(items: readonly Item[], apply: (item: Item) => void): void;
 };
 
 type PracticeCommand<Command> = {
@@ -97,14 +113,60 @@ const scheduleUnlock = (
   return { scheduledUnlock: { title: node.title, prerequisites: prerequisiteIds.length } };
 };
 
-const moveNodes = (practice: PracticeRoadmap, positions: readonly RoadmapNodePlacement[]) =>
-  practice.settleEach(positions, ({ nodeId, position }) =>
-    practice.mutateNode(nodeId, (node) => ({
-      ...node,
+const moveNodes = (practice: PracticeRoadmap, positions: readonly RoadmapNodePlacement[]) => {
+  if (practice.roadmap.roadmap.closedAt)
+    throw new Error('Este roadmap está cerrado y es de sólo lectura.');
+  if (!positions.length) return;
+  practice.updateNodes((nodes) => positionedNodes(nodes, positions));
+};
+
+const createNode: PracticeCommand<CanvasCommandOf<'add-node'>> = (
+  practice,
+  { nodeId, node, position: requested, displaced },
+) => {
+  if (practice.roadmap.roadmap.closedAt)
+    throw new Error('Este roadmap está cerrado y es de sólo lectura.');
+  if (typeof nodeId !== 'string' || !nodeId.trim())
+    throw new Error('El nodo debe tener una identidad válida.');
+  if (practice.roadmap.nodes.some(({ id }) => id === nodeId)) return { createdNodeId: nodeId };
+  practice.requireAvailableNodeType(node.nodeTypeId);
+  if (typeof node.isVisible !== 'boolean')
+    throw new Error('La visibilidad debe ser un valor booleano.');
+  if (!node.title.trim() || node.title.trim().length > 240)
+    throw new Error('El título debe ser un texto no vacío de hasta 240 caracteres.');
+  if (node.description && !node.description.trim())
+    throw new Error('La descripción debe ser un texto no vacío.');
+  if (!Number.isFinite(requested.x) || !Number.isFinite(requested.y))
+    throw new Error('La posición debe contener números finitos.');
+  positionedNodes(practice.roadmap.nodes, displaced);
+  const position = practice.createdNodePosition ?? requested;
+  const positions = practice.createdNodePosition
+    ? nodesDisplacedByNewNode(
+        practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
+          id,
+          title,
+          position: { x: positionX, y: positionY },
+        })),
+        { id: nodeId, title: node.title, position },
+      )
+    : displaced;
+  const placed = positionedNodes(practice.roadmap.nodes, positions);
+  practice.updateNodes(() => [
+    ...placed,
+    {
+      id: nodeId,
+      title: node.title.trim(),
+      description: node.description || null,
+      nodeTypeId: node.nodeTypeId,
       positionX: position.x,
       positionY: position.y,
-    })),
-  );
+      isVisible: node.isVisible,
+      isTeacherBlocked: false,
+      resources: [],
+    },
+  ]);
+  return { createdNodeId: nodeId };
+};
 
 const setVisibility = (practice: PracticeRoadmap, nodeId: string, isVisible: boolean) =>
   practice.mutateNode(nodeId, (node) => ('isVisible' in node ? { ...node, isVisible } : node));
@@ -155,37 +217,7 @@ export const practiceCommands: {
   'move-nodes': (practice, { positions }) => moveNodes(practice, positions),
   'apply-automatic-layout': (practice, layout) =>
     moveNodes(practice, chosenAutomaticLayout(layout)),
-  'add-node': (practice, { node, position: requested }) => {
-    practice.requireAvailableNodeType(node.nodeTypeId);
-    const id = crypto.randomUUID();
-    const position = practice.createdNodePosition ?? requested;
-    moveNodes(
-      practice,
-      nodesDisplacedByNewNode(
-        practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
-          id,
-          title,
-          position: { x: positionX, y: positionY },
-        })),
-        { id, title: node.title, position },
-      ),
-    );
-    practice.updateNodes((nodes) => [
-      ...nodes,
-      {
-        id,
-        title: node.title,
-        description: node.description || null,
-        nodeTypeId: node.nodeTypeId,
-        positionX: position.x,
-        positionY: position.y,
-        isVisible: node.isVisible,
-        isTeacherBlocked: false,
-        resources: [],
-      },
-    ]);
-    return { createdNodeId: id };
-  },
+  'add-node': createNode,
   'update-node': (practice, { nodeId, value }) => {
     practice.requireAvailableNodeType(value.nodeTypeId);
     practice.mutateNode(nodeId, (node) => ({

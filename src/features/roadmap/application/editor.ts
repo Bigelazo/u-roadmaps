@@ -253,27 +253,6 @@ function noChanges(message: string): never {
   throw new ApplicationError(400, 'INVALID_REQUEST', message);
 }
 
-export const createRoadmapNode = roadmapCommand({
-  capability: 'edit',
-  parse: ({ input }: { input: JsonObject }) => ({
-    title: requireString(input.title, 'title', 240),
-    description: nodeDescription(input.description),
-    nodeTypeId: requireUuid(input.nodeTypeId, 'nodeTypeId'),
-    positionX: requireFiniteNumber(input.positionX, 'positionX'),
-    positionY: requireFiniteNumber(input.positionY, 'positionY'),
-    isVisible: input.isVisible === undefined ? true : requireBoolean(input.isVisible, 'isVisible'),
-  }),
-  access: 'none',
-  run: async ({ tx, roadmap, input }) => {
-    await requireType(tx, input.nodeTypeId, roadmap.id);
-    const node = await tx.roadmapNode.create({ data: { roadmapId: roadmap.id, ...input } });
-    return {
-      result: nodeDto(node),
-      facts: [{ kind: 'node-created', nodeId: node.id, previous: null, current: node }],
-    };
-  },
-});
-
 type NodeChanges = {
   isVisible?: boolean;
   title?: string;

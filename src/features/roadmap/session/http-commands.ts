@@ -45,12 +45,8 @@ const scheduledUnlockRequest = ({
     : { method: 'DELETE' }),
 });
 
-const nodeMoveRequests = (positions: readonly RoadmapNodePlacement[]): RouteRequest[] =>
-  positions.map(({ nodeId, position }) => ({
-    method: 'PATCH',
-    path: `/nodes/${nodeId}`,
-    body: { positionX: position.x, positionY: position.y },
-  }));
+const nodeMoveRequests = (positions: readonly RoadmapNodePlacement[]): readonly RouteRequest[] =>
+  positions.length ? [{ method: 'PATCH', path: '/placement', body: { positions } }] : [];
 
 const nodeMoveFailure = 'No se pudo guardar la posición.';
 
@@ -143,19 +139,18 @@ export const httpCommands: {
     failure: nodeMoveFailure,
   },
   'add-node': {
-    requests: ({ node, position, displaced }) => [
-      {
-        method: 'POST',
-        path: '/nodes',
-        body: {
-          ...node,
-          description: node.description || null,
-          positionX: position.x,
-          positionY: position.y,
-        },
+    requests: ({ nodeId, node, position, displaced }) => ({
+      method: 'POST',
+      path: '/nodes',
+      body: {
+        nodeId,
+        ...node,
+        description: node.description || null,
+        positionX: position.x,
+        positionY: position.y,
+        displaced,
       },
-      ...nodeMoveRequests(displaced),
-    ],
+    }),
     failure: 'No se pudo crear el nodo.',
     result: async ([response]) => ({ createdNodeId: (await response.json()).node.id }),
   },

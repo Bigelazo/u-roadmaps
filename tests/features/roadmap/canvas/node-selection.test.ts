@@ -41,6 +41,7 @@ function blockedNode(id: string): StudentRoadmapNode {
 
 const addNodeCommand: CanvasCommand = {
   kind: 'add-node',
+  nodeId: 'created',
   node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
   position: { x: 480, y: 240 },
   displaced: [],

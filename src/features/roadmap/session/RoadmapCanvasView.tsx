@@ -7,7 +7,7 @@ import { NodeChangeCountsProvider } from '@/features/notifications/client';
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleHelp, Eye, LogOut } from 'lucide-react';
+import { CircleAlert, CircleHelp, Eye, LogOut } from 'lucide-react';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode, type CanvasMode } from '@/features/roadmap/canvas/mode';
 import {
@@ -45,6 +45,7 @@ import {
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { studentNodeStatus, type StudentNodeStatus } from '@/features/roadmap/student/node-status';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
+import type { PlacementRecovery } from '@/features/roadmap/session/placement-recovery';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   canvasConfirmation,
@@ -210,11 +211,19 @@ export function RoadmapCanvasView({ input }: Props) {
     canvasPreviewWorkflow,
     accessResource,
     isClosed,
+    placementRecovery,
+    recoverPlacement,
+    isActive,
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
     onCommandApplied: followAppliedCommand,
   });
-  useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
+  useStateToast(
+    'error',
+    'roadmap-session-error',
+    roadmap && !placementRecovery ? error : null,
+    dismissError,
+  );
 
   const { request } = canvasCommands;
   const performEditorEffect = useCallback(
@@ -300,6 +309,7 @@ export function RoadmapCanvasView({ input }: Props) {
 
   const selectedNode = displayedRoadmap?.nodes.find((node) => node.id === selectedNodeId);
   const panelLayout = useCanvasPanelLayout(panel);
+  const pendingCreationRef = useRef<Extract<CanvasCommand, { kind: 'add-node' }> | null>(null);
 
   if (accessLost) {
     return <LostRoadmapAccess />;
@@ -319,13 +329,26 @@ export function RoadmapCanvasView({ input }: Props) {
     placeNewNode,
     onProgress,
   ) => {
-    const outcome = await createNodeWithResources(
-      canvasCommands.run,
-      { kind: 'add-node', node, ...placeNewNode(node.title) },
-      resources,
-      onProgress,
-    );
-    if (!outcome) return false;
+    const creation = (pendingCreationRef.current ??= structuredClone({
+      kind: 'add-node',
+      nodeId: crypto.randomUUID(),
+      node,
+      ...placeNewNode(node.title),
+    }));
+    let rejected = false;
+    const run: CanvasCommands['run'] = async (command, options) => {
+      const result = await canvasCommands.run(command, options);
+      if (command.kind === 'add-node')
+        rejected = !result.applied && !result.creationUncertain && !result.sessionEnded;
+      return result;
+    };
+    const outcome = await createNodeWithResources(run, creation, resources, onProgress, isActive);
+    if (!isActive()) return false;
+    if (!outcome) {
+      if (rejected) pendingCreationRef.current = null;
+      return false;
+    }
+    pendingCreationRef.current = null;
     const summary = nodeCreationSummary(resources.length, outcome.failed);
     if (summary?.tone === 'error') {
       dismissError();
@@ -396,6 +419,8 @@ export function RoadmapCanvasView({ input }: Props) {
               onClearSelectedNode={() => void closeSelectedNode()}
               request={request}
               addNodeAtOpenPosition={addNodeAtOpenPosition}
+              placementRecovery={placementRecovery}
+              onRecoverPlacement={() => void recoverPlacement()}
               onViewportChange={canvasPreviewWorkflow.onViewportChange}
               viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
               canvasPreviewEntryButtonRef={canvasPreviewWorkflow.entryButtonRef}
@@ -615,6 +640,8 @@ function RoadmapCanvasGraph({
   onClearSelectedNode,
   request,
   addNodeAtOpenPosition,
+  placementRecovery,
+  onRecoverPlacement,
   onViewportChange,
   viewportRestoration,
   canvasPreviewEntryButtonRef,
@@ -631,6 +658,8 @@ function RoadmapCanvasGraph({
   onClearSelectedNode: () => void;
   request: CanvasCommands['request'];
   addNodeAtOpenPosition: AddNodeAtOpenPosition;
+  placementRecovery: PlacementRecovery | null;
+  onRecoverPlacement: () => void;
   onViewportChange: RoadmapGraphProps['onViewportChange'];
   viewportRestoration: RoadmapGraphProps['viewportRestoration'];
   canvasPreviewEntryButtonRef: RefObject<HTMLButtonElement | null>;
@@ -642,6 +671,18 @@ function RoadmapCanvasGraph({
     mode.capabilities;
   const { courseOffering } = input;
   const isCompactLayout = useCompactCanvasLayout();
+  const recoveryNotice =
+    placementRecovery && !isCanvasPreview ? (
+      <Alert variant="destructive" className="pointer-events-auto mt-4 max-w-sm">
+        <CircleAlert aria-hidden="true" />
+        <AlertDescription>
+          <p>{placementRecovery.message}</p>
+          <Button type="button" variant="outline" className="mt-2" onClick={onRecoverPlacement}>
+            Comprobar guardado
+          </Button>
+        </AlertDescription>
+      </Alert>
+    ) : null;
   return (
     <RoadmapGraph
       projection={projection}
@@ -685,6 +726,9 @@ function RoadmapCanvasGraph({
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
                 nodes={roadmap.nodes}
+                creationRecovery={
+                  placementRecovery?.kind === 'unsynchronized' ? null : placementRecovery
+                }
                 onSubmit={(node, resources, onProgress) =>
                   addNodeAtOpenPosition(node, resources, placeNewNode, onProgress)
                 }
@@ -701,13 +745,16 @@ function RoadmapCanvasGraph({
       }
       overlaySlots={{
         topLeft: (
-          <RoadmapCanvasHeader
-            title={courseOffering.title}
-            {...courseOffering.identifier}
-            isCanvasPreview={isCanvasPreview}
-            isEditing={mode.isEditing}
-            showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
-          />
+          <>
+            <RoadmapCanvasHeader
+              title={courseOffering.title}
+              {...courseOffering.identifier}
+              isCanvasPreview={isCanvasPreview}
+              isEditing={mode.isEditing}
+              showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
+            />
+            {recoveryNotice}
+          </>
         ),
         topCenter: isCanvasPreview ? (
           <CanvasPreviewToolbar

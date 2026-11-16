@@ -1,4 +1,5 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
+import { UncertainNodeCreationError } from './placement-recovery';
 import { roadmapUrl } from '@/features/roadmap/client';
 import {
   httpCommands,
@@ -14,12 +15,14 @@ type RequestOptions = {
   readonly previewHeader?: string;
   readonly previewVersion?: string;
   readonly load?: 'roadmap' | 'canvas-preview';
+  readonly creation?: boolean;
   readonly signal?: AbortSignal;
 };
 
-async function failureError(response: Response, failure: string) {
+async function failureError(response: Response, failure: string, creation = false) {
   const error = await readApiErrorBody(response);
-  if (!error) return new Error(failure);
+  if (!error) return creation ? new UncertainNodeCreationError() : new Error(failure);
+  if (creation && typeof error.code !== 'string') return new UncertainNodeCreationError();
   return error.code === 'ROADMAP_CLOSED'
     ? new RoadmapClosedError(error.message)
     : new Error(error.message);
@@ -31,22 +34,28 @@ export function createHttpRoadmapCanvasSessionPersistence(
   async function request(
     { method, path, body }: RouteRequest,
     failure: string,
-    { previewHeader, previewVersion, load, signal }: RequestOptions = {},
+    { previewHeader, previewVersion, load, creation, signal }: RequestOptions = {},
   ) {
     const json = body !== undefined && !(body instanceof FormData);
     const headers = {
       ...(json && { 'Content-Type': 'application/json' }),
       ...(previewHeader && previewVersion ? { [previewHeader]: previewVersion } : {}),
     };
-    const response = await fetch(roadmapUrl(identifier, path), {
-      ...(method && { method }),
-      ...(load && { cache: 'no-store' }),
-      ...(signal && { signal }),
-      ...(Object.keys(headers).length > 0 && { headers }),
-      ...(body && { body: json ? JSON.stringify(body) : body }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(roadmapUrl(identifier, path), {
+        ...(method && { method }),
+        ...(load && { cache: 'no-store' }),
+        ...(signal && { signal }),
+        ...(Object.keys(headers).length > 0 && { headers }),
+        ...(body && { body: json ? JSON.stringify(body) : body }),
+      });
+    } catch (cause) {
+      if (creation) throw new UncertainNodeCreationError();
+      throw cause;
+    }
     if (!response.ok) {
-      const error = await failureError(response, failure);
+      const error = await failureError(response, failure, creation);
       if (load === 'roadmap' && [401, 403, 404].includes(response.status))
         throw new RoadmapAccessLostError(error.message);
       throw error;
@@ -88,7 +97,11 @@ export function createHttpRoadmapCanvasSessionPersistence(
 
     async execute(command, previewVersion) {
       const entry: AnyHttpCommand = httpCommands[command.kind];
-      const options = { previewHeader: entry.previewHeader, previewVersion };
+      const options = {
+        previewHeader: entry.previewHeader,
+        previewVersion,
+        creation: command.kind === 'add-node',
+      };
       const sent = await Promise.allSettled(
         [entry.requests(command)].flat().map((item) => request(item, entry.failure, options)),
       );
@@ -96,7 +109,19 @@ export function createHttpRoadmapCanvasSessionPersistence(
         if (result.status === 'rejected') throw result.reason;
         return result.value;
       });
-      return entry.result?.(responses);
+      try {
+        const result = await entry.result?.(responses);
+        if (
+          command.kind === 'add-node' &&
+          result?.createdNodeId?.toLowerCase() !== command.nodeId.toLowerCase()
+        )
+          throw new UncertainNodeCreationError();
+        if (command.kind === 'add-node') return { ...result, createdNodeId: command.nodeId };
+        return result;
+      } catch (cause) {
+        if (command.kind === 'add-node') throw new UncertainNodeCreationError();
+        throw cause;
+      }
     },
   };
 }
