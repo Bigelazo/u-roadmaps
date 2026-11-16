@@ -181,6 +181,42 @@ test('unavailable recovery preserves uncertainty, discards dependent movement an
   expect(canvas.result.current.placementRecovery).toBeNull();
 });
 
+test('a definitive rejection of an uncertain creation resend clears the uncertainty and unblocks placements', async () => {
+  const saved = createInMemoryRoadmapSessionPersistence(roadmap);
+  let creationAttempts = 0;
+  const canvas = await openCanvas({
+    ...saved,
+    async execute(command, previewVersion) {
+      if (command.kind === 'add-node') {
+        creationAttempts += 1;
+        if (creationAttempts === 1) throw new UncertainNodeCreationError();
+        throw new Error('Rechazo definitivo');
+      }
+      return saved.execute(command, previewVersion);
+    },
+  });
+  await act(async () => {
+    await canvas.result.current.canvasCommands.run(creation);
+  });
+  expect(canvas.result.current.placementRecovery).toMatchObject({ kind: 'uncertain-creation' });
+  const uncertainMessage = canvas.result.current.error;
+  let resent: unknown;
+  await act(async () => {
+    resent = await canvas.result.current.canvasCommands.run(creation);
+  });
+  expect(resent).toEqual({ applied: false });
+  expect(canvas.result.current.placementRecovery).toBeNull();
+  expect(canvas.result.current.error).toContain('Rechazo definitivo');
+  expect(canvas.result.current.error).not.toBe(uncertainMessage);
+  expect((await saved.load()).nodes.some((node) => node.id === creation.nodeId)).toBe(false);
+  let moved: unknown;
+  await act(async () => {
+    moved = await canvas.result.current.canvasCommands.run(move(300));
+  });
+  expect(moved).toMatchObject({ applied: true });
+  expect((await saved.load()).nodes[0].positionX).toBe(300);
+});
+
 test('a successful read with no matching identity does not infer creation from matching content or resend automatically', async () => {
   const saved = createInMemoryRoadmapSessionPersistence({
     ...roadmap,

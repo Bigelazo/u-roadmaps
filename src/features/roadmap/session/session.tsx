@@ -495,11 +495,7 @@ function useInjectedSession(
           discardPlacements(placements, placement);
         }
         const missed = settleOwnCommand(echo, countsOwnWrite);
-        if (
-          command.kind === 'add-node' &&
-          (cause instanceof UncertainNodeCreationError ||
-            uncertainCreationRef.current?.nodeId === command.nodeId)
-        ) {
+        if (command.kind === 'add-node' && cause instanceof UncertainNodeCreationError) {
           if (!sessionAliveRef.current) return { applied: false, sessionEnded: true };
           uncertainCreationRef.current = command;
           placementFailureRef.current = uncertainCreationMessage;
@@ -522,6 +518,7 @@ function useInjectedSession(
             ? { applied: false, creationUncertain: true }
             : { applied: false, sessionEnded: true };
         }
+        if (resendingCreation) uncertainCreationRef.current = null;
         const failedPlacement = isPlacement(command);
         await reportFailure(cause, failedPlacement);
         if (missed && !failedPlacement && sessionAliveRef.current)
