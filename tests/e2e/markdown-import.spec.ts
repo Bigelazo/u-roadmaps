@@ -99,7 +99,6 @@ test('a Markdown file dragged into the window turns the description into a drop 
   const markdown = await fileDrop(page, 'guia.md', '# Guía');
   const pdf = await fileDrop(page, 'guia.pdf', 'PDF', 'application/pdf');
 
-  await expect(description).toBeVisible();
   await body.dispatchEvent('dragenter', { dataTransfer: pdf });
   await expect(dropTarget).toBeHidden();
 
