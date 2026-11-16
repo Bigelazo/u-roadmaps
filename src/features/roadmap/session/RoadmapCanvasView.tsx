@@ -299,7 +299,7 @@ export function RoadmapCanvasView({ input }: Props) {
   }, [displayedRoadmap, graphEditing, isStudentExperience]);
 
   const selectedNode = displayedRoadmap?.nodes.find((node) => node.id === selectedNodeId);
-  const panelLayout = useCanvasPanelLayout({ panel, mode: canvasMode, selectedNode });
+  const panelLayout = useCanvasPanelLayout(panel);
 
   if (accessLost) {
     return <LostRoadmapAccess />;
@@ -381,7 +381,7 @@ export function RoadmapCanvasView({ input }: Props) {
           ) : null}
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
-            openedNodeId={panelLayout.openPanel ? selectedNodeId : null}
+            openedNodeId={panel.kind === 'closed' ? null : selectedNodeId}
             enabled={fetchesRoadmapNotices(input) && !isCanvasPreview}
             simulatedCounts={isCanvasPreview ? undefined : input.practice?.nodeChangeCounts}
           >
@@ -405,13 +405,13 @@ export function RoadmapCanvasView({ input }: Props) {
           </NodeChangeCountsProvider>
         </div>
         <RoadmapPanelColumn
-          isOpen={panelLayout.openPanel !== null}
+          isOpen={panel.kind !== 'closed'}
           width={panelLayout.width}
           scene={isCanvasPreview ? 'canvas-preview' : 'roadmap'}
         >
           {canvasMode.isEditing && (
             <RoadmapNodeEditorPanel
-              isOpen={panelLayout.openPanel === 'editor'}
+              isOpen={panel.kind === 'editor'}
               width={panelLayout.width}
               onWidthChange={panelLayout.setWidth}
               nodeEditorRef={nodeEditorRef}
@@ -430,7 +430,6 @@ export function RoadmapCanvasView({ input }: Props) {
             panel={panel}
             selectedNode={selectedNode}
             nodeTypes={roadmap.nodeTypes}
-            isStudentExperience={isStudentExperience}
             isHistorical={canvasMode.isHistorical}
             width={panelLayout.width}
             onWidthChange={panelLayout.setWidth}
@@ -554,7 +553,6 @@ function RoadmapStudentPanel({
   panel,
   selectedNode,
   nodeTypes,
-  isStudentExperience,
   isHistorical,
   width,
   onWidthChange,
@@ -566,7 +564,6 @@ function RoadmapStudentPanel({
   panel: NodeSelectionPanel;
   selectedNode: RoadmapNode | StudentRoadmapNode | undefined;
   nodeTypes: AnyRoadmapDto['nodeTypes'];
-  isStudentExperience: boolean;
   isHistorical: boolean;
   width: number;
   onWidthChange: (width: number) => void;
@@ -577,24 +574,20 @@ function RoadmapStudentPanel({
 }) {
   const content = studentPanelContent(panel, selectedNode);
   return (
-    <>
-      {(isStudentExperience || content.isNodeInformationPreview) && (
-        <StudentNodeDetail
-          node={content.node}
-          status={content.status}
-          onClose={
-            content.isNodeInformationPreview ? onCloseNodeInformationPreview : onCloseSelectedNode
-          }
-          onComplete={(node) => onComplete(node.id)}
-          onResourceAccess={onResourceAccess}
-          isReadOnly={isHistorical && !content.isNodeInformationPreview}
-          isNodeInformationPreview={content.isNodeInformationPreview}
-          nodeTypes={nodeTypes}
-          panelWidth={width}
-          onPanelWidthChange={onWidthChange}
-        />
-      )}
-    </>
+    <StudentNodeDetail
+      node={content.node}
+      status={content.status}
+      onClose={
+        content.isNodeInformationPreview ? onCloseNodeInformationPreview : onCloseSelectedNode
+      }
+      onComplete={(node) => onComplete(node.id)}
+      onResourceAccess={onResourceAccess}
+      isReadOnly={isHistorical && !content.isNodeInformationPreview}
+      isNodeInformationPreview={content.isNodeInformationPreview}
+      nodeTypes={nodeTypes}
+      panelWidth={width}
+      onPanelWidthChange={onWidthChange}
+    />
   );
 }
 

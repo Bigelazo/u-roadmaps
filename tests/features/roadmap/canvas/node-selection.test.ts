@@ -4,6 +4,7 @@ import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import {
   useNodeSelection,
   type NodeSelectionOptions,
+  type NodeSelectionPanel,
 } from '@/features/roadmap/canvas/node-selection';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import type { RoadmapCanvasExperience } from '@/features/roadmap/session/types';
@@ -61,26 +62,38 @@ function renderNodeSelection({
   hasDraft?: () => boolean;
 }) {
   const reportPracticeAction = vi.fn();
-  let props = { nodes, isCanvasPreview: false };
+  const renderedPanels: NodeSelectionPanel[] = [];
+  let props = { nodes, experience, isCanvasPreview: false };
   const { result, rerender } = renderHook(
-    ({ nodes, isCanvasPreview }: typeof props) =>
-      useNodeSelection({
+    ({ nodes, experience, isCanvasPreview }: typeof props) => {
+      const selection = useNodeSelection({
         nodes,
         mode: deriveCanvasMode({ experience, isCanvasPreview }),
         guardDraft,
         hasDraft,
         reportPracticeAction,
-      }),
+      });
+      renderedPanels.push(selection.panel);
+      return selection;
+    },
     { initialProps: props },
   );
   const update = (next: Partial<typeof props>) => {
     props = { ...props, ...next };
     rerender(props);
   };
+  const panelsRenderedBy = (next: Partial<typeof props>) => {
+    const firstRender = renderedPanels.length;
+    update(next);
+    return renderedPanels.slice(firstRender);
+  };
   return {
     selection: () => result.current,
     reportPracticeAction,
     changeNodes: (next: Nodes) => update({ nodes: next }),
+    panelsRenderedByChangingNodes: (next: Nodes) => panelsRenderedBy({ nodes: next }),
+    panelsRenderedByChangingExperience: (next: RoadmapCanvasExperience) =>
+      panelsRenderedBy({ experience: next }),
     enterCanvasPreview: () => update({ isCanvasPreview: true }),
     exitCanvasPreview: () => update({ isCanvasPreview: false }),
     act: (operation: (selection: typeof result.current) => unknown) =>
@@ -304,6 +317,43 @@ describe('Node selection', () => {
     expect(canvas.selection().panel).toEqual({ kind: 'closed' });
     expect(canvas.selection().notice).toBe('selected-node-blocked');
     expect(canvas.selection().focusReturn).toMatchObject({ destination: 'node' });
+  });
+
+  test('the student detail of a Node blocked by another change is closed from the first render', async () => {
+    const canvas = renderNodeSelection({ experience: student, nodes: [accessibleNode('limits')] });
+    await canvas.act((selection) => selection.selectNode('limits'));
+
+    const panels = canvas.panelsRenderedByChangingNodes([blockedNode('limits')]);
+
+    expect(panels[0]).toEqual({ kind: 'closed' });
+    expect(panels).not.toContainEqual({ kind: 'student-detail' });
+  });
+
+  test('the student detail of a Node removed by another change is closed from the first render', async () => {
+    const canvas = renderNodeSelection({
+      experience: student,
+      nodes: [accessibleNode('limits'), accessibleNode('derivatives')],
+    });
+    await canvas.act((selection) => selection.selectNode('limits'));
+
+    const panels = canvas.panelsRenderedByChangingNodes([accessibleNode('derivatives')]);
+
+    expect(panels[0]).toEqual({ kind: 'closed' });
+    expect(panels).not.toContainEqual({ kind: 'student-detail' });
+  });
+
+  test('the editor is closed from the first render once the Roadmap stops being editable', async () => {
+    const canvas = renderNodeSelection({
+      experience: editableTeaching,
+      nodes: [accessibleNode('limits')],
+    });
+    await canvas.act((selection) => selection.selectNode('limits'));
+
+    const panels = canvas.panelsRenderedByChangingExperience(readOnlyTeaching);
+
+    expect(panels[0]).toEqual({ kind: 'closed' });
+    expect(panels).not.toContainEqual({ kind: 'editor' });
+    expect(canvas.selection().selectedNodeId).toBe('limits');
   });
 
   test('a selected Node blocked after its detail closed stays selected without a notice', async () => {

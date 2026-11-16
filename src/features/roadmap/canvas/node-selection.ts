@@ -161,6 +161,31 @@ function nodeSelectionReducer(
   }
 }
 
+function lostSelection(
+  nodes: readonly RoadmapNodeDto[],
+  selectedNodeId: string,
+  isStudentExperience: boolean,
+): NodeSelectionNotice | null {
+  const selected = nodes.find((node) => node.id === selectedNodeId);
+  if (!selected) return 'selected-node-removed';
+  return isStudentExperience && isStudentBlockedNode(selected) ? 'selected-node-blocked' : null;
+}
+
+function openPanel(
+  { selectedNodeId, panel }: NodeSelectionState,
+  nodes: readonly RoadmapNodeDto[] | undefined,
+  mode: Pick<CanvasMode, 'isEditing' | 'isStudentExperience'>,
+): NodeSelectionPanel {
+  if (panel.kind === 'editor') return mode.isEditing ? panel : closedPanel;
+  if (panel.kind !== 'student-detail') return panel;
+  return mode.isStudentExperience &&
+    selectedNodeId &&
+    nodes &&
+    !lostSelection(nodes, selectedNodeId, mode.isStudentExperience)
+    ? panel
+    : closedPanel;
+}
+
 function useNodeSelectionState(isCanvasPreview: boolean) {
   const [state, dispatch] = useReducer(
     nodeSelectionReducer,
@@ -197,8 +222,9 @@ export function useNodeSelection({
   const { isStudentExperience, isEditing } = mode;
   const { canEditRoadmap } = mode.capabilities;
   const { state, dispatch } = useNodeSelectionState(mode.isCanvasPreview);
-  const { selectedNodeId, panel } = state;
-  const isStudentDetailOpen = panel.kind === 'student-detail';
+  const { selectedNodeId } = state;
+  const panel = openPanel(state, nodes, mode);
+  const isStudentDetailStored = state.panel.kind === 'student-detail';
   const { focusReturn, requestFocusReturn } = useFocusReturn();
   const [notice, setNotice] = useState<NodeSelectionNotice | null>(null);
   const dismissNotice = useCallback(() => setNotice(null), []);
@@ -209,24 +235,24 @@ export function useNodeSelection({
 
   useEffect(() => {
     if (!selectedNodeId || !nodes) return;
-    const selected = nodes.find((node) => node.id === selectedNodeId);
-    const blocked = isStudentExperience && isStudentBlockedNode(selected);
-    if (selected && !blocked) return;
-    if (blocked && !isStudentDetailOpen) return;
+    const lost = lostSelection(nodes, selectedNodeId, isStudentExperience);
+    if (!lost) return;
+    const removed = lost === 'selected-node-removed';
+    if (!removed && !isStudentDetailStored) return;
     dispatch({
       type: 'reconcileSelection',
-      removed: !selected,
+      removed,
       preserveEditorDraft: canEditRoadmap && hasDraftRef.current(),
     });
-    setNotice(selected ? 'selected-node-blocked' : 'selected-node-removed');
-    requestFocusReturn({ destination: selected ? 'node' : 'canvas' });
+    setNotice(lost);
+    requestFocusReturn({ destination: removed ? 'canvas' : 'node' });
   }, [
     canEditRoadmap,
     dispatch,
     isStudentExperience,
     nodes,
     requestFocusReturn,
-    isStudentDetailOpen,
+    isStudentDetailStored,
     selectedNodeId,
   ]);
 
@@ -340,12 +366,12 @@ export function useNodeSelection({
       closeNodeInformationPreview();
       return true;
     }
-    if (panel.kind === 'editor' && isEditing) {
+    if (panel.kind === 'editor') {
       dispatch({ type: 'closeEditor' });
       return true;
     }
     return false;
-  }, [canEditRoadmap, closeNodeInformationPreview, dispatch, isEditing, panel.kind]);
+  }, [canEditRoadmap, closeNodeInformationPreview, dispatch, panel.kind]);
 
   return {
     selectedNodeId,
