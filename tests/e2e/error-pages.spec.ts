@@ -27,6 +27,10 @@ test('a server failure answers 500 with a Spanish page, the footer and a retry',
   await expect(page.getByRole('contentinfo')).toContainText('Cada curso, una ruta clara.');
   await expect(page.getByRole('link', { name: 'Ir al inicio' })).toHaveAttribute('href', '/');
 
+  const retried = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === '/development/server-error',
+  );
   await page.getByRole('button', { name: 'Intentar de nuevo' }).click();
+  await retried;
   await expect(heading).toBeVisible();
 });
