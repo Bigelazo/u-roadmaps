@@ -10,9 +10,7 @@ import {
   useRef,
   useState,
   type ReactNode,
-  type Dispatch,
 } from 'react';
-import type { CanvasState, CanvasStateAction } from '@/features/roadmap/canvas/state';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import {
   canvasCommandCatalog,
@@ -99,7 +97,6 @@ function matchesExperience(
 }
 
 export type RoadmapCanvasSessionOptions = {
-  canvas: { state: CanvasState; dispatch: Dispatch<CanvasStateAction> };
   guardDraft?: NodeEditorHandle['guardDraft'];
   onCommandApplied?: Parameters<typeof useCanvasCommands>[0]['onCommandApplied'];
 };
@@ -408,7 +405,7 @@ function useInjectedSession(
 
 export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
-  options: RoadmapCanvasSessionOptions,
+  options: RoadmapCanvasSessionOptions = {},
 ): RoadmapCanvasSession {
   const providedPersistence = useContext(persistenceContext);
   const { courseCode, year, semester } = input.courseOffering.identifier;
@@ -436,7 +433,6 @@ export function useRoadmapCanvasSession(
     report?.({ type: 'enterCanvasPreview' });
   }, [report]);
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
-    canvas: options.canvas,
     isHistorical: active.isClosed,
     guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
     loadCanvasPreview: active.loadCanvasPreview,

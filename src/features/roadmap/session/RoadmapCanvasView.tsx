@@ -4,14 +4,13 @@ import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft, CircleAlert, CircleHelp, Eye, History, LogOut, UserGroup } from 'lucide-react';
 import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
-import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import {
   useNodeSelection,
   type NodeSelectionNotice,
@@ -109,7 +108,6 @@ const SELECTION_NOTICE_MESSAGES: Record<NodeSelectionNotice, string> = {
 function useRoadmapCanvasController({ input }: Props) {
   const { identifier, title } = input.courseOffering;
   const { courseCode, year, semester } = identifier;
-  const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
   const acknowledgedRoadmapRef = useRef<string | null>(null);
   const { acknowledge } = useNotificationAcknowledgement();
   const canvasFocusRef = useRef<HTMLDivElement>(null);
@@ -149,7 +147,6 @@ function useRoadmapCanvasController({ input }: Props) {
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
     onCommandApplied: followAppliedCommand,
-    canvas: { state: canvasState, dispatch: dispatchCanvas },
   });
   useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
 
@@ -171,7 +168,6 @@ function useRoadmapCanvasController({ input }: Props) {
 
   const displayedRoadmap = isCanvasPreview ? canvasPreviewRoadmap : roadmap;
   const nodeSelection = useNodeSelection({
-    canvas: { state: canvasState, dispatch: dispatchCanvas },
     nodes: displayedRoadmap?.nodes,
     mode: canvasMode,
     guardDraft: guardEditorDraft,

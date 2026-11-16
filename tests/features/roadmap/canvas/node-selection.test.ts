@@ -1,7 +1,5 @@
-import { useReducer } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
-import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import {
   useNodeSelection,
@@ -63,24 +61,28 @@ function renderNodeSelection({
   hasDraft?: () => boolean;
 }) {
   const reportPracticeAction = vi.fn();
+  let props = { nodes, isCanvasPreview: false };
   const { result, rerender } = renderHook(
-    ({ nodes }: { nodes: Nodes }) => {
-      const [state, dispatch] = useReducer(canvasStateReducer, initialCanvasState);
-      return useNodeSelection({
-        canvas: { state, dispatch },
+    ({ nodes, isCanvasPreview }: typeof props) =>
+      useNodeSelection({
         nodes,
-        mode: deriveCanvasMode({ experience }),
+        mode: deriveCanvasMode({ experience, isCanvasPreview }),
         guardDraft,
         hasDraft,
         reportPracticeAction,
-      });
-    },
-    { initialProps: { nodes } },
+      }),
+    { initialProps: props },
   );
+  const update = (next: Partial<typeof props>) => {
+    props = { ...props, ...next };
+    rerender(props);
+  };
   return {
     selection: () => result.current,
     reportPracticeAction,
-    changeNodes: (next: Nodes) => rerender({ nodes: next }),
+    changeNodes: (next: Nodes) => update({ nodes: next }),
+    enterCanvasPreview: () => update({ isCanvasPreview: true }),
+    exitCanvasPreview: () => update({ isCanvasPreview: false }),
     act: (operation: (selection: typeof result.current) => unknown) =>
       act(async () => {
         await operation(result.current);
@@ -415,5 +417,75 @@ describe('Node selection', () => {
       type: 'selectNode',
       nodeId: 'limits',
     });
+  });
+
+  test('entering Canvas preview starts with no Node selected and no panel open', async () => {
+    const canvas = renderNodeSelection({
+      experience: editableTeaching,
+      nodes: [accessibleNode('limits')],
+    });
+    await canvas.act((selection) => selection.selectNode('limits'));
+
+    canvas.enterCanvasPreview();
+
+    expect(canvas.selection().selectedNodeId).toBeNull();
+    expect(canvas.selection().panel).toEqual({ kind: 'closed' });
+  });
+
+  test('selecting a Node inside Canvas preview opens its student detail', async () => {
+    const canvas = renderNodeSelection({
+      experience: editableTeaching,
+      nodes: [accessibleNode('limits')],
+    });
+    canvas.enterCanvasPreview();
+
+    await canvas.act((selection) => selection.selectNode('limits'));
+
+    expect(canvas.selection().selectedNodeId).toBe('limits');
+    expect(canvas.selection().panel).toEqual({ kind: 'student-detail' });
+  });
+
+  test('leaving Canvas preview restores the selected Node and its editor', async () => {
+    const canvas = renderNodeSelection({
+      experience: editableTeaching,
+      nodes: [accessibleNode('limits'), accessibleNode('derivatives')],
+    });
+    await canvas.act((selection) => selection.selectNode('limits'));
+    canvas.enterCanvasPreview();
+    await canvas.act((selection) => selection.selectNode('derivatives'));
+
+    canvas.exitCanvasPreview();
+
+    expect(canvas.selection().selectedNodeId).toBe('limits');
+    expect(canvas.selection().panel).toEqual({ kind: 'editor' });
+  });
+
+  test('leaving Canvas preview restores a selection that had no panel open', async () => {
+    const canvas = renderNodeSelection({
+      experience: readOnlyTeaching,
+      nodes: [accessibleNode('limits')],
+    });
+    await canvas.act((selection) => selection.selectNode('limits'));
+    canvas.enterCanvasPreview();
+
+    canvas.exitCanvasPreview();
+
+    expect(canvas.selection().selectedNodeId).toBe('limits');
+    expect(canvas.selection().panel).toEqual({ kind: 'closed' });
+  });
+
+  test('leaving Canvas preview entered from a Node information preview restores the selection with the panel closed', async () => {
+    const limits = accessibleNode('limits');
+    const canvas = renderNodeSelection({ experience: editableTeaching, nodes: [limits] });
+    await canvas.act((selection) => selection.selectNode('limits'));
+    await canvas.act((selection) =>
+      selection.showNodeInformationPreview(limits as StudentAccessibleRoadmapNode, vi.fn()),
+    );
+    canvas.enterCanvasPreview();
+
+    canvas.exitCanvasPreview();
+
+    expect(canvas.selection().selectedNodeId).toBe('limits');
+    expect(canvas.selection().panel).toEqual({ kind: 'closed' });
   });
 });

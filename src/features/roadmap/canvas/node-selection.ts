@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { CanvasMode } from './mode';
-import type { CanvasState, CanvasStateAction } from './state';
 import type { NodeEditorCommand, NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import { isStudentBlockedNode } from '@/features/roadmap/student/node-status';
 import type { CanvasCommand } from './commands/canvas-command';
@@ -25,13 +24,151 @@ export type NodeSelectionNotice = 'selected-node-blocked' | 'selected-node-remov
 export type NodeSelectionFocusReturn = { token: string; destination: 'node' | 'canvas' };
 
 export type NodeSelectionOptions = {
-  canvas: { state: CanvasState; dispatch: Dispatch<CanvasStateAction> };
   nodes: readonly RoadmapNodeDto[] | undefined;
   mode: CanvasMode;
   guardDraft: (reason: NodeEditorGuardReason) => Promise<boolean>;
   hasDraft: () => boolean;
   reportPracticeAction?: (action: PracticeCanvasAction) => void;
 };
+
+type RestorablePanel = { kind: 'closed' } | { kind: 'editor' } | { kind: 'student-detail' };
+
+type NodeSelectionState = {
+  selectedNodeId: string | null;
+  panel: NodeSelectionPanel;
+  isCanvasPreview: boolean;
+  canvasPreviewReturn: { selectedNodeId: string | null; panel: RestorablePanel } | null;
+};
+
+type NodeSelectionAction =
+  | { type: 'closeEditor' }
+  | { type: 'reconcileSelection'; removed: boolean; preserveEditorDraft?: boolean }
+  | { type: 'closeSelectedNode' }
+  | { type: 'closeNodeInformationPreview' }
+  | { type: 'observeCanvasPreview'; isCanvasPreview: boolean }
+  | { type: 'openResourceComposer'; command: NodeEditorCommand }
+  | { type: 'selectCreatedNode'; nodeId: string }
+  | { type: 'selectNode'; nodeId: string; panel: 'editor' | 'student-detail' | 'none' }
+  | {
+      type: 'showNodeInformationPreview';
+      node: StudentAccessibleRoadmapNode;
+      focusReturn: () => void;
+    }
+  | { type: 'completeNodeInformationPreview' };
+
+const closedPanel: NodeSelectionPanel = { kind: 'closed' };
+const editorPanel: NodeSelectionPanel = { kind: 'editor' };
+
+function restorablePanelOf(panel: NodeSelectionPanel): RestorablePanel {
+  if (panel.kind === 'editor') return { kind: 'editor' };
+  if (panel.kind === 'node-information-preview') return { kind: 'closed' };
+  return panel;
+}
+
+function withoutResourceComposer(panel: NodeSelectionPanel): NodeSelectionPanel {
+  return panel.kind === 'editor' && panel.resourceComposerCommand ? editorPanel : panel;
+}
+
+function observeCanvasPreview(
+  state: NodeSelectionState,
+  isCanvasPreview: boolean,
+): NodeSelectionState {
+  if (state.isCanvasPreview === isCanvasPreview) return state;
+  if (isCanvasPreview) {
+    return {
+      isCanvasPreview,
+      selectedNodeId: null,
+      panel: closedPanel,
+      canvasPreviewReturn: {
+        selectedNodeId: state.selectedNodeId,
+        panel: restorablePanelOf(state.panel),
+      },
+    };
+  }
+  return {
+    isCanvasPreview,
+    selectedNodeId: state.canvasPreviewReturn?.selectedNodeId ?? null,
+    panel: state.canvasPreviewReturn?.panel ?? closedPanel,
+    canvasPreviewReturn: null,
+  };
+}
+
+function nodeSelectionReducer(
+  state: NodeSelectionState,
+  action: NodeSelectionAction,
+): NodeSelectionState {
+  switch (action.type) {
+    case 'reconcileSelection':
+      return {
+        ...state,
+        selectedNodeId: action.removed ? null : state.selectedNodeId,
+        panel:
+          action.preserveEditorDraft && state.panel.kind === 'editor' ? state.panel : closedPanel,
+      };
+    case 'closeEditor':
+      return state.panel.kind === 'editor' ? { ...state, panel: closedPanel } : state;
+    case 'closeSelectedNode':
+      return { ...state, selectedNodeId: null, panel: closedPanel };
+    case 'closeNodeInformationPreview':
+      return { ...state, panel: editorPanel };
+    case 'observeCanvasPreview':
+      return observeCanvasPreview(state, action.isCanvasPreview);
+    case 'openResourceComposer':
+      return {
+        ...state,
+        selectedNodeId: action.command.nodeId,
+        panel: { kind: 'editor', resourceComposerCommand: action.command },
+      };
+    case 'selectCreatedNode':
+      return {
+        ...state,
+        selectedNodeId: action.nodeId,
+        panel: withoutResourceComposer(state.panel),
+      };
+    case 'selectNode':
+      return {
+        ...state,
+        selectedNodeId: action.nodeId,
+        panel:
+          action.panel === 'student-detail'
+            ? { kind: 'student-detail' }
+            : action.panel === 'editor'
+              ? editorPanel
+              : withoutResourceComposer(state.panel),
+      };
+    case 'showNodeInformationPreview':
+      return {
+        ...state,
+        panel: {
+          kind: 'node-information-preview',
+          node: action.node,
+          isCompleted: false,
+          focusReturn: action.focusReturn,
+        },
+      };
+    case 'completeNodeInformationPreview':
+      return state.panel.kind === 'node-information-preview'
+        ? { ...state, panel: { ...state.panel, isCompleted: true } }
+        : state;
+  }
+}
+
+function useNodeSelectionState(isCanvasPreview: boolean) {
+  const [state, dispatch] = useReducer(
+    nodeSelectionReducer,
+    isCanvasPreview,
+    (initiallyInCanvasPreview): NodeSelectionState => ({
+      selectedNodeId: null,
+      panel: closedPanel,
+      isCanvasPreview: initiallyInCanvasPreview,
+      canvasPreviewReturn: null,
+    }),
+  );
+  if (state.isCanvasPreview !== isCanvasPreview) {
+    dispatch({ type: 'observeCanvasPreview', isCanvasPreview });
+  }
+  return { state, dispatch };
+}
 
 function useFocusReturn() {
   const [focusReturn, setFocusReturn] = useState<NodeSelectionFocusReturn | null>(null);
@@ -43,7 +180,6 @@ function useFocusReturn() {
 }
 
 export function useNodeSelection({
-  canvas: { state, dispatch },
   nodes,
   mode,
   guardDraft,
@@ -52,6 +188,7 @@ export function useNodeSelection({
 }: NodeSelectionOptions) {
   const { isStudentExperience, isEditing } = mode;
   const { canEditRoadmap } = mode.capabilities;
+  const { state, dispatch } = useNodeSelectionState(mode.isCanvasPreview);
   const { selectedNodeId, panel } = state;
   const isStudentDetailOpen = panel.kind === 'student-detail';
   const { focusReturn, requestFocusReturn } = useFocusReturn();
