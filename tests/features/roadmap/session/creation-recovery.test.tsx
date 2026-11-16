@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { expect, test } from 'vitest';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { expect, test, vi } from 'vitest';
+import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import { UncertainNodeCreationError } from '@/features/roadmap/session/placement-recovery';
@@ -60,6 +62,22 @@ const creation = {
   position: { x: 0, y: 200 },
   displaced: [{ nodeId: 'first', position: { x: 80, y: 0 } }],
 };
+
+function RecoveryCanvas() {
+  const session = useTestCanvasSession(input);
+  return (
+    <>
+      <output data-testid="recovery-position">{session.roadmap?.nodes[0].positionX}</output>
+      <output data-testid="recovery-status">{session.placementRecovery?.kind}</output>
+      <button type="button" onClick={() => void session.canvasCommands.run(creation)}>
+        Crear o continuar
+      </button>
+      <button type="button" onClick={() => void session.recoverPlacement()}>
+        Comprobar
+      </button>
+    </>
+  );
+}
 
 test('a committed creation with a lost response recovers its exact identity and current saved state', async () => {
   const saved = createInMemoryRoadmapSessionPersistence(roadmap);
@@ -442,3 +460,118 @@ test('leaving during uncertain identity recovery suppresses attachment continuat
   expect(next.result.current.error).toBeNull();
   expect(next.result.current.placementRecovery).toBeNull();
 });
+
+test('continuing a creation already found by identity preserves current positions while its refreshed state is delayed', async () => {
+  const user = userEvent.setup();
+  const saved = createInMemoryRoadmapSessionPersistence(roadmap);
+  let holdRead = false;
+  let started!: () => void;
+  const reading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const persistence: RoadmapCanvasSessionPersistence = {
+    ...saved,
+    async load() {
+      if (holdRead) {
+        started();
+        await pending;
+      }
+      return saved.load();
+    },
+    async execute(command, previewVersion) {
+      if (command.kind === 'add-node') throw new UncertainNodeCreationError();
+      return saved.execute(command, previewVersion);
+    },
+  };
+  const view = render(
+    <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+      <RecoveryCanvas />
+    </RoadmapCanvasSessionPersistenceProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId('recovery-position').textContent).toBe('0'));
+  await user.click(screen.getByRole('button', { name: 'Crear o continuar' }));
+  await waitFor(() =>
+    expect(screen.getByTestId('recovery-status').textContent).toBe('uncertain-creation'),
+  );
+  await saved.execute(creation);
+  await saved.execute(move(320));
+  await user.click(screen.getByRole('button', { name: 'Comprobar' }));
+  await waitFor(() => expect(screen.getByTestId('recovery-position').textContent).toBe('320'));
+  view.rerender(
+    <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+      <RecoveryCanvas />
+    </RoadmapCanvasSessionPersistenceProvider>,
+  );
+  holdRead = true;
+  await user.click(screen.getByRole('button', { name: 'Crear o continuar' }));
+  await act(async () => {
+    await reading;
+  });
+  try {
+    expect(screen.getByTestId('recovery-position').textContent).toBe('320');
+  } finally {
+    await act(async () => {
+      release();
+    });
+  }
+  expect((await saved.load()).nodes[0].positionX).toBe(320);
+});
+
+test.for(['known identity', 'server replay'] as const)(
+  'a read-only creation continuation from %s does not absorb the next teacher’s committed change',
+  async (recovery) => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      const saved = createInMemoryRoadmapSessionPersistence(roadmap);
+      let unavailable = false;
+      let first = true;
+      const canvas = await openCanvas({
+        ...saved,
+        async load() {
+          if (unavailable) throw new Error('Sin conexión');
+          return saved.load();
+        },
+        async execute(command, previewVersion) {
+          const result = await saved.execute(command, previewVersion);
+          if (command.kind === 'add-node') {
+            if (first) {
+              first = false;
+              unavailable = true;
+              throw new UncertainNodeCreationError();
+            }
+            unavailable = false;
+          }
+          return result;
+        },
+      });
+      await act(async () => {
+        await canvas.result.current.canvasCommands.run(creation);
+      });
+      if (recovery === 'known identity') {
+        unavailable = false;
+        await act(async () => {
+          await canvas.result.current.recoverPlacement();
+        });
+      }
+      await act(async () => {
+        await canvas.result.current.canvasCommands.run(creation);
+      });
+      expect(canvas.result.current.placementRecovery).toBeNull();
+      await saved.execute(move(640));
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+            detail: input.courseOffering.identifier,
+          }),
+        );
+      });
+      await waitFor(() => expect(canvas.result.current.roadmap?.nodes[0].positionX).toBe(640));
+    } finally {
+      now.mockRestore();
+    }
+  },
+);

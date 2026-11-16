@@ -96,6 +96,13 @@ type PendingPlacement = {
   previewVersion?: string;
   resolve: (outcome: PlacementOutcome) => void;
 };
+type PlacementQueue = { pending: PendingPlacement[]; running: boolean; blocked: boolean };
+
+function discardPlacements(queue: PlacementQueue, active?: PendingPlacement) {
+  const discarded = queue.pending;
+  queue.pending = [];
+  for (const pending of discarded) if (pending !== active) pending.resolve({ applied: false });
+}
 
 function isPlacement(command: CanvasCommand): command is PlacementCommand {
   return (
@@ -113,8 +120,11 @@ function placementPositions(command: PlacementCommand): readonly RoadmapNodePlac
 
 function projectPlacements(roadmap: AnyRoadmapDto, pending: readonly PendingPlacement[]) {
   const positions = new Map<string, RoadmapNodePlacement['position']>();
-  for (const { command } of pending)
+  for (const { command } of pending) {
+    if (command.kind === 'add-node' && roadmap.nodes.some((node) => node.id === command.nodeId))
+      continue;
     for (const { nodeId, position } of placementPositions(command)) positions.set(nodeId, position);
+  }
   if (!positions.size) return roadmap;
   return {
     ...roadmap,
@@ -187,9 +197,7 @@ function useInjectedSession(
   const authoritativeRoadmapRef = useRef<AnyRoadmapDto | null>(null);
   const uncertainCreationRef = useRef<Extract<PlacementCommand, { kind: 'add-node' }> | null>(null);
   const placementFailureRef = useRef<string | null>(null);
-  const placementsRef = useRef<{ pending: PendingPlacement[]; running: boolean; blocked: boolean }>(
-    { pending: [], running: false, blocked: false },
-  );
+  const placementsRef = useRef<PlacementQueue>({ pending: [], running: false, blocked: false });
   const requestVersionRef = useRef(0);
   const canvasPreviewVersionRef = useRef(0);
   const ownEchoRef = useRef<OwnEcho>({ executing: 0, heard: 0, missed: false, expectedUntil: 0 });
@@ -338,9 +346,7 @@ function useInjectedSession(
       sessionAliveRef.current = false;
       requestVersionRef.current += 1;
       canvasPreviewVersionRef.current += 1;
-      const discarded = placements.pending;
-      placements.pending = [];
-      for (const pending of discarded) pending.resolve({ applied: false });
+      discardPlacements(placements);
     };
   }, [loadRoadmap]);
 
@@ -435,13 +441,15 @@ function useInjectedSession(
       const { changesCanvasPreview } = entry;
       const echo = ownEchoRef.current;
       const heard = echo.heard;
-      if (!changesCanvasPreview) echo.executing += 1;
+      const resendingCreation =
+        command.kind === 'add-node' && uncertainCreationRef.current?.nodeId === command.nodeId;
+      const recoveredCreation =
+        resendingCreation &&
+        authoritativeRoadmapRef.current?.nodes.some((node) => node.id === command.nodeId);
+      const countsOwnWrite = !changesCanvasPreview && !recoveredCreation;
+      if (countsOwnWrite) echo.executing += 1;
       let result: ExecutionResult | void;
       try {
-        const recoveredCreation =
-          command.kind === 'add-node' &&
-          uncertainCreationRef.current?.nodeId === command.nodeId &&
-          authoritativeRoadmapRef.current?.nodes.some((node) => node.id === command.nodeId);
         result = recoveredCreation
           ? { createdNodeId: command.nodeId }
           : await persistence.execute(command, previewVersion);
@@ -458,12 +466,9 @@ function useInjectedSession(
         if (placement) {
           const placements = placementsRef.current;
           placements.blocked = true;
-          const discarded = placements.pending;
-          placements.pending = [];
-          for (const pending of discarded)
-            if (pending !== placement) pending.resolve({ applied: false });
+          discardPlacements(placements, placement);
         }
-        const missed = settleOwnCommand(echo, !changesCanvasPreview);
+        const missed = settleOwnCommand(echo, countsOwnWrite);
         if (
           command.kind === 'add-node' &&
           (cause instanceof UncertainNodeCreationError ||
@@ -499,9 +504,10 @@ function useInjectedSession(
           ? { applied: false }
           : { applied: false, sessionEnded: true };
       }
-      if (!changesCanvasPreview) {
+      if (countsOwnWrite) {
         settleOwnCommand(echo, true);
-        if (echo.heard === heard) echo.expectedUntil = Date.now() + OWN_ECHO_WINDOW_MS;
+        if (!resendingCreation && echo.heard === heard)
+          echo.expectedUntil = Date.now() + OWN_ECHO_WINDOW_MS;
       }
       if (!sessionAliveRef.current) return { applied: false, sessionEnded: true };
       const refreshed = () =>
@@ -519,9 +525,7 @@ function useInjectedSession(
               setError(messageFor(cause, refreshFailure));
               if (placement) {
                 placementsRef.current.blocked = true;
-                const discarded = placementsRef.current.pending;
-                placementsRef.current.pending = [];
-                for (const pending of discarded) pending.resolve({ applied: false });
+                discardPlacements(placementsRef.current);
                 setPlacementRecovery({
                   kind: 'unsynchronized',
                   message: unsynchronizedPlacement(refreshFailure),

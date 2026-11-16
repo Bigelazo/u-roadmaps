@@ -9,6 +9,11 @@ import {
 } from '@/features/roadmap/server';
 import { recordingChangePort } from './support/recording-change-port';
 
+async function roadmapStateOf(course: Parameters<typeof teacher>[0]) {
+  const { nodeTypes, ...state } = await readRoadmapForParticipant(teacher(course));
+  return { ...state, nodeTypes: nodeTypes.filter(({ isPredefined }) => !isPredefined) };
+}
+
 test('creation persists its stable identity and displaced Nodes together', async ({ course }) => {
   const nodeId = randomUUID();
   const { port, facts } = recordingChangePort();
@@ -105,7 +110,7 @@ test.for(['missing', 'foreign', 'duplicate', 'self', 'coordinate', 'type'] as co
   'a creation with a rejected %s target leaves no new Node or displacement',
   async (invalid, { course, otherCourse }) => {
     const nodeId = randomUUID();
-    const before = await readRoadmapForParticipant(teacher(course));
+    const before = await roadmapStateOf(course);
     const displaced = [{ nodeId: course.change.nodeId, position: { x: 160, y: 0 } }];
     if (invalid === 'missing' || invalid === 'foreign' || invalid === 'self')
       displaced.push({
@@ -142,7 +147,7 @@ test.for(['missing', 'foreign', 'duplicate', 'self', 'coordinate', 'type'] as co
             ? 'NODE_TYPE_NOT_FOUND'
             : 'NODE_NOT_FOUND',
     });
-    expect(await readRoadmapForParticipant(teacher(course))).toEqual(before);
+    expect(await roadmapStateOf(course)).toEqual(before);
   },
 );
 
@@ -150,8 +155,8 @@ test('a foreign pending creation identity exposes and modifies neither Roadmap',
   course,
   otherCourse,
 }) => {
-  const before = await readRoadmapForParticipant(teacher(course));
-  const otherBefore = await readRoadmapForParticipant(teacher(otherCourse));
+  const before = await roadmapStateOf(course);
+  const otherBefore = await roadmapStateOf(otherCourse);
   await expect(
     createRoadmapNode(
       {
@@ -168,8 +173,8 @@ test('a foreign pending creation identity exposes and modifies neither Roadmap',
       recordingChangePort().port,
     ),
   ).rejects.toMatchObject({ code: 'NODE_NOT_FOUND' });
-  expect(await readRoadmapForParticipant(teacher(course))).toEqual(before);
-  expect(await readRoadmapForParticipant(teacher(otherCourse))).toEqual(otherBefore);
+  expect(await roadmapStateOf(course)).toEqual(before);
+  expect(await roadmapStateOf(otherCourse)).toEqual(otherBefore);
 });
 
 test.for(['inactive', 'student', 'closed'] as const)(
@@ -215,7 +220,7 @@ test('a later displacement failure rolls back the new Node and every displaced p
   course,
 }) => {
   const nodeId = randomUUID();
-  const before = await readRoadmapForParticipant(teacher(course));
+  const before = await roadmapStateOf(course);
   const suffix = randomUUID().replaceAll('-', '');
   const name = `reject_creation_${suffix}`;
   await prisma.$executeRawUnsafe(`CREATE SEQUENCE "${name}"`);
@@ -252,7 +257,7 @@ test('a later displacement failure rolls back the new Node and every displaced p
       `SELECT is_called FROM "${name}"`,
     );
     expect(attempt.is_called).toBe(true);
-    expect(await readRoadmapForParticipant(teacher(course))).toEqual(before);
+    expect(await roadmapStateOf(course)).toEqual(before);
   } finally {
     await prisma.$executeRawUnsafe(`DROP TRIGGER "${name}" ON "RoadmapNode"`);
     await prisma.$executeRawUnsafe(`DROP FUNCTION "${name}"()`);
@@ -416,14 +421,10 @@ test.for(['inactive', 'student', 'closed'] as const)(
 );
 
 test('an empty movement preserves the persisted Roadmap', async ({ course }) => {
-  const { nodeTypes: beforeTypes, ...before } = await readRoadmapForParticipant(teacher(course));
+  const before = await roadmapStateOf(course);
   const { port, facts } = recordingChangePort();
   await saveRoadmapNodePositions({ ...teacher(course), input: { positions: [] } }, port);
-  const { nodeTypes: afterTypes, ...after } = await readRoadmapForParticipant(teacher(course));
-  expect(after).toEqual(before);
-  expect(afterTypes.filter(({ isPredefined }) => !isPredefined)).toEqual(
-    beforeTypes.filter(({ isPredefined }) => !isPredefined),
-  );
+  expect(await roadmapStateOf(course)).toEqual(before);
   expect(facts()).toEqual([]);
 });
 
