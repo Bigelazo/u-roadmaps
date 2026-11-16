@@ -6,6 +6,7 @@ import { ExternalLink, Plus } from 'lucide-react';
 import { roadmapUrl, versionUrl } from '@/features/roadmap/client';
 import { creatorLabel, originLabel } from '@/features/roadmap/ui/version-labels';
 import { versionHistoryApiUrl } from '@/shared/version-history-url';
+import { readApiErrorBody } from '@/shared/api-error';
 import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 import { Button } from '@/shared/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group';
@@ -26,21 +27,7 @@ type Version = RoadmapVersionHistory['versions'][number];
 const termKey = ({ year, semester }: Version) => `${year}-${semester}`;
 
 async function creationError(response: Response) {
-  try {
-    const body: unknown = await response.json();
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof body.error === 'object' &&
-      body.error !== null &&
-      'message' in body.error &&
-      typeof body.error.message === 'string'
-    )
-      return body.error.message;
-    // eslint-disable-next-line no-empty -- La respuesta sin cuerpo JSON cae al mensaje genérico.
-  } catch {}
-  return 'No se pudo crear el roadmap.';
+  return (await readApiErrorBody(response))?.message ?? 'No se pudo crear el roadmap.';
 }
 
 async function frozenVersions(courseCode: string): Promise<Version[] | null> {
