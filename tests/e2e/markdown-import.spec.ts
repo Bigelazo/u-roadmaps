@@ -93,6 +93,7 @@ test('a Markdown file dragged into the window turns the description into a drop 
   await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
 
   const description = page.locator('#edit-node-description');
+  await expect(description).toBeVisible();
   const body = page.locator('body');
   const dropTarget = page.getByText('Suelta el archivo Markdown aquí');
   const markdown = await fileDrop(page, 'guia.md', '# Guía');

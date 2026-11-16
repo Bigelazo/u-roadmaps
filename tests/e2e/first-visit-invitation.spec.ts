@@ -89,6 +89,7 @@ test('opening a tutorial from a Roadmap canvas first prevents the invitation', a
 
   await page.getByRole('link', { name: 'Abrir tutorial' }).click();
   await expect(page).toHaveURL(/\/practice-roadmap\/teaching\?origin=/);
+  await expect(page.locator('.driver-popover-title')).toHaveText('Muévete por el mapa');
 
   await page.goto('/academic-overview');
   await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
