@@ -1,10 +1,10 @@
-import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import {
   RoadmapCanvasSessionPersistenceProvider,
+  useRoadmapCanvasSession,
   type RoadmapCanvasSessionOptions,
 } from '@/features/roadmap/session/session';
 import type {
@@ -65,7 +65,7 @@ const roadmap: RoadmapDto = {
 
 async function openCanvas(
   persistence: RoadmapCanvasSessionPersistence = createInMemoryRoadmapSessionPersistence(roadmap),
-  options: Omit<RoadmapCanvasSessionOptions, 'canvas'> = {},
+  options: RoadmapCanvasSessionOptions = {},
 ) {
   const onCommandApplied = vi.fn();
   const report = vi.fn<(action: PracticeCanvasAction) => void>();
@@ -77,7 +77,7 @@ async function openCanvas(
   );
   vi.spyOn(notify, 'success');
   const { result, unmount } = renderHook(
-    () => useTestCanvasSession(input, { onCommandApplied, ...options }),
+    () => useRoadmapCanvasSession(input, { onCommandApplied, ...options }),
     { wrapper },
   );
   await waitFor(() => expect(result.current.roadmap).not.toBeNull());

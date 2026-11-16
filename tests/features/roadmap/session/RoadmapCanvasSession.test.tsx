@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { useNodeChangeCount } from '@/features/notifications/client';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
@@ -53,6 +54,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
       <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
       {projection.roadmap.nodes[0] ? (
+        <NodeChangeMark nodeId={projection.roadmap.nodes[0].id} />
+      ) : null}
+      {projection.roadmap.nodes[0] ? (
         <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
           {projection.roadmap.nodes[0].title}
         </button>
@@ -60,6 +64,10 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     </>
   ),
 }));
+
+function NodeChangeMark({ nodeId }: { nodeId: string }) {
+  return <output data-testid="node-change-mark">{useNodeChangeCount(nodeId)}</output>;
+}
 
 vi.mock('@/features/roadmap/student/NodeDetail', () => ({
   StudentNodeDetail: ({
@@ -512,6 +520,45 @@ describe('RoadmapCanvasSession', () => {
       expect((await persistence.load()).nodeTypes.map(({ name }) => name)).toEqual(['Contenido']),
     );
   });
+});
+
+async function selectChangedTeachingNode(term: 'current' | 'historical') {
+  const user = userEvent.setup();
+  const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>((url) =>
+    Promise.resolve(
+      Response.json(
+        url.startsWith('/api/notifications/node-changes?') ? { byNode: { 'node-1': 1 } } : {},
+      ),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap), {
+    courseOffering: teachingInput.courseOffering,
+    experience: { kind: 'teaching', term },
+    notificationsEnabled: true,
+  });
+
+  await user.click(await screen.findByRole('button', { name: 'Límites' }));
+  await waitFor(() => {
+    expect(screen.getByTestId('selected-node-id').textContent).toBe('node-1');
+    expect(screen.getByTestId('node-change-mark').textContent).toBe('1');
+  });
+  return () =>
+    fetch.mock.calls.some(
+      ([url, init]) => url === '/api/notifications/node-changes' && init?.method === 'POST',
+    );
+}
+
+test('selecting a changed current teaching Node opens the editor and reviews its change mark', async () => {
+  const reviewed = await selectChangedTeachingNode('current');
+
+  expect(reviewed()).toBe(true);
+});
+
+test('selecting a changed historical teaching Node opens no panel and keeps its change mark', async () => {
+  const reviewed = await selectChangedTeachingNode('historical');
+
+  expect(reviewed()).toBe(false);
 });
 
 test('current teaching sessions recover missed changes and retain the last projection on transient failure', async () => {
