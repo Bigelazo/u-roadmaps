@@ -341,8 +341,8 @@ export function RoadmapCanvasView({ input }: Props) {
   };
   const completeStudentPanelNode = (nodeId: string) => {
     if (canvasPreviewWorkflow.completeNode(nodeId)) return;
-    if (panel.kind === 'node-information-preview') nodeSelection.completeNodeInformationPreview();
-    else void request({ kind: 'complete-node', nodeId });
+    if (nodeSelection.completeNodeInformationPreview()) return;
+    void request({ kind: 'complete-node', nodeId });
   };
   const exitCanvasPreview = () => {
     if (!canvasPreviewWorkflow.isActive) return;

@@ -355,10 +355,11 @@ export function useNodeSelection({
     [dispatch],
   );
 
-  const completeNodeInformationPreview = useCallback(
-    () => dispatch({ type: 'completeNodeInformationPreview' }),
-    [dispatch],
-  );
+  const completeNodeInformationPreview = useCallback(() => {
+    if (panel.kind !== 'node-information-preview') return false;
+    dispatch({ type: 'completeNodeInformationPreview' });
+    return true;
+  }, [dispatch, panel.kind]);
 
   const dismissTopmostPanel = useCallback(() => {
     if (!canEditRoadmap) return false;

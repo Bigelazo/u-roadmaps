@@ -238,6 +238,27 @@ describe('Node selection', () => {
     expect(returnFocus).not.toHaveBeenCalled();
   });
 
+  test('completing a Node absorbs it only while a Node information preview is open', async () => {
+    const limits = accessibleNode('limits');
+    const canvas = renderNodeSelection({ experience: editableTeaching, nodes: [limits] });
+    await canvas.act((selection) => selection.selectNode('limits'));
+    let absorbed: boolean | undefined;
+
+    await canvas.act((selection) => (absorbed = selection.completeNodeInformationPreview()));
+    expect(absorbed).toBe(false);
+    expect(canvas.selection().panel).toEqual({ kind: 'editor' });
+
+    await canvas.act((selection) =>
+      selection.showNodeInformationPreview(limits as StudentAccessibleRoadmapNode, vi.fn()),
+    );
+    await canvas.act((selection) => (absorbed = selection.completeNodeInformationPreview()));
+    expect(absorbed).toBe(true);
+    expect(canvas.selection().panel).toMatchObject({
+      kind: 'node-information-preview',
+      isCompleted: true,
+    });
+  });
+
   test('each closed Node information preview asks again for focus on its opener', async () => {
     const limits = accessibleNode('limits');
     const canvas = renderNodeSelection({ experience: editableTeaching, nodes: [limits] });
