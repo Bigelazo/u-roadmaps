@@ -4,7 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
 import { CircleHelp } from 'lucide-react';
 import { useState } from 'react';
-import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial';
+import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial-closing-popover';
 import { TUTORIAL_TRIGGER_ATTRIBUTE } from '@/shared/client/tutorial/tutorial-support';
 import { TutorialChoiceDialog } from '@/shared/client/tutorial/tutorial-choice-dialog';
 import { useClaimTutorialInvitation } from '@/shared/client/tutorial/tutorial-records';

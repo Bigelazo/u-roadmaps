@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cache } from 'react';
 import { getServerSession, type NextAuthOptions, type Session } from 'next-auth';
 
 const sessionSecret = process.env.NEXTAUTH_SECRET;
@@ -20,7 +21,7 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-export async function getApplicationSession(): Promise<Session | null> {
+export const getApplicationSession = cache(async (): Promise<Session | null> => {
   if (!sessionSecret) return null;
   return getServerSession(authOptions);
-}
+});

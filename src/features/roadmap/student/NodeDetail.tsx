@@ -20,7 +20,7 @@ import { RoadmapSidePanel } from '@/features/roadmap/ui/RoadmapSidePanel';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
-import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
+import { NodeDescription } from '@/features/roadmap/ui/LazyNodeDescription';
 import { ResourceActionIcon, ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 
 type ContentProps = {

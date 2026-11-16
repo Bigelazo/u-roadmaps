@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
-import type { RoadmapDto } from '@/features/roadmap/types';
+import type { AnyRoadmapDto, RoadmapDto } from '@/features/roadmap/types';
 import { canvasConfirmationChoices } from '@/features/roadmap/ui/roadmap-confirmation';
 import { createNodeWithResources } from '@/features/roadmap/session/node-creation';
 import { useTestCanvasSession } from '../support/use-test-canvas-session';
@@ -61,13 +61,19 @@ function move(x: number, nodeId = 'first') {
   return { kind: 'move-nodes' as const, positions: [{ nodeId, position: { x, y: 0 } }] };
 }
 
-async function openCanvas(persistence: RoadmapCanvasSessionPersistence) {
+async function openCanvas(
+  persistence: RoadmapCanvasSessionPersistence,
+  entryRoadmap?: Promise<AnyRoadmapDto | null>,
+) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
       {children}
     </RoadmapCanvasSessionPersistenceProvider>
   );
-  const view = renderHook(() => useTestCanvasSession(input), { wrapper });
+  const view = renderHook(({ entryRoadmap }) => useTestCanvasSession({ ...input, entryRoadmap }), {
+    wrapper,
+    initialProps: { entryRoadmap },
+  });
   await waitFor(() => expect(view.result.current.roadmap).not.toBeNull());
   return view;
 }
@@ -165,6 +171,97 @@ test('a failed placement discards dependent unsent gestures and reloads another 
   expect((await saved.load()).nodes[0].positionX).toBe(80);
 });
 
+test('a new streamed entry snapshot preserves newer pending placement and the mounted session queue', async () => {
+  const saved = createInMemoryRoadmapSessionPersistence(roadmap);
+  const submitted = deferred();
+  const release = deferred();
+  let first = true;
+  const canvas = await openCanvas(
+    {
+      ...saved,
+      async execute(command, previewVersion) {
+        if (first) {
+          first = false;
+          submitted.resolve();
+          await release.promise;
+        }
+        return saved.execute(command, previewVersion);
+      },
+    },
+    Promise.resolve(roadmap),
+  );
+  let earlier!: ReturnType<typeof canvas.result.current.canvasCommands.run>;
+  let later!: typeof earlier;
+  act(() => {
+    earlier = canvas.result.current.canvasCommands.run(move(20));
+  });
+  await submitted.promise;
+  act(() => {
+    later = canvas.result.current.canvasCommands.run(move(40));
+  });
+  await waitFor(() => expect(canvas.result.current.roadmap?.nodes[0].positionX).toBe(40));
+  await saved.execute({
+    kind: 'update-node',
+    nodeId: 'first',
+    value: { title: 'Contenido actualizado', description: '', nodeTypeId: 'content' },
+  });
+  const entered = await saved.load();
+  canvas.rerender({ entryRoadmap: Promise.resolve(entered) });
+  await waitFor(() =>
+    expect(canvas.result.current.roadmap?.nodes[0].title).toBe('Contenido actualizado'),
+  );
+  try {
+    expect(canvas.result.current.roadmap?.nodes[0].positionX).toBe(40);
+  } finally {
+    await act(async () => {
+      release.resolve();
+      await Promise.all([earlier, later]);
+    });
+  }
+  expect((await saved.load()).nodes[0].positionX).toBe(40);
+});
+
+test('a new authoritative entry snapshot recovers a blocked placement session without a duplicate initial read', async () => {
+  const saved = createInMemoryRoadmapSessionPersistence(roadmap);
+  let unavailable = false;
+  let reject = true;
+  let reads = 0;
+  const canvas = await openCanvas(
+    {
+      ...saved,
+      async load() {
+        reads += 1;
+        if (unavailable) throw new Error('Sin conexión');
+        return saved.load();
+      },
+      async execute(command, previewVersion) {
+        if (reject) {
+          reject = false;
+          unavailable = true;
+          throw new Error('No se pudo guardar la posición.');
+        }
+        return saved.execute(command, previewVersion);
+      },
+    },
+    Promise.resolve(roadmap),
+  );
+  expect(reads).toBe(0);
+  await act(async () => {
+    await canvas.result.current.canvasCommands.run(move(20));
+  });
+  expect(canvas.result.current.placementRecovery?.kind).toBe('unsynchronized');
+  await saved.execute(move(180));
+  const entered = await saved.load();
+  canvas.rerender({ entryRoadmap: Promise.resolve(entered) });
+  await waitFor(() => expect(canvas.result.current.roadmap?.nodes[0].positionX).toBe(180));
+  expect(canvas.result.current.placementRecovery).toBeNull();
+  unavailable = false;
+  await act(async () => {
+    await canvas.result.current.canvasCommands.run(move(80));
+  });
+  expect((await saved.load()).nodes[0].positionX).toBe(80);
+});
+
 test('failed recovery keeps explicit unsynchronized feedback and refuses placements until authoritative reload succeeds', async () => {
   const saved = createInMemoryRoadmapSessionPersistence(roadmap);
   let unavailable = false;
@@ -221,41 +318,48 @@ test('failed recovery keeps explicit unsynchronized feedback and refuses placeme
   expect(canvas.result.current.error).toBeNull();
 });
 
-test('leaving discards unsent placements while an already submitted write can commit without changing the next session', async () => {
-  const saved = createInMemoryRoadmapSessionPersistence(roadmap);
-  const submitted = deferred();
-  const release = deferred();
-  let first = true;
-  const previous = await openCanvas({
-    ...saved,
-    async execute(command, previewVersion) {
-      if (first) {
-        first = false;
-        submitted.resolve();
-        await release.promise;
-      }
-      return saved.execute(command, previewVersion);
-    },
-  });
-  let earlier!: ReturnType<typeof previous.result.current.canvasCommands.run>;
-  let later!: typeof earlier;
-  act(() => {
-    earlier = previous.result.current.canvasCommands.run(move(20));
-  });
-  await submitted.promise;
-  act(() => {
-    later = previous.result.current.canvasCommands.run(move(60));
-  });
-  previous.unmount();
-  const next = await openCanvas(saved);
-  await act(async () => {
-    release.resolve();
-    expect(await earlier).toEqual({ applied: false });
-    expect(await later).toEqual({ applied: false });
-  });
-  expect((await saved.load()).nodes[0].positionX).toBe(20);
-  expect(next.result.current.roadmap?.nodes[0].positionX).toBe(0);
-});
+test.for(['network load', 'server entry'] as const)(
+  'leaving a %s canvas discards unsent placements while an already submitted write can commit without changing the next session',
+  async (entrySource) => {
+    const saved = createInMemoryRoadmapSessionPersistence(roadmap);
+    const submitted = deferred();
+    const release = deferred();
+    let first = true;
+    const persistence: RoadmapCanvasSessionPersistence = {
+      ...saved,
+      async execute(command, previewVersion) {
+        if (first) {
+          first = false;
+          submitted.resolve();
+          await release.promise;
+        }
+        return saved.execute(command, previewVersion);
+      },
+    };
+    const previous = await openCanvas(
+      persistence,
+      entrySource === 'server entry' ? Promise.resolve(roadmap) : undefined,
+    );
+    let earlier!: ReturnType<typeof previous.result.current.canvasCommands.run>;
+    let later!: typeof earlier;
+    act(() => {
+      earlier = previous.result.current.canvasCommands.run(move(20));
+    });
+    await submitted.promise;
+    act(() => {
+      later = previous.result.current.canvasCommands.run(move(60));
+    });
+    previous.unmount();
+    const next = await openCanvas(saved);
+    await act(async () => {
+      release.resolve();
+      expect(await earlier).toEqual({ applied: false });
+      expect(await later).toEqual({ applied: false });
+    });
+    expect((await saved.load()).nodes[0].positionX).toBe(20);
+    expect(next.result.current.roadmap?.nodes[0].positionX).toBe(0);
+  },
+);
 
 test('a refresh from another teacher preserves newer pending positions over the authoritative Roadmap', async () => {
   const saved = createInMemoryRoadmapSessionPersistence(roadmap);

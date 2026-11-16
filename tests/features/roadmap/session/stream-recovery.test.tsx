@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { OwnInboxRealtime } from '@/features/notifications/components/own-realtime';
 import {
@@ -34,15 +34,21 @@ const teachingRoadmap: RoadmapDto = {
   dependencies: [],
 };
 
-function TeachingCanvas() {
-  useTestCanvasSession({
+type EntryRoadmap = Promise<RoadmapDto | null>;
+
+function TeachingCanvas({ entryRoadmap }: { entryRoadmap?: EntryRoadmap }) {
+  const { roadmap } = useTestCanvasSession({
     courseOffering: { identifier, title: 'Programación I' },
     experience: { kind: 'teaching', term: 'current' },
+    entryRoadmap,
   });
-  return null;
+  return roadmap ? <p>{roadmap.nodes.map((node) => node.title).join(', ')}</p> : null;
 }
 
-function openTeachingCanvas() {
+function openTeachingCanvas({
+  entryRoadmap,
+  listening = true,
+}: { entryRoadmap?: EntryRoadmap; listening?: boolean } = {}) {
   const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
   let loads = 0;
   const load = persistence.load.bind(persistence);
@@ -50,17 +56,18 @@ function openTeachingCanvas() {
     loads += 1;
     return load();
   };
-  render(
+  const { unmount } = render(
     <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
-      <OwnInboxRealtime userId="teacher" />
-      <TeachingCanvas />
+      {listening ? <OwnInboxRealtime userId="teacher" /> : null}
+      <TeachingCanvas entryRoadmap={entryRoadmap} />
     </RoadmapCanvasSessionPersistenceProvider>,
   );
-  return () => {
+  const takeLoads = () => {
     const taken = loads;
     loads = 0;
     return taken;
   };
+  return Object.assign(takeLoads, { leave: unmount });
 }
 
 const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
@@ -78,6 +85,51 @@ afterEach(() => {
 
 test('opening the teaching canvas loads its Roadmap exactly once', async () => {
   const loads = openTeachingCanvas();
+  await advance(1000);
+  expect(loads()).toBe(1);
+});
+
+test('a Roadmap read before entry opens the canvas without loading it again', async () => {
+  const loads = openTeachingCanvas({
+    entryRoadmap: Promise.resolve(teachingRoadmap),
+    listening: false,
+  });
+  await advance(1000);
+  expect(loads()).toBe(0);
+  expect(screen.getByText('Límites')).toBeTruthy();
+});
+
+test('a stream that starts listening after the entry read reloads the Roadmap once', async () => {
+  const loads = openTeachingCanvas({ entryRoadmap: Promise.resolve(teachingRoadmap) });
+  await advance(1000);
+  expect(loads()).toBe(1);
+});
+
+test('an entry read streamed as a bare thenable still opens the canvas', async () => {
+  const streamed = {
+    then(resolve: (roadmap: RoadmapDto) => void) {
+      resolve(teachingRoadmap);
+    },
+  } as unknown as EntryRoadmap;
+  const loads = openTeachingCanvas({ entryRoadmap: streamed, listening: false });
+  await advance(1000);
+  expect(loads()).toBe(0);
+  expect(screen.getByText('Límites')).toBeTruthy();
+});
+
+test('an entry read that found nothing falls back to loading the Roadmap', async () => {
+  const loads = openTeachingCanvas({ entryRoadmap: Promise.resolve(null), listening: false });
+  await advance(1000);
+  expect(loads()).toBe(1);
+  expect(screen.getByText('Límites')).toBeTruthy();
+});
+
+test('an entry read is not reused when the same page is entered again', async () => {
+  const entryRoadmap = Promise.resolve(teachingRoadmap);
+  const firstEntry = openTeachingCanvas({ entryRoadmap, listening: false });
+  await advance(1000);
+  firstEntry.leave();
+  const loads = openTeachingCanvas({ entryRoadmap, listening: false });
   await advance(1000);
   expect(loads()).toBe(1);
 });

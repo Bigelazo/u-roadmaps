@@ -16,19 +16,25 @@ const NodeChangeCountsContext = createContext<Record<string, number> | undefined
 function useNodeChangeCounts(roadmapId: string | undefined) {
   const [result, setResult] = useState<{ roadmapId: string; byNode: Record<string, number> }>();
   const generation = useRef(0);
-  const refetch = useCallback(async () => {
-    if (!roadmapId) return;
-    const current = ++generation.current;
-    const response = await request<{ byNode: Record<string, number> }>(
-      `/node-changes?${new URLSearchParams({ roadmapId })}`,
-    ).catch(() => null);
-    if (response && current === generation.current)
-      setResult({ roadmapId, byNode: response.byNode });
-  }, [roadmapId]);
+  const refetch = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!roadmapId) return;
+      const current = ++generation.current;
+      const response = await request<{ byNode: Record<string, number> }>(
+        `/node-changes?${new URLSearchParams({ roadmapId })}`,
+        { signal },
+      ).catch(() => null);
+      if (response && current === generation.current)
+        setResult({ roadmapId, byNode: response.byNode });
+    },
+    [roadmapId],
+  );
   useEffect(() => {
-    void refetch();
+    const entry = new AbortController();
+    void refetch(entry.signal);
     const requestGeneration = generation;
     return () => {
+      entry.abort();
       ++requestGeneration.current;
     };
   }, [refetch]);
@@ -61,7 +67,7 @@ export function NodeChangeCountsProvider({
     reviewedOpening.current = opening;
     if (!byNode[openedNodeId]) return;
     void postJson('/node-changes', { roadmapId: activeRoadmapId, nodeId: openedNodeId }).then(
-      refetch,
+      () => refetch(),
       () => {
         reviewedOpening.current = null;
       },

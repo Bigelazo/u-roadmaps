@@ -402,6 +402,25 @@ function refuseWith(status: number, error?: { message: string; code?: string }) 
 
 afterEach(() => vi.unstubAllGlobals());
 
+test('the initial Roadmap read forwards its abort signal', async () => {
+  const controller = new AbortController();
+  const fetchMock = respondWith(roadmap);
+  await http.load(controller.signal);
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api(''), {
+    cache: 'no-store',
+    signal: controller.signal,
+  });
+});
+
+test('an aborted Roadmap read preserves its read cancellation and does not become an uncertain creation', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const fetchMock = vi.fn().mockRejectedValue(new DOMException('Read cancelled', 'AbortError'));
+  vi.stubGlobal('fetch', fetchMock);
+  await expect(http.load(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 test.each([
   ['load the Roadmap', () => http.load(), ''],
   ['load the Canvas preview', () => http.loadCanvasPreview(), '/simulation'],

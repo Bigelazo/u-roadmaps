@@ -79,6 +79,22 @@ function absorbsOwnEcho(echo: OwnEcho) {
   echo.expectedUntil = 0;
   return true;
 }
+const claimedEntryRoadmaps = new WeakSet<Promise<AnyRoadmapDto | null>>();
+
+function entryRoadmapForThisMount(entryRoadmap: Promise<AnyRoadmapDto | null> | undefined) {
+  if (!entryRoadmap || claimedEntryRoadmaps.has(entryRoadmap)) return undefined;
+  queueMicrotask(() => claimedEntryRoadmaps.add(entryRoadmap));
+  return entryRoadmap;
+}
+
+async function settledEntryRoadmap(streamedThenable: PromiseLike<AnyRoadmapDto | null>) {
+  try {
+    return await streamedThenable;
+  } catch {
+    return null;
+  }
+}
+
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
 
@@ -207,21 +223,48 @@ function useInjectedSession(
   const semester = input.courseOffering.identifier.semester;
   const experienceKind = input.experience.kind;
   const experienceTerm = input.experience.term;
-  const loadRoadmap = useCallback(async () => {
-    const loading = persistence.load();
-    latestLoadRef.current = {
-      startedAt: Date.now(),
-      succeeded: loading.then(
-        () => true,
-        () => false,
-      ),
-    };
-    const loadedRoadmap = await loading;
-    if (!matchesExperience(loadedRoadmap, experienceKind)) {
-      throw new Error(loadFailure);
+  const entryRoadmap = input.entryRoadmap;
+  const loadRoadmap = useCallback(
+    async (signal?: AbortSignal, readBeforeEntry?: Promise<AnyRoadmapDto | null>) => {
+      const loadNow = () => persistence.load(signal);
+      const loading = readBeforeEntry
+        ? settledEntryRoadmap(readBeforeEntry).then((entered) => entered ?? loadNow())
+        : loadNow();
+      latestLoadRef.current = {
+        startedAt: readBeforeEntry ? 0 : Date.now(),
+        succeeded: loading.then(
+          () => true,
+          () => false,
+        ),
+      };
+      const loadedRoadmap = await loading;
+      if (!matchesExperience(loadedRoadmap, experienceKind)) {
+        throw new Error(loadFailure);
+      }
+      return loadedRoadmap;
+    },
+    [experienceKind, persistence],
+  );
+
+  const applyAuthoritativeRoadmap = useCallback((loadedRoadmap: AnyRoadmapDto) => {
+    authoritativeRoadmapRef.current = loadedRoadmap;
+    setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
+    const uncertain = uncertainCreationRef.current;
+    if (uncertain) {
+      const found = loadedRoadmap.nodes.some((node) => node.id === uncertain.nodeId);
+      placementsRef.current.blocked = true;
+      setPlacementRecovery({
+        kind: found ? 'recovered-creation' : 'uncertain-creation',
+        message: found
+          ? 'El nodo está guardado. Continúa para finalizar esta creación.'
+          : uncertainCreationMessage,
+      });
+    } else if (placementsRef.current.blocked) {
+      placementsRef.current.blocked = false;
+      setPlacementRecovery(null);
+      setError(placementFailureRef.current);
     }
-    return loadedRoadmap;
-  }, [experienceKind, persistence]);
+  }, []);
 
   const refresh = useCallback(
     async (applyProjection = true) => {
@@ -231,25 +274,7 @@ function useInjectedSession(
         if (!sessionAliveRef.current || requestVersion !== requestVersionRef.current) {
           return false;
         }
-        if (applyProjection) {
-          authoritativeRoadmapRef.current = loadedRoadmap;
-          setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
-          const uncertain = uncertainCreationRef.current;
-          if (uncertain) {
-            const found = loadedRoadmap.nodes.some((node) => node.id === uncertain.nodeId);
-            placementsRef.current.blocked = true;
-            setPlacementRecovery({
-              kind: found ? 'recovered-creation' : 'uncertain-creation',
-              message: found
-                ? 'El nodo está guardado. Continúa para finalizar esta creación.'
-                : uncertainCreationMessage,
-            });
-          } else if (placementsRef.current.blocked) {
-            placementsRef.current.blocked = false;
-            setPlacementRecovery(null);
-            setError(placementFailureRef.current);
-          }
-        }
+        if (applyProjection) applyAuthoritativeRoadmap(loadedRoadmap);
         return true;
       } catch (cause) {
         if (!sessionAliveRef.current || requestVersion !== requestVersionRef.current) {
@@ -263,7 +288,7 @@ function useInjectedSession(
         throw cause;
       }
     },
-    [loadRoadmap],
+    [applyAuthoritativeRoadmap, loadRoadmap],
   );
 
   useEffect(() => {
@@ -326,15 +351,24 @@ function useInjectedSession(
   useEffect(() => {
     sessionAliveRef.current = true;
     const placements = placementsRef.current;
+    return () => {
+      sessionAliveRef.current = false;
+      requestVersionRef.current += 1;
+      canvasPreviewVersionRef.current += 1;
+      discardPlacements(placements);
+    };
+  }, []);
+
+  useEffect(() => {
     const requestVersion = ++requestVersionRef.current;
-    void loadRoadmap().then(
+    const entry = new AbortController();
+    void loadRoadmap(entry.signal, entryRoadmapForThisMount(entryRoadmap)).then(
       (loadedRoadmap) => {
-        if (requestVersion !== requestVersionRef.current) return;
-        authoritativeRoadmapRef.current = loadedRoadmap;
-        setRoadmap(projectPlacements(loadedRoadmap, placementsRef.current.pending));
+        if (entry.signal.aborted || requestVersion !== requestVersionRef.current) return;
+        applyAuthoritativeRoadmap(loadedRoadmap);
       },
       (cause: unknown) => {
-        if (requestVersion !== requestVersionRef.current) return;
+        if (entry.signal.aborted || requestVersion !== requestVersionRef.current) return;
         if (cause instanceof RoadmapAccessLostError) {
           setRoadmap(null);
           setAccessLost(true);
@@ -342,13 +376,8 @@ function useInjectedSession(
         setError(messageFor(cause, loadFailure));
       },
     );
-    return () => {
-      sessionAliveRef.current = false;
-      requestVersionRef.current += 1;
-      canvasPreviewVersionRef.current += 1;
-      discardPlacements(placements);
-    };
-  }, [loadRoadmap]);
+    return () => entry.abort();
+  }, [applyAuthoritativeRoadmap, entryRoadmap, loadRoadmap]);
 
   const dismissError = useCallback(() => {
     if (placementsRef.current.blocked) return;

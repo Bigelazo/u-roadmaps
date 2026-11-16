@@ -11,7 +11,12 @@ import {
 } from '../../application/notice-targets';
 import { PRESENT, nodeCreationRef, nodeDeletionRef } from '../../application/absorption';
 import { acknowledgeCapturedNotice } from '../recognition-snapshot';
-import { setKnownValue, type RecipientRoadmap } from './known-values';
+import {
+  setKnownValue,
+  setKnownValues,
+  type KnownValueUpdate,
+  type RecipientRoadmap,
+} from './known-values';
 import { roadmapView, type ParticipantAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
 import { lazyNoticeCourseContext, type NoticeCourseContext } from './course-context';
@@ -89,7 +94,30 @@ export async function recognizeTargetSnapshots(
   const roadmap = roadmapView(transaction, roadmapId, readAccess);
   if (recognized.length) await roadmap.preload();
   let acknowledged = 0;
+  let pendingTargetKeys: ReadonlySet<string> | undefined;
+  const unannouncedKnownValues = new Map<string, KnownValueUpdate>();
+  const recordUnannouncedKnownValues = async () => {
+    await setKnownValues(transaction, identity, [...unannouncedKnownValues.values()]);
+    unannouncedKnownValues.clear();
+  };
   for (const { snapshot, target, descriptor } of recognized) {
+    if (snapshot.onlyPending && !snapshot.id) {
+      pendingTargetKeys ??= await readPendingTargetKeys(transaction, identity);
+      if (!pendingTargetKeys.has(snapshot.targetKey)) {
+        if (
+          descriptor.keepsKnownValue !== false &&
+          (await descriptor.current(target, roadmap, recipientId))
+        )
+          unannouncedKnownValues.set(snapshot.targetKey, {
+            target,
+            knownValue: snapshot.currentValue,
+            context: targetContext(snapshot.context),
+          });
+        continue;
+      }
+    }
+    await recordUnannouncedKnownValues();
+    pendingTargetKeys = undefined;
     if (snapshot.id)
       acknowledged += await acknowledgeCapturedNotice(
         transaction,
@@ -108,6 +136,7 @@ export async function recognizeTargetSnapshots(
       roadmap,
     });
   }
+  await recordUnannouncedKnownValues();
   const broad = recognized.filter(({ descriptor }) => descriptor.scope);
   for (const { snapshot, target, descriptor } of broad) {
     if (descriptor.scope !== 'node' || !snapshot.nodeId) continue;
@@ -143,6 +172,17 @@ export async function recognizeTargetSnapshots(
     });
   }
   return acknowledged;
+}
+
+async function readPendingTargetKeys(
+  transaction: Prisma.TransactionClient,
+  identity: RecipientRoadmap,
+): Promise<ReadonlySet<string>> {
+  const pending = await transaction.roadmapNotice.findMany({
+    where: { ...identity, acknowledgedAt: null },
+    select: { targetKey: true },
+  });
+  return new Set(pending.flatMap(({ targetKey }) => (targetKey === null ? [] : [targetKey])));
 }
 
 async function reconcileUncaptured(

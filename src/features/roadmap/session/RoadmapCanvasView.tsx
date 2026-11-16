@@ -71,7 +71,7 @@ import {
   TUTORIAL_TRIGGER_ATTRIBUTE,
   markTutorialClosingPopover,
 } from '@/shared/client/tutorial/tutorial-support';
-import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial';
+import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial-closing-popover';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import { termLabel } from '@/shared/course-offering';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';

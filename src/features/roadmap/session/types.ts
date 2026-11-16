@@ -43,7 +43,7 @@ export type ExecutionResult = {
 export type ResourceAccessScope = 'roadmap' | 'canvas-preview';
 
 export type RoadmapCanvasSessionPersistence = {
-  load(): Promise<AnyRoadmapDto>;
+  load(signal?: AbortSignal): Promise<AnyRoadmapDto>;
   loadCanvasPreview(): Promise<StudentRoadmapDto>;
   recordResourceAccess(
     resource: Pick<Resource, 'id' | 'type'>,
@@ -62,6 +62,7 @@ export type RoadmapCanvasExperience =
 export type RoadmapCanvasSessionInput = {
   readonly notificationsEnabled?: boolean;
   readonly roadmapEntryKey?: string | null;
+  readonly entryRoadmap?: Promise<AnyRoadmapDto | null>;
   readonly courseOffering: {
     readonly identifier: CourseOfferingIdentifier;
     readonly title: string;
