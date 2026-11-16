@@ -38,10 +38,13 @@ const teachingRoadmap: RoadmapDto = {
 };
 
 function TeachingCanvas() {
-  useRoadmapCanvasSession({
-    courseOffering,
-    experience: { kind: 'teaching', term: 'current' },
-  });
+  useRoadmapCanvasSession(
+    {
+      courseOffering,
+      experience: { kind: 'teaching', term: 'current' },
+    },
+    {},
+  );
   return null;
 }
 

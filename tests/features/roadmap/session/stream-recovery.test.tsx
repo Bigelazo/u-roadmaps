@@ -39,11 +39,14 @@ const teachingRoadmap: RoadmapDto = {
 type EntryRoadmap = Promise<RoadmapDto | null>;
 
 function TeachingCanvas({ entryRoadmap }: { entryRoadmap?: EntryRoadmap }) {
-  const { roadmap } = useRoadmapCanvasSession({
-    courseOffering: { identifier, title: 'Programación I' },
-    experience: { kind: 'teaching', term: 'current' },
-    entryRoadmap,
-  });
+  const { roadmap } = useRoadmapCanvasSession(
+    {
+      courseOffering: { identifier, title: 'Programación I' },
+      experience: { kind: 'teaching', term: 'current' },
+      entryRoadmap,
+    },
+    {},
+  );
   return roadmap ? <p>{roadmap.nodes.map((node) => node.title).join(', ')}</p> : null;
 }
 

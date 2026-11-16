@@ -82,7 +82,7 @@ function renderPracticeSession(reported: PracticeCanvasAction[]) {
       onAction: (action: PracticeCanvasAction) => reported.push(action),
     },
   };
-  return renderHook(() => useRoadmapCanvasSession(input), {
+  return renderHook(() => useRoadmapCanvasSession(input, {}), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
         {children}

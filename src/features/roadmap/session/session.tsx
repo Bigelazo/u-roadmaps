@@ -405,7 +405,7 @@ function useInjectedSession(
 
 export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
-  options: RoadmapCanvasSessionOptions = {},
+  options: RoadmapCanvasSessionOptions,
 ): RoadmapCanvasSession {
   const providedPersistence = useContext(persistenceContext);
   const { courseCode, year, semester } = input.courseOffering.identifier;
