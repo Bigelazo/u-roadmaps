@@ -70,65 +70,93 @@ async function reconcileInScope(
   });
 }
 
-async function reconcileOne(
+type PendingNotice = NonNullable<
+  Awaited<ReturnType<Prisma.TransactionClient['roadmapNotice']['findFirst']>>
+>;
+type CurrentTarget = NonNullable<Awaited<ReturnType<NoticeTargetDescriptor['current']>>>;
+type Reconciliation = Exclude<ReturnType<typeof reconcileTarget>, { action: 'withdraw' }>;
+type KnownTarget = Readonly<{
+  knownValue: string;
+  currentValue: string | null;
+  context: Readonly<Record<string, unknown>>;
+}>;
+type PendingValues = NonNullable<ReturnType<typeof storedTargetValues>>['values'];
+
+const unreadablePendingValues: PendingValues = { knownValue: '', currentValue: '', context: {} };
+
+async function forgetTarget(
+  transaction: Prisma.TransactionClient,
+  { identity, target }: TargetReconciliationInput,
+  pending: PendingNotice | null,
+) {
+  if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
+  await transaction.noticeKnownValue.deleteMany({
+    where: { ...identity, targetKey: target.targetKey },
+  });
+}
+
+async function knownTarget(
   transaction: Prisma.TransactionClient,
   input: TargetReconciliationInput,
-): Promise<string | null> {
-  const { descriptor, identity, target } = input;
-  const current = await descriptor.current(target, input.roadmap, identity.recipientId);
-  const pending = await transaction.roadmapNotice.findFirst({
-    where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
-  });
-  if (!current) {
-    if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
-    await transaction.noticeKnownValue.deleteMany({
-      where: { ...identity, targetKey: target.targetKey },
-    });
-    return null;
-  }
-  const known =
-    descriptor.keepsKnownValue === false
-      ? {
-          knownValue: input.fallbackKnown,
-          currentValue: null,
-          context: input.fallbackContext ?? {},
-        }
-      : await ensureKnownValue(
-          transaction,
-          identity,
-          target,
-          input.fallbackKnown,
-          input.fallbackContext,
-        );
-  const pendingValues = pending
-    ? (storedTargetValues(pending.data)?.values ?? {
-        knownValue: '',
-        currentValue: '',
-        context: {},
-      })
-    : null;
-  const result = reconcileTarget({
-    knownValue: known.knownValue,
-    pending: pendingValues,
-    currentValue: input.descriptor.currentAtEdit
-      ? (known.currentValue ?? known.knownValue)
-      : current.value,
-  });
-  if (result.action === 'withdraw') {
-    await transaction.roadmapNotice.delete({ where: { id: pending!.id } });
-    return null;
-  }
-  if (result.action === 'no-op' && !(pending && input.absorbing)) return pending?.id ?? null;
-  if (!current.visible) return pending?.id ?? null;
-  const occurredAt = new Date(
-    Math.max(input.occurredAt.getTime(), pending?.occurredAt.getTime() ?? 0),
+): Promise<KnownTarget> {
+  if (input.descriptor.keepsKnownValue === false)
+    return {
+      knownValue: input.fallbackKnown,
+      currentValue: null,
+      context: input.fallbackContext ?? {},
+    };
+  return ensureKnownValue(
+    transaction,
+    input.identity,
+    input.target,
+    input.fallbackKnown,
+    input.fallbackContext,
   );
-  const values = {
-    knownValue: result.action === 'no-op' ? pendingValues!.knownValue : result.knownValue,
-    currentValue: result.action === 'no-op' ? pendingValues!.currentValue : result.currentValue,
+}
+
+function pendingNoticeValues(pending: PendingNotice | null): PendingValues | null {
+  if (!pending) return null;
+  return storedTargetValues(pending.data)?.values ?? unreadablePendingValues;
+}
+
+function keepsPendingNotice(
+  input: TargetReconciliationInput,
+  result: Reconciliation,
+  pending: PendingNotice | null,
+  current: CurrentTarget,
+) {
+  if (result.action === 'no-op' && !(pending && input.absorbing)) return true;
+  return !current.visible;
+}
+
+function noticeValues(
+  input: TargetReconciliationInput,
+  result: Reconciliation,
+  pendingValues: PendingValues | null,
+  current: CurrentTarget,
+  known: KnownTarget,
+) {
+  const settled = result.action === 'no-op' ? pendingValues! : result;
+  return {
+    knownValue: settled.knownValue,
+    currentValue: settled.currentValue,
     context: { ...pendingValues?.context, ...input.context, ...current.context },
     knownContext: known.context,
   };
+}
+
+function noticeOccurredAt(input: TargetReconciliationInput, pending: PendingNotice | null) {
+  return new Date(Math.max(input.occurredAt.getTime(), pending?.occurredAt.getTime() ?? 0));
+}
+
+async function writeNotice(
+  transaction: Prisma.TransactionClient,
+  input: TargetReconciliationInput,
+  pending: PendingNotice | null,
+  values: ReturnType<typeof noticeValues>,
+): Promise<string> {
+  const { descriptor, identity, target } = input;
+  const occurredAt = noticeOccurredAt(input, pending);
   const wording = descriptor.wording(values);
   const courseContext = await input.courseContext();
   const row = {
@@ -164,4 +192,39 @@ async function reconcileOne(
     select: { id: true },
   });
   return created.id;
+}
+
+async function reconcileOne(
+  transaction: Prisma.TransactionClient,
+  input: TargetReconciliationInput,
+): Promise<string | null> {
+  const { descriptor, identity, target } = input;
+  const current = await descriptor.current(target, input.roadmap, identity.recipientId);
+  const pending = await transaction.roadmapNotice.findFirst({
+    where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
+  });
+  if (!current) {
+    await forgetTarget(transaction, input, pending);
+    return null;
+  }
+  const known = await knownTarget(transaction, input);
+  const pendingValues = pendingNoticeValues(pending);
+  const result = reconcileTarget({
+    knownValue: known.knownValue,
+    pending: pendingValues,
+    currentValue: descriptor.currentAtEdit
+      ? (known.currentValue ?? known.knownValue)
+      : current.value,
+  });
+  if (result.action === 'withdraw') {
+    await transaction.roadmapNotice.delete({ where: { id: pending!.id } });
+    return null;
+  }
+  if (keepsPendingNotice(input, result, pending, current)) return pending?.id ?? null;
+  return writeNotice(
+    transaction,
+    input,
+    pending,
+    noticeValues(input, result, pendingValues, current, known),
+  );
 }
