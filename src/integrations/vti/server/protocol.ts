@@ -52,6 +52,7 @@ export async function startVtiLogin() {
   if (!loginTarget) return null;
 
   const state = crypto.randomUUID();
+  await prisma.vtiLoginTransaction.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   await prisma.vtiLoginTransaction.create({
     data: { state, expiresAt: new Date(Date.now() + vtiLoginStateMaxAge * 1000) },
   });

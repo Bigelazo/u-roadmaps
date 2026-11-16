@@ -854,9 +854,9 @@ test('a failed uploaded Resource transaction compensates its stored bytes', asyn
   );
   await expect(upload).rejects.toThrow('transaction failed');
   expect(storedFileKey).toEqual(expect.any(String));
-  const { readUploadedFile } =
+  const { openUploadedFile } =
     await import('@/features/roadmap/infrastructure/resources/filesystem');
-  await expect(readUploadedFile(storedFileKey!)).rejects.toMatchObject({ code: 'ENOENT' });
+  await expect(openUploadedFile(storedFileKey!)).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
 test('external creation refuses Files; uploaded Files can only be renamed and Links cannot convert', async ({

@@ -15,6 +15,12 @@ const authenticationCookieNames = [
 
 export function endInstitutionalSession(request: Request) {
   const response = NextResponse.redirect(siteUrl('/', request), 303);
-  for (const name of authenticationCookieNames) response.cookies.delete(name);
+  for (const name of authenticationCookieNames) {
+    if (name.startsWith('__Secure-') || name.startsWith('__Host-')) {
+      response.cookies.set({ name, value: '', path: '/', secure: true, maxAge: 0 });
+    } else {
+      response.cookies.delete(name);
+    }
+  }
   return response;
 }

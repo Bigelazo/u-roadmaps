@@ -16,6 +16,7 @@ vi.mock('@/features/notifications/server', () => ({
   reviewOwnNode,
 }));
 vi.mock('@/app/_adapters/auth', () => ({
+  synchronizeSessionParticipation: async () => undefined,
   requireAuthenticatedUser: async () => ({ id: session.userId }),
 }));
 import {

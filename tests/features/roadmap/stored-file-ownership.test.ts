@@ -22,6 +22,7 @@ const faults = vi.hoisted(() => ({
   lateSettled: false,
 }));
 vi.mock('@/app/_adapters/auth', () => ({
+  synchronizeSessionParticipation: async () => undefined,
   requireAuthenticatedUser: async () => ({
     id: faults.userId,
     rut: null,
@@ -121,6 +122,9 @@ afterEach(async () => {
     ),
   );
 });
+const downloadedText = ({ stream }: { stream: ReadableStream<Uint8Array> }) =>
+  new Response(stream).text();
+
 afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
 });
@@ -292,7 +296,7 @@ test('successful uploads and copies retain independent bytes', async ({ course }
     { ...teacher(course), resourceId: resource.id },
     recordingChangePort().port,
   );
-  expect(downloaded.bytes.toString()).toBe('Contenido');
+  expect(await downloadedText(downloaded)).toBe('Contenido');
   const source = await copySource(course);
   await source.copy();
   const destinations = (await readdir(directory)).filter((key) => !source.keys.includes(key));
@@ -350,12 +354,12 @@ test('a retried upload registration retains the original bytes without repeating
     },
   );
   expect(
-    (
+    await downloadedText(
       await downloadRoadmapResource(
         { ...teacher(course), resourceId: result.id },
         recordingChangePort().port,
-      )
-    ).bytes.toString(),
+      ),
+    ),
   ).toBe('Once');
   expect(await readdir(directory)).toHaveLength(1);
   expect(
@@ -518,12 +522,12 @@ for (const node of [false, true]) {
       await getRoadmapNodeResources({ ...teacher(course), nodeId: course.change.nodeId }),
     ).toMatchObject([{ id: resource.id }]);
     expect(
-      (
+      await downloadedText(
         await downloadRoadmapResource(
           { ...teacher(course), resourceId: resource.id },
           recordingChangePort().port,
-        )
-      ).bytes.toString(),
+        ),
+      ),
     ).toBe('Contenido');
   });
 
@@ -618,13 +622,13 @@ test('downloads keep participant Node access separate from frozen version teache
     ),
   ).rejects.toMatchObject({ status: 404, code: 'VERSION_NOT_FOUND' });
   expect(
-    (
+    await downloadedText(
       await downloadRoadmapVersionResource(
         { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
         course.identifier,
         resource.id,
-      )
-    ).bytes.toString(),
+      ),
+    ),
   ).toBe('Contenido');
   await expect(
     removeRoadmapResource({ ...teacher(course), id: resource.id }, recordingChangePort().port),
@@ -700,7 +704,7 @@ test('a file replacement keeps the Resource, serves the new bytes and deletes on
     recordingChangePort().port,
   );
   expect(downloaded).toMatchObject({ contentType: 'application/pdf', title: 'Guía revisada.pdf' });
-  expect(downloaded.bytes.toString()).toBe('Segunda versión');
+  expect(await downloadedText(downloaded)).toBe('Segunda versión');
   const [fact] = recorder.facts();
   expect(fact).toMatchObject({
     kind: 'resource',
@@ -742,7 +746,7 @@ test('replacing a file in a copied Roadmap leaves the frozen version with its ow
     course.identifier,
     frozen.id,
   );
-  expect(frozenDownload.bytes.toString()).toBe('Independent source');
+  expect(await downloadedText(frozenDownload)).toBe('Independent source');
   const currentDownload = await downloadRoadmapResource(
     {
       ...teacher(course),
@@ -751,7 +755,7 @@ test('replacing a file in a copied Roadmap leaves the frozen version with its ow
     },
     recordingChangePort().port,
   );
-  expect(currentDownload.bytes.toString()).toBe('Versión 2027');
+  expect(await downloadedText(currentDownload)).toBe('Versión 2027');
 });
 
 test('a refused file replacement keeps the Resource and its stored file', async ({ course }) => {

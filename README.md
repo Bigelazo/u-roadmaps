@@ -1,111 +1,38 @@
 # U-Roadmaps
 
-Plataforma para visualizar y gestionar rutas de aprendizaje de cursos universitarios de la Universidad de Chile. El equipo docente organiza contenidos, evaluaciones y recursos en un roadmap; los estudiantes recorren sus nodos, consultan materiales y registran su avance respetando los prerrequisitos.
+U-Roadmaps muestra un curso universitario como un mapa: cada contenido, evaluación o material es un nodo, y las flechas entre nodos dicen qué hay que aprender antes de qué. El equipo docente arma el mapa y los estudiantes lo recorren a su ritmo, marcando lo que ya completaron.
 
-Cada curso se identifica por el código del ramo, el año y el semestre, y tiene como máximo un roadmap compartido. Una persona puede participar en distintos cursos con permisos diferentes.
+Está hecho para los cursos de la Universidad de Chile. Se entra con U-Pasaporte y los cursos y cargos de cada persona vienen de U-Campus.
 
-## Contenido
+## Qué se puede hacer
 
-- [Funcionalidades actuales](#funcionalidades-actuales)
-- [Tecnologías](#tecnologías)
-- [Instalación y desarrollo local](#instalación-y-desarrollo-local)
-- [Configuración](#configuración)
-- [Comandos disponibles](#comandos-disponibles)
-- [Pruebas](#pruebas)
-- [Despliegue](#despliegue)
-- [Arquitectura y estructura](#arquitectura-y-estructura)
-- [Estado y limitaciones](#estado-y-limitaciones)
-- [Documentación](#documentación)
-- [Contribuciones y licencia](#contribuciones-y-licencia)
+**Si enseñas el curso**
 
-## Funcionalidades actuales
+- Crear el roadmap del curso, vacío o copiando el de un semestre anterior.
+- Agregar nodos con título, descripción en Markdown y un tipo (Contenido, Evaluación, Material extra o uno propio con su color e ícono).
+- Conectar nodos para definir prerrequisitos. La aplicación impide los ciclos.
+- Adjuntar archivos de hasta 10 MB o enlaces a cada nodo.
+- Ocultar nodos que aún no están listos y bloquear los que no deben abrirse todavía. Un bloqueo se puede levantar a mano o programar para un día y una hora.
+- Ver el roadmap como lo ve un estudiante y simular su avance sin tocar el progreso real.
+- Revisar quiénes participan en el curso y cuánto ha avanzado cada estudiante.
 
-### Acceso y resumen académico
+**Si cursas el ramo**
 
-- Inicio de sesión institucional con U-Pasaporte mediante VTI, validación del token y de una transacción de acceso de un solo uso, y sesión local con NextAuth.
-- Cierre de sesión con confirmación.
-- Consulta de cursos inscritos y dictados desde U-Campus mediante el puente MUFASA, agrupados por semestre, con acceso a períodos anteriores.
-- Presentación del cargo institucional, la sección cuando la fuente la entrega y la disponibilidad de un roadmap.
-- Consulta de participaciones locales activas cuando U-Campus no está disponible o no está configurado.
-- Materialización de la participación individual al resolver el acceso institucional a un curso.
-- Creación de un roadmap vacío desde el resumen académico para quien tiene permiso de creación.
+- Ver el mapa completo del curso y en qué punto estás.
+- Abrir un nodo cuando completaste sus prerrequisitos, leer su descripción y descargar sus materiales.
+- Marcar un nodo como completado después de revisar sus recursos.
+- Recibir avisos cuando el equipo docente cambia algo que te afecta, con un resumen de lo ocurrido desde tu última visita.
 
-### Edición docente del roadmap
+**Además**
 
-- Creación, edición y eliminación de nodos con título, descripción y tipo.
-- Canvas interactivo con desplazamiento, zoom, centrado, movimiento de nodos y guardado de posiciones.
-- Ordenamiento automático horizontal o vertical mediante Dagre.
-- Creación y eliminación de dependencias dirigidas entre nodos del mismo roadmap, con validación de ciclos, duplicados y conexiones inválidas.
-- Tipos predefinidos: **Contenido**, **Evaluación** y **Material extra**.
-- Gestión de tipos personalizados por roadmap, con una paleta de 20 colores y un catálogo de 80 íconos docentes.
-- Publicación y ocultamiento de nodos. Ocultar un nodo elimina sus dependencias entrantes y salientes y retira su bloqueo docente, tras confirmar el impacto.
-- Bloqueo docente de nodos y propagación a sus dependientes. El desbloqueo considera los prerrequisitos bloqueados y permite liberar un nodo o una rama según el caso.
-- Confirmaciones que presentan el impacto de ocultar, eliminar, conectar o cambiar bloqueos. Eliminar un nodo elimina también sus recursos, dependencias y registros de completación asociados.
-- Panel de edición redimensionable, conservación de su ancho y protección de cambios sin guardar al cambiar de selección.
-- Previsualización de la información de un nodo, incluidos los cambios del borrador que corresponden a esa vista.
+- Cuando termina el período de exámenes, el roadmap se cierra y queda como una versión de solo lectura que el equipo docente puede consultar y copiar después.
+- Una [extensión de navegador](https://github.com/Bigelazo/u-roadmaps-web-extension) muestra el roadmap dentro de cada curso de U-Cursos.
 
-### Recursos pedagógicos
+## Probarlo en tu computador
 
-- Recursos de tipo Archivo subido o Enlace externo, asociados a un nodo. Los videos y archivos alojados fuera de U-Roadmaps son Enlaces.
-- Creación, edición y eliminación de referencias externas con título y URL HTTP/HTTPS.
-- Subida de archivos de hasta 25 MB y descarga mediante rutas que comprueban el acceso al curso y al nodo.
-- Almacenamiento de archivos subidos en el directorio `uploads/`; PostgreSQL conserva sus metadatos.
+Necesitas Node.js 24, pnpm y PostgreSQL corriendo localmente.
 
-### Experiencia del estudiante y progreso
-
-- Visualización de los nodos publicados y de sus dependencias.
-- Estados de nodo **pendiente**, **completado** y **bloqueado**.
-- Consulta de detalles y recursos únicamente cuando el nodo es accesible. Un nodo bloqueado permanece representado en el canvas; uno oculto queda fuera de la vista del estudiante.
-- Acceso condicionado por bloqueos docentes y por la completación de la cadena de prerrequisitos.
-- Registro persistente de la completación, con su fecha original. Repetir la operación conserva el registro y el estudiante no puede revertirlo.
-- Conservación del progreso previo cuando aparece un bloqueo: la completación vuelve a ser efectiva al recuperar el acceso.
-- Previsualización docente del canvas con las reglas del estudiante y progreso simulado independiente por participación docente y roadmap. Se puede retomar o reiniciar sin modificar el progreso real de los estudiantes.
-- Detección de períodos históricos a partir de la fecha de cierre registrada: la interfaz presenta el roadmap sin controles de edición y el servidor rechaza nuevas completaciones y cambios en el progreso simulado. El cierre completo tiene limitaciones descritas más adelante.
-
-### Avisos y actualización de información
-
-- Campana y bandeja de avisos dentro de la aplicación, con paginación, filtros por curso y nodo, contadores de pendientes y navegación al elemento relacionado.
-- Avisos propios guardados en PostgreSQL para la disponibilidad de un roadmap, los Nodos, Recursos, cambios de acceso, Dependencias y clasificación.
-- Selección de destinatarios según participación activa y acceso al contenido, excluyendo al autor del cambio.
-- Reconocimiento de avisos al entrar al roadmap, con un Resumen de cambios de lo ocurrido desde la entrada anterior. Abrir la bandeja o un nodo no reconoce avisos; las llegadas posteriores a la entrada permanecen pendientes.
-- Agrupación por objeto del aviso: los cambios sucesivos al mismo elemento actualizan un único aviso, y volver al valor conocido lo retira.
-- Los avisos se leen al cargar la página, sin tiempo real; reconocer un roadmap actualiza la campana y los contadores por curso en el mismo navegador. SSE entrega solo las señales del roadmap para el lienzo docente y la pérdida de acceso; recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
-
-Los avisos funcionan exclusivamente con la aplicación y PostgreSQL, sin servicios externos. Véase [operación de avisos](docs/notifications-operations.md).
-
-### Integración con U-Cursos
-
-- La extensión [u-roadmaps-web-extension](https://github.com/Bigelazo/u-roadmaps-web-extension) (Chrome y Firefox) agrega el servicio U-Roadmaps a cada curso de U-Cursos y muestra ahí el roadmap y la cantidad de avisos pendientes del curso.
-- `/embed/courses/[courseCode]/[year]/[semester]` es la entrada embebida: con sesión redirige al roadmap sin la barra superior; sin sesión pide acceso al almacenamiento o el ingreso con U-Pasaporte en una pestaña nueva.
-- `GET /api/[courseCode]/[year]/[semester]/notifications/count` entrega los avisos pendientes de una oferta de curso.
-- Sobre HTTPS la cookie de sesión es `SameSite=None`; solo U-Cursos puede embeber la aplicación (`frame-ancestors`) y `src/proxy.ts` rechaza las mutaciones de `/api` que vienen de otro sitio.
-
-## Tecnologías
-
-Las versiones siguientes corresponden a las dependencias declaradas en [package.json](package.json).
-
-| Área               | Tecnología                                                      |
-| ------------------ | --------------------------------------------------------------- |
-| Aplicación y API   | Next.js 16.3.2, App Router y Route Handlers                     |
-| Interfaz           | React 19.2.8, TypeScript 6, Tailwind CSS 4, shadcn/ui y Base UI |
-| Canvas             | React Flow (`@xyflow/react` 12.11.3) y Dagre                    |
-| Persistencia       | PostgreSQL y Prisma 7 con adaptador `pg`                        |
-| Sesión e identidad | NextAuth 4, JOSE y VTI                                          |
-| Datos académicos   | U-Campus/MUFASA y lectura del calendario oficial en PDF         |
-| Notificaciones     | PostgreSQL, agrupación propia y lectura al cargar la página     |
-| Pruebas            | Vitest, Testing Library y Playwright                            |
-| Herramientas       | pnpm, ESLint y Prettier                                         |
-
-## Instalación y desarrollo local
-
-### Requisitos
-
-- Node.js 24.
-- pnpm.
-- PostgreSQL activo y accesible localmente.
-- Git.
-
-### 1. Obtener el proyecto e instalar dependencias
+**1. Descarga el proyecto**
 
 ```bash
 git clone https://github.com/Bigelazo/u-roadmaps.git
@@ -113,30 +40,24 @@ cd u-roadmaps
 pnpm install --frozen-lockfile
 ```
 
-### 2. Configurar el entorno
+**2. Crea la base de datos**
 
-Crea el archivo de desarrollo a partir de la plantilla:
-
-```bash
-cp .env.example .env
-```
-
-Ajusta `DATABASE_URL` y define un `NEXTAUTH_SECRET` local. Puedes generar un secreto con `openssl rand -hex 32`. Los archivos `.env*` con credenciales están excluidos de Git.
-
-Para usar la demostración local, conserva `U_ROADMAPS_DEV_DATA=true`. Los perfiles ficticios permiten explorar la aplicación sin credenciales de VTI, MUFASA o Novu.
-
-### 3. Preparar PostgreSQL
-
-Usa el servicio PostgreSQL local existente. Crea una base de desarrollo y un usuario con permisos sobre ella. Este ejemplo coincide con los valores de desarrollo de `.env.example`; ejecútalo una sola vez con una cuenta administradora de PostgreSQL:
+Ejecuta esto una sola vez con una cuenta administradora de PostgreSQL:
 
 ```sql
 CREATE USER roadmap_dev_user WITH PASSWORD 'roadmap_dev_password';
 CREATE DATABASE roadmap_dev_db OWNER roadmap_dev_user;
 ```
 
-Si utilizas otros nombres o credenciales, actualiza `DATABASE_URL`.
+**3. Configura el entorno**
 
-### 4. Generar el cliente y cargar la demostración
+```bash
+cp .env.example .env
+```
+
+Los valores de la plantilla ya coinciden con la base del paso anterior. Solo cambia `NEXTAUTH_SECRET` por un valor propio; `openssl rand -hex 32` genera uno.
+
+**4. Carga la demostración y arranca**
 
 ```bash
 pnpm prisma:generate
@@ -144,66 +65,41 @@ NODE_ENV=development pnpm dev:data:reset
 pnpm dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). El botón **Cambiar perfil de desarrollo**, en la esquina inferior izquierda, permite asumir los perfiles de Daniela Rojas Mella, Nicolás Fuentes Arancibia, Camila Morales Soto y los perfiles de verificación de FI1001.
+Abre <http://localhost:3000>. No hace falta U-Pasaporte: el botón **Cambiar perfil de desarrollo**, abajo a la izquierda, te deja entrar como docente o como estudiante de cursos ficticios. La demostración trae roadmaps de programación y cálculo, versiones cerradas de física y un curso sin roadmap.
 
-La demostración incluye roadmaps de programación y cálculo, dos versiones cerradas de física, un curso sin roadmap, recursos descargables y distintos escenarios de avance y bloqueo. La [guía de versionamiento](docs/roadmap-versioning-walkthrough.md) recorre las ediciones FI1001, sus permisos y la copia manual. `dev:data:reset` aplica las migraciones y reemplaza los datos reservados de la demostración, incluidos los archivos de las copias manuales; requiere una base local llamada `roadmap_dev_db` o `roadmap_e2e_db` y las banderas de fixtures correspondientes.
-
-Para inicializar solamente el esquema y los tipos predefinidos, sin cargar los escenarios ficticios:
-
-```bash
-pnpm prisma:migrate
-pnpm exec dotenv -e .env -- pnpm prisma:seed
-```
+`dev:data:reset` se puede repetir cuando quieras volver al estado inicial. Solo funciona contra una base local llamada `roadmap_dev_db` o `roadmap_e2e_db`.
 
 ## Configuración
 
-La plantilla está en [.env.example](.env.example). Next.js carga los archivos de entorno desde la raíz. Prisma usa `DATABASE_URL` del entorno; los scripts de migración cargan `.env` explícitamente.
+Todas las variables están en [.env.example](.env.example).
 
-| Variable                    | Uso                                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`              | Conexión PostgreSQL de la aplicación y Prisma. Obligatoria.                                      |
-| `E2E_DATABASE_URL`          | Conexión a la base separada de pruebas E2E.                                                      |
-| `NEXTAUTH_URL`              | Origen de la aplicación; por ejemplo, `http://localhost:3000`.                                   |
-| `NEXTAUTH_SECRET`           | Secreto de la sesión local. Necesario para iniciar sesión, incluidos los perfiles de desarrollo. |
-| `NEXT_PUBLIC_VTI_LOGIN_URL` | URL válida del servicio institucional de acceso. Necesaria para el flujo real de U-Pasaporte.    |
-| `VTI_JWT_SECRET`            | Secreto acordado con VTI para validar sus tokens.                                                |
-| `MUFASA_TOKEN`              | Token del puente U-Campus para consultar cursos y cargos institucionales.                        |
-| `MUFASA_BASE_URL`           | URL base del puente; la plantilla incluye el endpoint institucional usado por el proyecto.       |
-| `U_ROADMAPS_DEV_DATA`       | Activa el selector de perfiles cuando `NODE_ENV=development`.                                    |
-| `U_ROADMAPS_E2E_DATA`       | Habilita los datos ficticios para E2E cuando se configura en el servidor.                        |
+| Variable                                         | Para qué sirve                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `DATABASE_URL`                                   | Conexión a PostgreSQL. Obligatoria.                                           |
+| `NEXTAUTH_URL`                                   | Dirección pública de la aplicación, por ejemplo `http://localhost:3000`.      |
+| `NEXTAUTH_SECRET`                                | Secreto con que se firman las sesiones. Obligatoria para iniciar sesión.      |
+| `NEXT_PUBLIC_VTI_LOGIN_URL`, `VTI_JWT_SECRET`    | Ingreso real con U-Pasaporte.                                                 |
+| `MUFASA_TOKEN`, `MUFASA_BASE_URL`                | Consulta de cursos y cargos en U-Campus.                                      |
+| `PROBLEM_REPORT_EMAIL`, `SMTP_URL`, `SMTP_FROM`  | Envío por correo del formulario "reportar un problema".                       |
+| `U_ROADMAPS_DEV_DATA`                            | Activa los perfiles de demostración en desarrollo.                            |
+| `E2E_DATABASE_URL`, `NOTIFICATIONS_DATABASE_URL` | Bases de datos de las pruebas.                                                |
+| `ROADMAP_CLOSURE_INTERVAL_MS`                    | Cada cuánto se revisa si hay roadmaps que cerrar. Por defecto, cinco minutos. |
 
-Los avisos no tienen configuración externa. Véase [operación y verificación](docs/notifications-operations.md).
+Sin las variables de U-Pasaporte y U-Campus la aplicación funciona igual con los perfiles de demostración.
 
-## Comandos disponibles
+## Comandos del día a día
 
-| Comando                                    | Descripción                                                                                           |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                         |
-| `pnpm build`                               | Genera el build de producción.                                                                        |
-| `pnpm start`                               | Sirve un build de producción existente.                                                               |
-| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                        |
-| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                          |
-| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                  |
-| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.             |
-| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                    |
-| `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas. |
-| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                   |
-| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                      |
-| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                 |
-| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones, ejecuta el seed y registra tamaños de archivo faltantes.       |
-| `pnpm resources:backfill-file-sizes`       | Registra el tamaño de los recursos de archivo que no lo tienen, leyendo `uploads/`.                   |
-| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                   |
-| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.  |
+| Comando                                      | Qué hace                                                    |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| `pnpm dev`                                   | Arranca la aplicación en modo desarrollo.                   |
+| `pnpm build` y `pnpm start`                  | Construye y sirve la versión de producción.                 |
+| `pnpm lint`, `pnpm format`, `pnpm typecheck` | Revisan estilo, formato y tipos.                            |
+| `pnpm test`                                  | Corre todas las pruebas.                                    |
+| `pnpm prisma:prepare`                        | Deja la base lista: cliente, migraciones y datos iniciales. |
+| `NODE_ENV=development pnpm dev:data:reset`   | Restaura la demostración local.                             |
+| `pnpm sync:academic-calendar`                | Lee del calendario oficial las fechas del semestre actual.  |
 
-La sincronización del calendario puede consultar el PDF sin escribir en la base:
-
-```bash
-pnpm exec dotenv -e .env -- pnpm sync:academic-calendar --dry-run
-```
-
-Sin `--dry-run`, guarda las fechas y sus fuentes en `AcademicTerm`. El script utiliza el año y mes de `America/Santiago` para seleccionar el semestre y no espera la fecha habitual de publicación.
-
-El proceso persistente sincroniza el calendario por sí solo. Desde el 15 de abril (semestre 1) o el 15 de octubre (semestre 2), hora de `America/Santiago`, lo busca una vez al día, cerca de las 10:00, hasta guardarlo; después no vuelve a consultarlo. Antes de esas fechas no consulta el sitio. Los fallos se registran como advertencia y se reintentan al día siguiente o al reiniciar el proceso. No se ejecuta con datos de desarrollo o E2E, para conservar sus calendarios ficticios.
+El resto está en la sección `scripts` de [package.json](package.json).
 
 ## Pruebas
 
@@ -212,13 +108,9 @@ pnpm exec playwright install chromium
 pnpm test
 ```
 
-Las suites unitarias, de integración y E2E usan bases PostgreSQL separadas del desarrollo. La preparación, el aislamiento y las convenciones de ejecución están en la [guía de pruebas](docs/agents/testing.md).
+Hay pruebas unitarias (Vitest), de integración con PostgreSQL real y de extremo a extremo (Playwright). Usan bases de datos separadas de la de desarrollo. La [guía de pruebas](docs/agents/testing.md) explica cómo prepararlas y cómo correr una sola suite.
 
 ## Despliegue
-
-### Servidor Node.js
-
-Configura `.env.production` o inyecta las variables al proceso, con PostgreSQL accesible y almacenamiento persistente para `uploads/`:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -227,67 +119,49 @@ pnpm build
 pnpm start
 ```
 
-Los tipos predefinidos necesitan el seed además de las migraciones. Configura VTI y MUFASA para el uso institucional y utiliza los secretos del entorno de despliegue. Las variables `NEXT_PUBLIC_*` utilizadas en código del navegador quedan fijadas durante el build; reconstruye al cambiarlas.
+Tres cosas que conviene saber antes de desplegar:
 
-Los avisos requieren un único proceso Node persistente, con conexión directa a PostgreSQL para LISTEN y streaming sin buffering del proxy. El repositorio no incluye un despliegue Docker. Véase [operación de avisos](docs/notifications-operations.md).
+- **Un solo proceso.** La aplicación debe correr como un único proceso Node que no se apague. Ese proceso entrega los cambios en vivo, libera los desbloqueos programados cada 15 minutos, cierra los roadmaps al terminar el semestre y lee el calendario académico una vez al día.
+- **Los archivos viven en disco.** Lo que suben los docentes se guarda en la carpeta `uploads/`. Tiene que estar en un almacenamiento que sobreviva a los reinicios.
+- **Las variables `NEXT_PUBLIC_*` se fijan al construir.** Si cambias una, vuelve a ejecutar `pnpm build`.
 
-Ese mismo proceso libera los desbloqueos programados: al iniciar y cada 15 minutos, unos segundos después de cada :00, :15, :30 y :45, revisa los nodos cuyo día y hora programados (hora de Chile) ya llegaron y avisa a sus estudiantes. Los horarios programables usan esos mismos tramos de 15 minutos.
+Si pones un proxy delante, desactiva el buffering para `/api/notifications/stream` y deja pasar cuerpos de al menos 11 MB.
 
-El proceso también revisa cada cinco minutos los Roadmaps pendientes de cierre. El último día editable es la fecha final de exámenes sincronizada, o el 20 de julio (semestre 1) / 20 de enero del año siguiente (semestre 2) si no hay calendario. El cierre vence al comenzar el día siguiente en `America/Santiago`; el primer pase posterior quita los bloqueos docentes y las fechas de desbloqueo, y registra `closedAt` en una transacción por Roadmap. No crea ni modifica avisos. La página del Curso, las Completions y la previsualización leen ese cierre registrado. `ROADMAP_CLOSURE_INTERVAL_MS` ajusta el intervalo (mínimo 1000 ms). Los errores de un Roadmap se registran y se reintentan en el siguiente pase. La protección de todas las mutaciones docentes se implementa por separado en #193.
-
-## Arquitectura y estructura
-
-El código se organiza por funcionalidades. Las páginas y rutas HTTP componen los módulos mediante sus entradas públicas; dentro de cada funcionalidad se separan reglas de dominio, operaciones de aplicación, infraestructura y componentes.
+## Cómo está organizado el código
 
 ```text
 src/
-├── app/                       Páginas, layout, API y adaptadores HTTP
-├── features/
-│   ├── academic-overview/     Resumen académico
-│   ├── institutional-access/ Acceso y cierre de sesión institucional
-│   ├── notifications/        Avisos, bandeja y transportes
-│   └── roadmap/              Dominio, editor, canvas, recursos y progreso
-├── integrations/             VTI, U-Campus y calendario académico
-├── shared/                   UI, sesión, base de datos, errores y validaciones
-├── development/              Perfiles, escenarios y archivos ficticios
-└── generated/prisma/         Cliente generado; no se versiona
-prisma/                       Esquema, migraciones y seed
-scripts/                      Reinicio de fixtures y operaciones auxiliares
-tests/                        Pruebas unitarias, de integración y E2E
-docs/                         ADR, especificaciones, investigación y prototipos
-uploads/                      Archivos subidos; no se versiona
+├── app/            Páginas, rutas de la API y adaptadores HTTP
+├── features/       Una carpeta por funcionalidad: roadmap, avisos,
+│                   resumen académico e ingreso institucional
+├── integrations/   U-Pasaporte (VTI), U-Campus y calendario académico
+├── shared/         Componentes de interfaz, sesión, base de datos y validaciones
+└── development/    Perfiles y datos de la demostración
+prisma/             Esquema, migraciones y datos iniciales
+tests/              Pruebas unitarias, de integración y E2E
+docs/               Decisiones de arquitectura y guías
 ```
 
-Las entidades persistidas principales son `Course`, `CourseOffering`, `Roadmap`, `RoadmapNode`, `NodeType`, `Dependency`, `Resource`, `ResourceAccess`, `User`, `Participation`, `Completion`, `SimulatedCompletion`, `SimulatedResourceReview`, `AcademicTerm` y los registros de avisos y reconocimiento.
+Está construido con Next.js 16, React 19, TypeScript, PostgreSQL con Prisma, Tailwind CSS y React Flow para el canvas.
 
-Las pantallas principales son `/`, `/academic-overview` y `/courses/[courseCode]/[year]/[semester]`. La API del roadmap parte de `/api/[courseCode]/[year]/[semester]/roadmap`; los avisos propios se consultan en `/api/notifications`.
+## Limitaciones conocidas
 
-## Estado y limitaciones
+- Al cerrarse un semestre, el servidor rechaza nuevas completaciones, pero aún no protege todas las operaciones de edición docente.
+- Los permisos de edición para ayudantes todavía no están implementados.
+- Los avisos se entregan con el mejor esfuerzo: si el proceso cae justo después de guardar un cambio, ese aviso puede perderse.
+- No hay almacenamiento de archivos compartido entre varias instancias.
 
-El proyecto está en desarrollo. Esta lista de funcionalidades describe el código presente; [GLOSSARY.md](GLOSSARY.md) también contiene reglas del producto que todavía requieren implementación.
+## Para saber más
 
-- **Cierre de semestres parcial:** hay fechas oficiales, una interfaz histórica sin edición y restricciones servidor para completaciones y simulación. Todavía faltan el retiro automático de todos los bloqueos docentes al cerrar y la protección del cierre en todas las operaciones de edición del servidor.
-- **Evolución del roadmap pendiente:** todavía no existe el flujo para copiar una versión anterior con nuevas identidades, archivos independientes y referencia a su origen.
-- **Gestión académica incompleta:** las secciones coordinadas, el cargo institucional persistido, la importación y reconciliación del listado completo de participantes y el seguimiento docente de estudiantes aún no están implementados. Los datos ficticios de estos escenarios no prueban su disponibilidad en la aplicación.
-- **Permisos institucionales en desarrollo:** con respuesta de U-Campus, la creación se reserva al profesor de cátedra y la edición se asigna a cátedra, coordinación y auxiliares. La asignación de permisos de edición a ayudantes prevista por el dominio sigue pendiente. Cuando falta la respuesta institucional, algunas operaciones utilizan la participación docente local activa.
-- **Operación de notificaciones:** se admite un único proceso Node persistente. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
-- **Almacenamiento local:** los archivos requieren conservar `uploads/`. El código actual no incorpora un servicio de almacenamiento de objetos compartido entre instancias.
+- [GLOSSARY.md](GLOSSARY.md): el vocabulario del dominio y sus reglas.
+- [docs/adr/](docs/adr/): por qué se tomó cada decisión de arquitectura.
+- [DESIGN.md](DESIGN.md) y [PRODUCT.md](PRODUCT.md): criterios visuales y de producto.
+- [AGENTS.md](AGENTS.md): instrucciones para agentes de código que trabajan en el repositorio.
 
-El contrato de notificaciones propias está en [#152](https://github.com/Bigelazo/u-roadmaps/issues/152); la integración retirada se conserva como antecedente en [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y en el historial Git.
+## Contribuir
 
-## Documentación
+Las tareas se gestionan en los [issues del repositorio](https://github.com/Bigelazo/u-roadmaps/issues), en inglés. Antes de proponer un cambio, revisa el glosario y los ADR relacionados, y corre `pnpm lint`, `pnpm typecheck` y las pruebas que correspondan.
 
-- [Modelo de dominio y vocabulario](GLOSSARY.md).
-- [Decisiones de arquitectura](docs/adr/).
-- [Criterios visuales](DESIGN.md).
-- [Operación de notificaciones propias](docs/notifications-operations.md).
-- [Antecedente de la integración retirada](https://github.com/Bigelazo/u-roadmaps/issues/139).
-- [Guía de pruebas](docs/agents/testing.md).
-- [Instrucciones para agentes](AGENTS.md).
-- [Convenciones del gestor de issues](docs/agents/issue-tracker.md).
+## Licencia
 
-## Contribuciones y licencia
-
-Las tareas y solicitudes se gestionan en los issues del repositorio `Bigelazo/u-roadmaps`. Antes de contribuir, revisa [AGENTS.md](AGENTS.md), el modelo de dominio y los ADR pertinentes. Utiliza pnpm, conserva los límites entre funcionalidades y ejecuta las comprobaciones correspondientes al cambio.
-
-El repositorio no incluye actualmente un archivo `LICENSE` ni declara una licencia en `package.json`.
+[Apache 2.0](LICENSE).

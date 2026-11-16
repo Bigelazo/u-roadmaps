@@ -6,10 +6,13 @@ import { handleApplicationResult, courseRoute } from '@/app/_adapters/http';
 import { ApplicationError } from '@/shared/errors/types';
 import { Prisma } from '@/shared/server/db';
 
-const { getApplicationSession, findUser } = vi.hoisted(() => ({
+const { getApplicationSession, findUser, synchronizeCourseOffering } = vi.hoisted(() => ({
   getApplicationSession: vi.fn(),
   findUser: vi.fn(),
+  synchronizeCourseOffering: vi.fn(),
 }));
+vi.mock('@/features/roadmap/server', () => ({ synchronizeCourseOffering }));
+vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 vi.mock('@/shared/server/session', () => ({ getApplicationSession }));
 vi.mock('@/shared/server/db', async () => {
   const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
@@ -183,5 +186,37 @@ test.each([
     expect(response.status).toBe(status);
     await expect(response.json()).resolves.toEqual({ error });
     expect(mutation).not.toHaveBeenCalled();
+  },
+);
+
+const offering = { courseCode: 'CC3002', year: 2026, semester: 2 };
+
+test.each([
+  { method: 'POST', order: ['synchronized', 'handled'], synchronized: [offering] },
+  { method: 'DELETE', order: ['synchronized', 'handled'], synchronized: [offering] },
+  { method: 'GET', order: ['handled'], synchronized: [] },
+])(
+  'a $method runs $order against the stored Participation refreshed from U-Campus',
+  async ({ method, order, synchronized }) => {
+    const userId = '11111111-1111-4111-8111-111111111111';
+    getApplicationSession.mockResolvedValue({ user: { id: userId } });
+    findUser.mockResolvedValue({ id: userId, rut: '12345678' });
+    synchronizeCourseOffering.mockReset();
+    const steps: string[] = [];
+    synchronizeCourseOffering.mockImplementation(async () => {
+      steps.push('synchronized');
+    });
+    const handler = courseRoute(async () => {
+      steps.push('handled');
+      return Response.json({ saved: true });
+    });
+    const response = await handler(new Request('http://localhost/api/roadmap', { method }), {
+      params: Promise.resolve({ courseCode: 'CC3002', year: '2026', semester: '2' }),
+    });
+    expect(response.status).toBe(200);
+    expect(steps).toEqual(order);
+    expect(
+      synchronizeCourseOffering.mock.calls.map(([user, identifier]) => [user.id, identifier]),
+    ).toEqual(synchronized.map((identifier) => [userId, identifier]));
   },
 );

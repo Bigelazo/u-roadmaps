@@ -34,6 +34,7 @@ vi.mock('@/shared/server/db', async () => {
   return { Prisma: { PrismaClientKnownRequestError } };
 });
 vi.mock('@/app/_adapters/auth', () => ({
+  synchronizeSessionParticipation: async () => undefined,
   requireAuthenticatedUser: async () => ({ id: 'teacher-id' }),
 }));
 vi.mock('@/features/roadmap/server', () => ({

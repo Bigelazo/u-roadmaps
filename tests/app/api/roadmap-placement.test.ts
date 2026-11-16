@@ -14,7 +14,10 @@ vi.mock('@/shared/server/db', async () => {
   const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
   return { Prisma: { PrismaClientKnownRequestError } };
 });
-vi.mock('@/app/_adapters/auth', () => ({ requireAuthenticatedUser }));
+vi.mock('@/app/_adapters/auth', () => ({
+  requireAuthenticatedUser,
+  synchronizeSessionParticipation: async () => undefined,
+}));
 vi.mock('@/features/roadmap/server', () => ({ createRoadmapNode, saveRoadmapNodePositions }));
 
 import { PATCH } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/placement/route';
