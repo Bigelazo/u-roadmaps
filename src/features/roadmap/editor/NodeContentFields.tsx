@@ -6,8 +6,9 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/fie
 import { Input } from '@/shared/ui/input';
 import { inputClassName, NodeTypeSelect } from './primitives';
 
-const MarkdownEditor = dynamic(() =>
-  import('./MarkdownEditor').then(({ MarkdownEditor }) => MarkdownEditor),
+const MarkdownEditor = dynamic(
+  () => import('./MarkdownEditor').then(({ MarkdownEditor }) => MarkdownEditor),
+  { loading: () => null },
 );
 
 type NodeContent = { title: string; description: string; nodeTypeId: string };
