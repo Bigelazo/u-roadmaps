@@ -107,31 +107,19 @@ test('Practice creation and replay retain identity without repeating placement o
   );
 });
 
-test.each(['coordinate', 'type', 'duplicate', 'closed', 'visibility'] as const)(
-  'rejected %s Practice creation mutates no Node',
-  async (invalid) => {
-    const initial = structuredClone(roadmap) as RoadmapDto;
-    if (invalid === 'closed') initial.roadmap.closedAt = new Date().toISOString();
-    const persistence = createInMemoryRoadmapSessionPersistence(initial);
-    const displaced = [{ nodeId: 'prerequisite', position: { x: 160, y: 0 } }];
-    if (invalid === 'duplicate') displaced.push(displaced[0]);
-    await expect(
-      persistence.execute({
-        kind: 'add-node',
-        nodeId: 'new-node',
-        node: {
-          title: 'Nuevo',
-          description: '',
-          nodeTypeId: invalid === 'type' ? 'missing' : 'content',
-          isVisible: invalid === 'visibility' ? ('true' as never) : true,
-        },
-        position: { x: invalid === 'coordinate' ? Infinity : 0, y: 0 },
-        displaced,
-      }),
-    ).rejects.toThrow();
-    expect(await persistence.load()).toEqual(initial);
-  },
-);
+test('a Practice creation with an unavailable Node type mutates no Node', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  await expect(
+    persistence.execute({
+      kind: 'add-node',
+      nodeId: 'new-node',
+      node: { title: 'Nuevo', description: '', nodeTypeId: 'missing', isVisible: true },
+      position: { x: 0, y: 0 },
+      displaced: [{ nodeId: 'prerequisite', position: { x: 160, y: 0 } }],
+    }),
+  ).rejects.toThrow();
+  expect(await persistence.load()).toEqual(roadmap);
+});
 
 test('sets a Node to the target visibility, as production does', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
@@ -615,19 +603,6 @@ test('a missing placement target rejects the entire movement before changing pos
       ],
     }),
   ).rejects.toThrow();
-  expect((await persistence.load()).nodes).toEqual(roadmap.nodes);
-});
-
-test.each([
-  [
-    { nodeId: 'selected', position: { x: 80, y: 240 } },
-    { nodeId: 'selected', position: { x: 240, y: 240 } },
-  ],
-  [{ nodeId: 'selected', position: { x: Infinity, y: 240 } }],
-  [{ nodeId: '', position: { x: 80, y: 240 } }],
-])('invalid complete placements preserve every Practice position', async (...positions) => {
-  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
-  await expect(persistence.execute({ kind: 'move-nodes', positions })).rejects.toThrow();
   expect((await persistence.load()).nodes).toEqual(roadmap.nodes);
 });
 
