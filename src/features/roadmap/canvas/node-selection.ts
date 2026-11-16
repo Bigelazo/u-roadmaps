@@ -21,7 +21,11 @@ export type NodeSelectionPanel =
 
 export type NodeSelectionNotice = 'selected-node-blocked' | 'selected-node-removed';
 
-export type NodeSelectionFocusReturn = { token: string; destination: 'node' | 'canvas' };
+type NodeSelectionFocusReturnRequest =
+  | { destination: 'node' | 'canvas' }
+  | { destination: 'node-information-preview-opener'; returnFocus: () => void };
+
+export type NodeSelectionFocusReturn = NodeSelectionFocusReturnRequest & { token: string };
 
 export type NodeSelectionOptions = {
   nodes: readonly RoadmapNodeDto[] | undefined;
@@ -48,7 +52,11 @@ type NodeSelectionAction =
   | { type: 'observeCanvasPreview'; isCanvasPreview: boolean }
   | { type: 'openResourceComposer'; command: NodeEditorCommand }
   | { type: 'selectCreatedNode'; nodeId: string }
-  | { type: 'selectNode'; nodeId: string; panel: 'editor' | 'student-detail' | 'none' }
+  | {
+      type: 'selectNode';
+      nodeId: string;
+      panel: 'editor' | 'student-detail' | 'current-without-resource-composer';
+    }
   | {
       type: 'showNodeInformationPreview';
       node: StudentAccessibleRoadmapNode;
@@ -173,8 +181,8 @@ function useNodeSelectionState(isCanvasPreview: boolean) {
 function useFocusReturn() {
   const [focusReturn, setFocusReturn] = useState<NodeSelectionFocusReturn | null>(null);
   const nextTokenRef = useRef(0);
-  const requestFocusReturn = useCallback((destination: NodeSelectionFocusReturn['destination']) => {
-    setFocusReturn({ token: `node-selection-focus-${++nextTokenRef.current}`, destination });
+  const requestFocusReturn = useCallback((request: NodeSelectionFocusReturnRequest) => {
+    setFocusReturn({ ...request, token: `node-selection-focus-${++nextTokenRef.current}` });
   }, []);
   return { focusReturn, requestFocusReturn };
 }
@@ -211,7 +219,7 @@ export function useNodeSelection({
       preserveEditorDraft: canEditRoadmap && hasDraftRef.current(),
     });
     setNotice(selected ? 'selected-node-blocked' : 'selected-node-removed');
-    requestFocusReturn(selected ? 'node' : 'canvas');
+    requestFocusReturn({ destination: selected ? 'node' : 'canvas' });
   }, [
     canEditRoadmap,
     dispatch,
@@ -232,7 +240,11 @@ export function useNodeSelection({
         dispatch({
           type: 'selectNode',
           nodeId,
-          panel: isStudentExperience ? 'student-detail' : canEditRoadmap ? 'editor' : 'none',
+          panel: isStudentExperience
+            ? 'student-detail'
+            : canEditRoadmap
+              ? 'editor'
+              : 'current-without-resource-composer',
         });
       };
       if (isEditing && selectedNodeId && selectedNodeId !== nodeId) {
@@ -257,12 +269,12 @@ export function useNodeSelection({
 
   const closeSelectedNodeNow = useCallback(() => {
     dispatch({ type: 'closeSelectedNode' });
-    requestFocusReturn('node');
+    requestFocusReturn({ destination: 'node' });
   }, [dispatch, requestFocusReturn]);
 
   const closeSelectedNode = useCallback(
-    (options: { guardDraft?: boolean } = {}) => {
-      if (options.guardDraft !== false && isEditing && selectedNodeId) {
+    (options: { skipDraftGuard?: boolean } = {}) => {
+      if (!options.skipDraftGuard && isEditing && selectedNodeId) {
         return guardDraft({ kind: 'deselect-node', nodeId: selectedNodeId }).then((proceed) => {
           if (proceed) closeSelectedNodeNow();
         });
@@ -296,7 +308,7 @@ export function useNodeSelection({
       if (command.kind === 'add-node' && createdNodeId) {
         dispatch({ type: 'selectCreatedNode', nodeId: createdNodeId });
       } else if (command.kind === 'delete-node') {
-        closeSelectedNode({ guardDraft: false });
+        closeSelectedNode({ skipDraftGuard: true });
       }
     },
     [closeSelectedNode, dispatch],
@@ -304,10 +316,12 @@ export function useNodeSelection({
 
   const closeNodeInformationPreview = useCallback(() => {
     if (panel.kind !== 'node-information-preview') return;
-    const { focusReturn } = panel;
     dispatch({ type: 'closeNodeInformationPreview' });
-    requestAnimationFrame(() => focusReturn());
-  }, [dispatch, panel]);
+    requestFocusReturn({
+      destination: 'node-information-preview-opener',
+      returnFocus: panel.focusReturn,
+    });
+  }, [dispatch, panel, requestFocusReturn]);
 
   const showNodeInformationPreview = useCallback(
     (node: StudentAccessibleRoadmapNode, focusReturn: () => void) =>

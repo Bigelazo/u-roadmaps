@@ -154,8 +154,11 @@ function useEscapeDismissal(dismissTopmostPanel: () => boolean) {
 function useCanvasFocusReturn(focusReturn: NodeSelectionFocusReturn | null) {
   const canvasFocusRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (focusReturn?.destination !== 'canvas') return;
-    requestAnimationFrame(() => canvasFocusRef.current?.focus());
+    if (focusReturn?.destination === 'canvas') {
+      requestAnimationFrame(() => canvasFocusRef.current?.focus());
+    } else if (focusReturn?.destination === 'node-information-preview-opener') {
+      requestAnimationFrame(() => focusReturn.returnFocus());
+    }
   }, [focusReturn]);
   return canvasFocusRef;
 }
@@ -261,7 +264,7 @@ export function RoadmapCanvasView({ input }: Props) {
     (intent: NodeEditorIntent) => {
       switch (intent.kind) {
         case 'close':
-          void closeSelectedNode({ guardDraft: false });
+          void closeSelectedNode({ skipDraftGuard: true });
           return;
         case 'preview-node-information':
           showNodeInformationPreview(intent.node, intent.returnFocus);

@@ -214,13 +214,36 @@ describe('Node selection', () => {
       isCompleted: true,
     });
 
-    await canvas.act(async (selection) => {
-      selection.closeNodeInformationPreview();
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    });
+    await canvas.act((selection) => selection.closeNodeInformationPreview());
     expect(canvas.selection().selectedNodeId).toBe('limits');
     expect(canvas.selection().panel).toEqual({ kind: 'editor' });
-    expect(returnFocus).toHaveBeenCalledOnce();
+    expect(canvas.selection().focusReturn).toEqual({
+      token: expect.any(String),
+      destination: 'node-information-preview-opener',
+      returnFocus,
+    });
+    expect(returnFocus).not.toHaveBeenCalled();
+  });
+
+  test('each closed Node information preview asks again for focus on its opener', async () => {
+    const limits = accessibleNode('limits');
+    const canvas = renderNodeSelection({ experience: editableTeaching, nodes: [limits] });
+    await canvas.act((selection) => selection.selectNode('limits'));
+    const openPreview = () =>
+      canvas.act((selection) =>
+        selection.showNodeInformationPreview(limits as StudentAccessibleRoadmapNode, vi.fn()),
+      );
+
+    await openPreview();
+    await canvas.act((selection) => selection.closeNodeInformationPreview());
+    const first = canvas.selection().focusReturn;
+    await openPreview();
+    await canvas.act((selection) => selection.dismissTopmostPanel());
+
+    expect(canvas.selection().focusReturn).toMatchObject({
+      destination: 'node-information-preview-opener',
+    });
+    expect(canvas.selection().focusReturn?.token).not.toBe(first?.token);
   });
 
   test('dismissing closes the Node information preview before the editor', async () => {
