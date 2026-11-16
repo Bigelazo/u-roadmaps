@@ -1,6 +1,6 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
+import { courseRoute, parseFormData, parseJsonObject } from '@/app/_adapters/http';
 import {
   createRoadmapResource,
   getRoadmapNodeResources,
@@ -12,7 +12,7 @@ export const POST = courseRoute(async ({ identifier, user, params, request }) =>
   const isUpload = request.headers.get('content-type')?.startsWith('multipart/form-data');
   const resource = await (isUpload
     ? uploadRoadmapResource(
-        { ...target, file: (await request.formData()).get('file') },
+        { ...target, file: (await parseFormData(request)).get('file') },
         roadmapChangePort,
       )
     : createRoadmapResource(

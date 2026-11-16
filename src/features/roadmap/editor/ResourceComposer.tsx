@@ -131,7 +131,7 @@ function ResourceFileField({
         <FieldError id={`${idPrefix}-file-help`}>{fileError}</FieldError>
       ) : (
         <p id={`${idPrefix}-file-help`} className="mt-1 text-xs text-muted-foreground">
-          Máximo 25 MB.
+          Máximo 10 MB.
         </p>
       )}
     </Field>
@@ -208,7 +208,7 @@ function ResourceReplacementField({
         <FieldError id={`${idPrefix}-file-help`}>{fileError}</FieldError>
       ) : (
         <p id={`${idPrefix}-file-help`} className="mt-1 text-xs text-muted-foreground">
-          Opcional. Máximo 25 MB.
+          Opcional. Máximo 10 MB.
         </p>
       )}
     </Field>

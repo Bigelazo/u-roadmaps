@@ -38,11 +38,11 @@ export function replaceFileTitleExtension(title: string, previousName: string, n
   return stem + fileTitleExtension(nextName);
 }
 
-export const MAX_RESOURCE_FILE_BYTES = 25 * 1024 * 1024;
+export const MAX_RESOURCE_FILE_BYTES = 10 * 1024 * 1024;
 
 export function resourceFileError(file: Pick<File, 'size'> | null): string | null {
   if (!file) return null;
   if (!file.size) return 'El archivo está vacío.';
-  if (file.size > MAX_RESOURCE_FILE_BYTES) return 'El archivo supera los 25 MB.';
+  if (file.size > MAX_RESOURCE_FILE_BYTES) return 'El archivo supera los 10 MB.';
   return null;
 }

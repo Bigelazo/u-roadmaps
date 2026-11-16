@@ -6,7 +6,7 @@ import {
   copyUploadedFile,
   createStoredFile,
   deleteUploadedFile,
-  readUploadedFile,
+  openUploadedFile,
 } from './filesystem';
 
 export type ProvisionalStoredFiles = {
@@ -90,9 +90,9 @@ export async function withStoredFiles<Result>(
   }
 }
 
-export async function readStoredFile(fileKey: string) {
+export async function openStoredFile(fileKey: string) {
   try {
-    return await readUploadedFile(fileKey);
+    return await openUploadedFile(fileKey);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');

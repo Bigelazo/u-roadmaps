@@ -17,7 +17,7 @@ import type {
   RoadmapDto,
   RoadmapNode,
 } from '../types';
-import { readStoredFile } from '../infrastructure/resources/lifecycle';
+import { openStoredFile } from '../infrastructure/resources/lifecycle';
 import { versionApiUrl } from '@/shared/version-history-url';
 import { termLabel } from '@/shared/course-offering';
 import { requireUuid } from '@/shared/validation';
@@ -272,7 +272,7 @@ export async function downloadRoadmapVersionResource(
   if (!resource?.fileKey)
     throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en esta versión.');
   return {
-    bytes: await readStoredFile(resource.fileKey),
+    ...(await openStoredFile(resource.fileKey)),
     contentType: resource.fileContentType ?? 'application/octet-stream',
     title: resource.title,
   };

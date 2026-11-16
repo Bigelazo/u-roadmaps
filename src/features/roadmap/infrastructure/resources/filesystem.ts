@@ -1,7 +1,9 @@
 import 'server-only';
 
-import { copyFile, mkdir, open, readFile, rm, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { copyFile, mkdir, open, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { MAX_RESOURCE_FILE_BYTES } from '@/features/roadmap/domain/resource';
 const storageDirectory = join(
   /* turbopackIgnore: true */ process.cwd(),
@@ -22,8 +24,15 @@ export async function createStoredFile(fileKey: string) {
   return open(storagePath(fileKey), 'wx');
 }
 
-export async function readUploadedFile(fileKey: string) {
-  return readFile(storagePath(fileKey));
+export async function openUploadedFile(fileKey: string) {
+  const path = storagePath(fileKey);
+  const stats = await stat(path);
+  if (!stats.isFile())
+    throw Object.assign(new Error(`EISDIR: illegal operation on a directory, read '${path}'`), {
+      code: 'EISDIR',
+    });
+  const stream = Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>;
+  return { stream, size: stats.size };
 }
 
 export async function deleteUploadedFile(fileKey: string) {

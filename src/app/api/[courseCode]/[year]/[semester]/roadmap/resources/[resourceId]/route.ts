@@ -1,6 +1,6 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
+import { courseRoute, parseFormData, parseJsonObject } from '@/app/_adapters/http';
 import {
   removeRoadmapResource,
   replaceRoadmapResourceFile,
@@ -11,7 +11,7 @@ export const PATCH = courseRoute(async ({ identifier, user, params, request }) =
   const target = { userId: user.id, identifier, id: params.resourceId };
   const isUpload = request.headers.get('content-type')?.startsWith('multipart/form-data');
   if (isUpload) {
-    const form = await request.formData();
+    const form = await parseFormData(request);
     const result = await replaceRoadmapResourceFile(
       { ...target, file: form.get('file'), title: form.get('title') },
       roadmapChangePort,

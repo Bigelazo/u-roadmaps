@@ -103,7 +103,7 @@ function uploadedFileError(error: unknown): never {
     throw new ApplicationError(400, 'INVALID_REQUEST', 'El archivo seleccionado está vacío.');
   }
   if (error instanceof Error && error.message === 'FILE_TOO_LARGE') {
-    throw new ApplicationError(400, 'INVALID_REQUEST', 'El archivo no puede superar los 25 MB.');
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'El archivo no puede superar los 10 MB.');
   }
   throw error;
 }

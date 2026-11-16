@@ -12,6 +12,7 @@ vi.mock('@/shared/server/db', async () => {
 });
 vi.mock('@/features/notifications/server', () => ({ countOwnCourseOfferingNotices }));
 vi.mock('@/app/_adapters/auth', () => ({
+  synchronizeSessionParticipation: async () => undefined,
   requireAuthenticatedUser: async () => {
     if (!session.userId)
       throw new ApplicationError(401, 'UNAUTHENTICATED', 'Debes iniciar sesión para continuar.');

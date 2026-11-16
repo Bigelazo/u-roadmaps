@@ -14,6 +14,7 @@ import {
 
 const session = vi.hoisted(() => ({ userId: '' }));
 vi.mock('@/app/_adapters/auth', () => ({
+  synchronizeSessionParticipation: async () => undefined,
   requireAuthenticatedUser: async () => ({
     id: session.userId,
     rut: null,

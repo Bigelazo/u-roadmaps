@@ -1,7 +1,5 @@
-import { gzipSync } from 'node:zlib';
-import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireAuthenticatedUser, synchronizeSessionParticipation } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import type {
   CourseOfferingIdentifier,
@@ -25,59 +23,27 @@ export function applicationErrorResponse(error: ApplicationError): NextResponse 
 }
 
 type FileDownload = {
-  readonly bytes: Uint8Array;
+  readonly stream: ReadableStream<Uint8Array>;
+  readonly size: number;
   readonly contentType: string;
   readonly title: string;
 };
 
 export function fileDownloadResponse(download: FileDownload): NextResponse {
-  return new NextResponse(Uint8Array.from(download.bytes).buffer, {
+  return new NextResponse(download.stream, {
     headers: {
       'Content-Type': download.contentType,
-      'Content-Length': String(download.bytes.byteLength),
+      'Content-Length': String(download.size),
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(download.title)}`,
       'Cache-Control': 'private, no-store',
     },
   });
 }
 
-const smallestJsonWorthCompressing = 1024;
-
-async function requestInScopeAcceptsGzip() {
-  try {
-    return /\bgzip\b/.test((await headers()).get('accept-encoding') ?? '');
-  } catch {
-    return false;
-  }
-}
-
-async function gzippedWhenLargeJson(response: Response): Promise<Response> {
-  if (
-    !response.body ||
-    response.headers.has('content-encoding') ||
-    !response.headers.get('content-type')?.startsWith('application/json') ||
-    !(await requestInScopeAcceptsGzip())
-  )
-    return response;
-  const json = Buffer.from(await response.clone().arrayBuffer());
-  if (json.byteLength < smallestJsonWorthCompressing) return response;
-  const compressedHeaders = new Headers(response.headers);
-  compressedHeaders.set('Content-Encoding', 'gzip');
-  compressedHeaders.append('Vary', 'Accept-Encoding');
-  compressedHeaders.delete('Content-Length');
-  return new Response(gzipSync(json), {
-    status: response.status,
-    statusText: response.statusText,
-    headers: compressedHeaders,
-  });
-}
-
 export async function handleApplicationResult<Success extends Response>(
   operation: () => Promise<Success>,
 ): Promise<Response> {
-  return gzippedWhenLargeJson(
-    await applicationResult(operation).match((response) => response, applicationErrorResponse),
-  );
+  return applicationResult(operation).match((response) => response, applicationErrorResponse);
 }
 
 export async function parseJsonObject(request: Request): Promise<JsonObject> {
@@ -92,6 +58,16 @@ export async function parseJsonObject(request: Request): Promise<JsonObject> {
   }
   return body as JsonObject;
 }
+
+export async function parseFormData(request: Request): Promise<FormData> {
+  try {
+    return await request.formData();
+  } catch {
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'El archivo no puede superar los 10 MB.');
+  }
+}
+
+const readMethods = new Set(['GET', 'HEAD']);
 
 type AuthenticatedUser = Awaited<ReturnType<typeof requireAuthenticatedUser>>;
 type RouteParams = Readonly<Record<string, string>>;
@@ -155,6 +131,8 @@ export function courseRoute<
         identifier = identify(params);
         [body, user] = await Promise.all([parseBody(request), requireAuthenticatedUser()]);
       }
+      if (!options.identify && !readMethods.has(request.method))
+        await synchronizeSessionParticipation(identifier as CourseOfferingIdentifier);
       return handle({
         request,
         params,

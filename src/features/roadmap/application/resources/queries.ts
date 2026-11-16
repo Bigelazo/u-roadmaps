@@ -7,7 +7,7 @@ import {
   type RoadmapParticipant,
   type RoadmapReadContext,
 } from '@/features/roadmap/application/roadmap-command';
-import { readStoredFile } from '@/features/roadmap/infrastructure/resources/lifecycle';
+import { openStoredFile } from '@/features/roadmap/infrastructure/resources/lifecycle';
 import { nodeNotFound, resourceNotFound } from '@/features/roadmap/application/errors';
 import { requireUuid } from '@/shared/validation';
 import type { RoadmapChangePort } from '@/features/roadmap/application/change-port';
@@ -59,7 +59,7 @@ export async function downloadRoadmapResource(
     const countsAccess = context.participation.role === 'STUDENT' && !context.roadmap.closedAt;
     return { fileKey, fileContentType, title, countsAccess };
   });
-  const bytes = await readStoredFile(resource.fileKey);
+  const file = await openStoredFile(resource.fileKey);
   if (resource.countsAccess)
     await recordFileResourceAccess(
       { ...participant, resourceId: id, fileKey: resource.fileKey },
@@ -68,7 +68,7 @@ export async function downloadRoadmapResource(
       console.error('Resource access recording failed', { resourceId: id, error });
     });
   return {
-    bytes,
+    ...file,
     contentType: resource.fileContentType ?? 'application/octet-stream',
     title: resource.title,
   };

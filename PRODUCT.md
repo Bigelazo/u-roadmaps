@@ -39,7 +39,7 @@ U-Roadmaps aims to replace course pages as the main place where a course's conte
 - Capabilities and current limitations are listed in `README.md` ("Funcionalidades actuales", "Estado y limitaciones"); domain rules, including ones not yet implemented, live in `GLOSSARY.md`; decisions in `docs/adr/`.
 - Node states: pending, completed, blocked; hidden nodes are absent for students. Completion cannot be reverted by the student.
 - Node-type colors (20-color palette, 80-icon catalog) are user-defined pedagogical data, distinct from platform progress colors.
-- File resources up to 25 MB, stored on local disk (`uploads/`); links and videos as external URLs.
+- File resources up to 10 MB, stored on local disk (`uploads/`); links and videos as external URLs.
 - Single persistent Node process (SSE notices, scheduled unlocks, roadmap closure); PostgreSQL; Next.js 16 App Router, Tailwind 4, shadcn/ui on Base UI.
 - `prefers-reduced-motion` is deliberately ignored; animations stay on.
 - Undecided / incomplete: coordinated sections, full roster reconciliation, teaching-assistant edit permissions, roadmap copy across versions, complete closure enforcement on every server mutation.

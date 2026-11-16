@@ -18,4 +18,11 @@ test('logout expires all application authentication cookies before returning hom
       expect.stringContaining('u-roadmaps-vti-state=;'),
     ]),
   );
+
+  for (const name of ['__Secure-next-auth.session-token', '__Host-next-auth.csrf-token']) {
+    const header = response.headers.getSetCookie().find((cookie) => cookie.startsWith(`${name}=`));
+    expect(header).toMatch(/;\s*secure/i);
+    expect(header).toMatch(/;\s*path=\/(;|$)/i);
+    expect(header).toMatch(/max-age=0|expires=thu, 01 jan 1970/i);
+  }
 });

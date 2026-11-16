@@ -23,7 +23,7 @@ jobs:
           version: 11.22.0
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: cp .env.example .env
@@ -57,7 +57,7 @@ jobs:
           version: 11.22.0
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: cp .env.example .env

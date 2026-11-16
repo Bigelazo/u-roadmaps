@@ -205,15 +205,15 @@ test('does not create the node while a resource is half prepared', async () => {
   );
 });
 
-test('rejects a file above 25 MB before the node exists', async () => {
+test('rejects a file above 10 MB before the node exists', async () => {
   const { user } = await openCreator(vi.fn(async () => true));
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
   const tooLarge = new File(['x'], 'video.mp4', { type: 'video/mp4' });
-  Object.defineProperty(tooLarge, 'size', { value: 25 * 1024 * 1024 + 1 });
+  Object.defineProperty(tooLarge, 'size', { value: 10 * 1024 * 1024 + 1 });
   await user.upload(screen.getByLabelText('Archivo', { selector: 'input' }), tooLarge);
 
-  expect(screen.getByText('El archivo supera los 25 MB.')).toBeTruthy();
+  expect(screen.getByText('El archivo supera los 10 MB.')).toBeTruthy();
   expect(
     (screen.getByRole('button', { name: 'Agregar archivo' }) as HTMLButtonElement).disabled,
   ).toBe(true);
