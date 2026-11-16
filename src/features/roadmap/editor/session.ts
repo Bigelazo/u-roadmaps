@@ -273,173 +273,185 @@ function refreshMatchesPendingEffect(state: NodeEditorState, next: RoadmapNode) 
   }
 }
 
+function advanced(state: NodeEditorState, changes: Partial<NodeEditorState>): NodeEditorState {
+  return { ...state, ...changes, epoch: state.epoch + 1 };
+}
+
+function canonicalNodeChanged(previous: RoadmapNode | null, next: RoadmapNode) {
+  return Boolean(
+    previous &&
+    (nodeDraftIsDirty(previous, nodeUpdateFromNode(next)) ||
+      previous.isVisible !== next.isVisible ||
+      previous.isTeacherBlocked !== next.isTeacherBlocked ||
+      !sameResources(previous.resources, next.resources)),
+  );
+}
+
+function refreshDirtyEditor(state: NodeEditorState, node: RoadmapNode): NodeEditorState {
+  const changed = canonicalNodeChanged(state.canonicalNode, node);
+  const isPendingEffectResult = refreshMatchesPendingEffect(state, node);
+  const keepsPendingEffectCurrent =
+    changed && Boolean(state.pendingEditorEffect) && isPendingEffectResult;
+  return {
+    ...state,
+    epoch: keepsPendingEffectCurrent ? state.epoch : state.epoch + 1,
+    canonicalNode: node,
+    remoteConflict: state.remoteConflict || (changed && !isPendingEffectResult),
+    remoteDeleted: false,
+    confirmedEditorEffect: null,
+  };
+}
+
+function refreshCanonicalNode(
+  state: NodeEditorState,
+  node: RoadmapNode | undefined,
+): NodeEditorState {
+  if (!node) return { ...state, remoteConflict: true, remoteDeleted: true };
+  if (node.id !== state.nodeId) return state;
+  if (nodeEditorStateIsDirty(state)) return refreshDirtyEditor(state, node);
+  return advanced(state, {
+    canonicalNode: node,
+    nodeDraft: nodeUpdateFromNode(node),
+    resourceSession: closedResourceSession,
+    confirmedEditorEffect: null,
+  });
+}
+
+function changeResourceMode(state: NodeEditorState, mode: 'file' | 'link'): NodeEditorState {
+  const session = state.resourceSession;
+  if (session.kind !== 'adding-file' && session.kind !== 'adding-link') return state;
+  if (session.kind === `adding-${mode}`) return state;
+  return advanced(state, { resourceSession: addingResourceSession(mode, session.value) });
+}
+
+function selectResourceFile(state: NodeEditorState, file: File | null): NodeEditorState {
+  const session = state.resourceSession;
+  if (session.kind === 'editing-existing') {
+    if (session.replacementFile === file) return state;
+    const resourceSession = withReplacementFile(state, session, file);
+    return resourceSession === session ? state : advanced(state, { resourceSession });
+  }
+  if (session.kind !== 'adding-file' || session.selectedFile === file) return state;
+  return advanced(state, { resourceSession: { ...session, selectedFile: file } });
+}
+
+function consumeCommand(state: NodeEditorState, command: NodeEditorCommand): NodeEditorState {
+  if (state.consumedCommandIds.includes(command.id) || state.nodeId !== command.nodeId)
+    return state;
+  const consumedCommandIds = [...state.consumedCommandIds, command.id];
+  if (state.resourceSession.kind !== 'closed') return { ...state, consumedCommandIds };
+  return advanced(state, {
+    consumedCommandIds,
+    resourceSession: addingResourceSession(
+      command.mode,
+      command.mode === 'file' ? emptyResourceInput : command.value,
+    ),
+  });
+}
+
+function settleCommittedEffect(
+  state: NodeEditorState,
+  next: NodeEditorState,
+  effect: NodeEditorEffect,
+): NodeEditorState {
+  switch (effect.kind) {
+    case 'update-node':
+      return state.canonicalNode?.id === effect.nodeId
+        ? { ...next, canonicalNode: replaceNodeInformation(state.canonicalNode, effect.value) }
+        : next;
+    case 'add-resource':
+    case 'upload-resource':
+    case 'update-resource':
+      return resourceSessionMatchesEffect(state.resourceSession, effect)
+        ? { ...next, resourceSession: closedResourceSession }
+        : next;
+    case 'delete-resource':
+      return state.pendingResourceDeletion?.id === effect.resourceId
+        ? { ...next, pendingResourceDeletion: null }
+        : next;
+  }
+}
+
+function resolveEffect(
+  state: NodeEditorState,
+  { effectId, epoch, status }: ActionOf<'resolve-effect'>,
+): NodeEditorState {
+  const pending = state.pendingEditorEffect;
+  if (!pending || pending.id !== effectId || pending.epoch !== epoch) return state;
+  const committed = status === 'committed';
+  const next = {
+    ...state,
+    pendingEditorEffect: null,
+    confirmedEditorEffect: committed ? pending.effect : state.confirmedEditorEffect,
+  };
+  if (pending.epoch !== state.epoch || !committed) return next;
+  return settleCommittedEffect(state, next, pending.effect);
+}
+
+type ActionOf<Type extends NodeEditorAction['type']> = Extract<NodeEditorAction, { type: Type }>;
+
+type NodeEditorHandlers = {
+  [Type in NodeEditorAction['type']]: (
+    state: NodeEditorState,
+    action: ActionOf<Type>,
+  ) => NodeEditorState;
+};
+
+const nodeEditorHandlers: NodeEditorHandlers = {
+  'replace-node': (state, { node }) => createState(node, state.epoch + 1, state.consumedCommandIds),
+  'resolve-remote-conflict': (state) =>
+    state.remoteDeleted ? state : { ...state, remoteConflict: false },
+  'canonical-refresh': (state, { node }) => refreshCanonicalNode(state, node),
+  'change-node-draft': (state, { value }) => advanced(state, { nodeDraft: value }),
+  'open-resource': (state, { mode }) =>
+    advanced(state, { resourceSession: addingResourceSession(mode) }),
+  'edit-resource': (state, { resource }) =>
+    advanced(state, {
+      resourceSession: {
+        kind: 'editing-existing',
+        resourceId: resource.id,
+        value: resourceInputFromResource(resource),
+        replacementFile: null,
+      },
+    }),
+  'change-resource': (state, { value }) =>
+    state.resourceSession.kind === 'closed'
+      ? state
+      : advanced(state, { resourceSession: { ...state.resourceSession, value } }),
+  'change-resource-mode': (state, { mode }) => changeResourceMode(state, mode),
+  'select-resource-file': (state, { file }) => selectResourceFile(state, file),
+  'close-resource': (state) =>
+    state.resourceSession.kind === 'closed'
+      ? state
+      : advanced(state, { resourceSession: closedResourceSession }),
+  'consume-command': (state, { command }) => consumeCommand(state, command),
+  'request-resource-deletion': (state, { resource }) =>
+    state.pendingEditorEffect ? state : { ...state, pendingResourceDeletion: resource },
+  'cancel-resource-deletion': (state) =>
+    state.pendingEditorEffect?.effect.kind === 'delete-resource'
+      ? state
+      : { ...state, pendingResourceDeletion: null },
+  'request-guard': (state, { reason }) =>
+    state.pendingGuard ? state : { ...state, pendingGuard: reason },
+  'confirm-guard': (state) => ({
+    ...createState(state.canonicalNode ?? undefined, state.epoch + 1, state.consumedCommandIds),
+    pendingGuard: null,
+  }),
+  'cancel-guard': (state) => ({ ...state, pendingGuard: null }),
+  'start-effect': (state, { pending }) =>
+    state.pendingEditorEffect || pending.epoch !== state.epoch
+      ? state
+      : { ...state, pendingEditorEffect: pending },
+  'resolve-effect': resolveEffect,
+};
+
 export function nodeEditorReducer(
   state: NodeEditorState,
   action: NodeEditorAction,
 ): NodeEditorState {
-  switch (action.type) {
-    case 'replace-node':
-      return createState(action.node, state.epoch + 1, state.consumedCommandIds);
-    case 'resolve-remote-conflict':
-      return state.remoteDeleted ? state : { ...state, remoteConflict: false };
-    case 'canonical-refresh': {
-      if (!action.node) return { ...state, remoteConflict: true, remoteDeleted: true };
-      if (action.node.id !== state.nodeId) return state;
-      if (nodeEditorStateIsDirty(state)) {
-        const previous = state.canonicalNode;
-        const changed =
-          previous &&
-          (nodeDraftIsDirty(previous, nodeUpdateFromNode(action.node)) ||
-            previous.isVisible !== action.node.isVisible ||
-            previous.isTeacherBlocked !== action.node.isTeacherBlocked ||
-            !sameResources(previous.resources, action.node.resources));
-        const isPendingEffectResult = refreshMatchesPendingEffect(state, action.node);
-        const keepsPendingEffectCurrent = Boolean(
-          changed && state.pendingEditorEffect && isPendingEffectResult,
-        );
-        return {
-          ...state,
-          epoch: keepsPendingEffectCurrent ? state.epoch : state.epoch + 1,
-          canonicalNode: action.node,
-          remoteConflict: state.remoteConflict || Boolean(changed && !isPendingEffectResult),
-          remoteDeleted: false,
-          confirmedEditorEffect: null,
-        };
-      }
-      return {
-        ...state,
-        epoch: state.epoch + 1,
-        canonicalNode: action.node,
-        nodeDraft: nodeUpdateFromNode(action.node),
-        resourceSession: closedResourceSession,
-        confirmedEditorEffect: null,
-      };
-    }
-    case 'change-node-draft':
-      return { ...state, epoch: state.epoch + 1, nodeDraft: action.value };
-    case 'open-resource':
-      return {
-        ...state,
-        epoch: state.epoch + 1,
-        resourceSession: addingResourceSession(action.mode),
-      };
-    case 'edit-resource':
-      return {
-        ...state,
-        epoch: state.epoch + 1,
-        resourceSession: {
-          kind: 'editing-existing',
-          resourceId: action.resource.id,
-          value: resourceInputFromResource(action.resource),
-          replacementFile: null,
-        },
-      };
-    case 'change-resource':
-      if (state.resourceSession.kind === 'closed') return state;
-      return {
-        ...state,
-        epoch: state.epoch + 1,
-        resourceSession: { ...state.resourceSession, value: action.value },
-      };
-    case 'change-resource-mode': {
-      const session = state.resourceSession;
-      if (
-        (session.kind !== 'adding-file' && session.kind !== 'adding-link') ||
-        session.kind === `adding-${action.mode}`
-      )
-        return state;
-      return {
-        ...state,
-        epoch: state.epoch + 1,
-        resourceSession: addingResourceSession(action.mode, session.value),
-      };
-    }
-    case 'select-resource-file':
-      if (state.resourceSession.kind === 'editing-existing') {
-        if (state.resourceSession.replacementFile === action.file) return state;
-        const resourceSession = withReplacementFile(state, state.resourceSession, action.file);
-        return resourceSession === state.resourceSession
-          ? state
-          : { ...state, epoch: state.epoch + 1, resourceSession };
-      }
-      if (state.resourceSession.kind !== 'adding-file') return state;
-      if (state.resourceSession.selectedFile === action.file) return state;
-      return {
-        ...state,
-        epoch: state.epoch + 1,
-        resourceSession: { ...state.resourceSession, selectedFile: action.file },
-      };
-    case 'close-resource':
-      if (state.resourceSession.kind === 'closed') return state;
-      return { ...state, epoch: state.epoch + 1, resourceSession: closedResourceSession };
-    case 'consume-command':
-      if (
-        state.consumedCommandIds.includes(action.command.id) ||
-        state.nodeId !== action.command.nodeId
-      )
-        return state;
-      return {
-        ...state,
-        ...(state.resourceSession.kind === 'closed' ? { epoch: state.epoch + 1 } : {}),
-        consumedCommandIds: [...state.consumedCommandIds, action.command.id],
-        resourceSession:
-          state.resourceSession.kind === 'closed'
-            ? addingResourceSession(
-                action.command.mode,
-                action.command.mode === 'file' ? emptyResourceInput : action.command.value,
-              )
-            : state.resourceSession,
-      };
-    case 'request-resource-deletion':
-      if (state.pendingEditorEffect) return state;
-      return { ...state, pendingResourceDeletion: action.resource };
-    case 'cancel-resource-deletion':
-      if (state.pendingEditorEffect?.effect.kind === 'delete-resource') return state;
-      return { ...state, pendingResourceDeletion: null };
-    case 'request-guard':
-      return state.pendingGuard ? state : { ...state, pendingGuard: action.reason };
-    case 'confirm-guard':
-      return {
-        ...createState(state.canonicalNode ?? undefined, state.epoch + 1, state.consumedCommandIds),
-        pendingGuard: null,
-      };
-    case 'cancel-guard':
-      return { ...state, pendingGuard: null };
-    case 'start-effect':
-      if (state.pendingEditorEffect || action.pending.epoch !== state.epoch) return state;
-      return { ...state, pendingEditorEffect: action.pending };
-    case 'resolve-effect': {
-      const pending = state.pendingEditorEffect;
-      if (!pending || pending.id !== action.effectId || pending.epoch !== action.epoch)
-        return state;
-
-      const next = {
-        ...state,
-        pendingEditorEffect: null,
-        confirmedEditorEffect:
-          action.status === 'committed' ? pending.effect : state.confirmedEditorEffect,
-      };
-      if (pending.epoch !== state.epoch || action.status === 'rejected') return next;
-
-      switch (pending.effect.kind) {
-        case 'update-node': {
-          const canonicalNode =
-            state.canonicalNode?.id === pending.effect.nodeId
-              ? replaceNodeInformation(state.canonicalNode, pending.effect.value)
-              : state.canonicalNode;
-          return { ...next, canonicalNode };
-        }
-        case 'add-resource':
-        case 'upload-resource':
-        case 'update-resource':
-          return resourceSessionMatchesEffect(state.resourceSession, pending.effect)
-            ? { ...next, resourceSession: closedResourceSession }
-            : next;
-        case 'delete-resource':
-          return state.pendingResourceDeletion?.id === pending.effect.resourceId
-            ? { ...next, pendingResourceDeletion: null }
-            : next;
-      }
-    }
-  }
+  const handle = nodeEditorHandlers[action.type] as (
+    state: NodeEditorState,
+    action: NodeEditorAction,
+  ) => NodeEditorState;
+  return handle(state, action);
 }

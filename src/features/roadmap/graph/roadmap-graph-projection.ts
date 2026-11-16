@@ -5,7 +5,6 @@ import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
 export type {
   NewNodePlacement,
   RoadmapNodePlacement,
-  RoadmapNodePosition,
 } from '@/features/roadmap/canvas/commands/canvas-command';
 
 export type RoadmapViewport = {

@@ -205,7 +205,7 @@ function displayableImageSource(source: string) {
   return /^(https?:\/\/|\/(?!\/)|\.{1,2}\/)/i.test(source);
 }
 
-export function livePreviewDecorations(state: EditorState, revealsSyntax: boolean): DecorationSet {
+function livePreviewDecorations(state: EditorState, revealsSyntax: boolean): DecorationSet {
   const decorations: Range<Decoration>[] = [];
   const { doc, selection } = state;
 

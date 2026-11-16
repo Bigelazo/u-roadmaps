@@ -24,6 +24,23 @@ export function applicationErrorResponse(error: ApplicationError): NextResponse 
   );
 }
 
+type FileDownload = {
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+  readonly title: string;
+};
+
+export function fileDownloadResponse(download: FileDownload): NextResponse {
+  return new NextResponse(Uint8Array.from(download.bytes).buffer, {
+    headers: {
+      'Content-Type': download.contentType,
+      'Content-Length': String(download.bytes.byteLength),
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(download.title)}`,
+      'Cache-Control': 'private, no-store',
+    },
+  });
+}
+
 const smallestJsonWorthCompressing = 1024;
 
 async function requestInScopeAcceptsGzip() {

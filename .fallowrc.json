@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "dynamicallyLoaded": ["tests/e2e/release-scheduled-unlocks.run.ts"],
+  "ignoreBinaries": ["psql"],
+  "ignoreDependencies": ["@prisma/client", "shadcn"],
+  "usedClassMembers": ["close", "fail"],
+  "ignoreExports": [
+    {
+      "file": "src/features/notifications/server.ts",
+      "exports": ["acknowledgeOwnNotices", "listOwnNotices", "readOwnInbox"]
+    },
+    {
+      "file": "src/shared/server/environment/development.ts",
+      "exports": [
+        "developmentEnvironmentEnabled",
+        "fixtureEnvironmentEnabled",
+        "requireFixtureEnvironment"
+      ]
+    }
+  ],
+  "overrides": [
+    {
+      "files": ["src/app/api/auth/**/route.ts"],
+      "rules": { "duplicate-export-aliases": "off" }
+    }
+  ],
+  "rules": {
+    "unused-dependencies": "warn"
+  }
+}
