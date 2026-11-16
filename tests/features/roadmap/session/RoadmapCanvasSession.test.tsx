@@ -514,6 +514,40 @@ describe('RoadmapCanvasSession', () => {
   });
 });
 
+test.each([
+  ['current', 'opens the editor and reviews', true],
+  ['historical', 'opens no panel and keeps', false],
+] as const)(
+  'selecting a changed %s teaching Node %s its change mark',
+  async (term, _outcome, reviews) => {
+    const user = userEvent.setup();
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      void init;
+      return Promise.resolve(
+        Response.json(
+          url.startsWith('/api/notifications/node-changes?') ? { byNode: { 'node-1': 1 } } : {},
+        ),
+      );
+    });
+    vi.stubGlobal('fetch', fetch);
+    const reviewed = () =>
+      fetch.mock.calls.some(
+        ([url, init]) => url === '/api/notifications/node-changes' && init?.method === 'POST',
+      );
+    renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap), {
+      courseOffering: teachingInput.courseOffering,
+      experience: { kind: 'teaching', term },
+      notificationsEnabled: true,
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    await waitFor(() => expect(screen.getByTestId('selected-node-id').textContent).toBe('node-1'));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+
+    expect(reviewed()).toBe(reviews);
+  },
+);
+
 test('current teaching sessions recover missed changes and retain the last projection on transient failure', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
   const load = vi.spyOn(persistence, 'load');
