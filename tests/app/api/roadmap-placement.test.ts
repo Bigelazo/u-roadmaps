@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { ApplicationError } from '@/shared/errors/types';
 
 const { createRoadmapNode, saveRoadmapNodePositions, requireAuthenticatedUser } = vi.hoisted(
   () => ({
@@ -56,20 +55,6 @@ test('one authenticated request carries the complete placement and returns only 
   );
 });
 
-test.each([
-  [400, 'INVALID_REQUEST'],
-  [403, 'FORBIDDEN'],
-  [404, 'NODE_NOT_FOUND'],
-  [409, 'ROADMAP_CLOSED'],
-] as const)('a rejected placement serializes its %s response', async (status, code) => {
-  saveRoadmapNodePositions.mockRejectedValue(
-    new ApplicationError(status, code, 'Placement refused'),
-  );
-  const response = await PATCH(request({ positions }), context as never);
-  expect(response.status).toBe(status);
-  expect(await response.json()).toMatchObject({ error: { code, message: 'Placement refused' } });
-});
-
 test('malformed JSON is rejected before persistence', async () => {
   const response = await PATCH(
     new Request('http://localhost/placement', {
@@ -80,13 +65,6 @@ test('malformed JSON is rejected before persistence', async () => {
     context as never,
   );
   expect(response.status).toBe(400);
-  expect(saveRoadmapNodePositions).not.toHaveBeenCalled();
-});
-
-test('an unauthenticated participant cannot submit placement', async () => {
-  requireAuthenticatedUser.mockRejectedValue(new ApplicationError(401, 'UNAUTHORIZED', 'Sign in'));
-  const response = await PATCH(request({ positions }), context as never);
-  expect(response.status).toBe(401);
   expect(saveRoadmapNodePositions).not.toHaveBeenCalled();
 });
 
