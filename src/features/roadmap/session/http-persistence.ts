@@ -2,12 +2,11 @@ import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { UncertainNodeCreationError } from './placement-recovery';
 import { roadmapUrl } from '@/features/roadmap/client';
 import {
-  canvasCommandCatalog,
-  type AnyCommandEntry,
-  type ChangeImpactCommand,
-  type CommandEntry,
+  httpCommands,
+  type AnyHttpCommand,
+  type ChangeImpactHttpCommand,
   type RouteRequest,
-} from '@/features/roadmap/canvas/commands/commands';
+} from '@/features/roadmap/session/http-commands';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
@@ -101,13 +100,12 @@ export function createHttpRoadmapCanvasSessionPersistence(
       ).json(),
 
     async readChangeImpact(command) {
-      const { changeImpact }: CommandEntry<ChangeImpactCommand, unknown> =
-        canvasCommandCatalog[command.kind];
+      const { changeImpact }: ChangeImpactHttpCommand = httpCommands[command.kind];
       return (await request({ path: changeImpact.path(command) }, changeImpact.failure)).json();
     },
 
     async execute(command, previewVersion) {
-      const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
+      const entry: AnyHttpCommand = httpCommands[command.kind];
       const options = {
         previewHeader: entry.previewHeader,
         previewVersion,

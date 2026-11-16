@@ -1,4 +1,4 @@
-import type { ChangeImpactCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { ChangeImpactCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
 export async function executeWithChangeImpact(

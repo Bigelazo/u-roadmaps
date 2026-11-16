@@ -1,4 +1,4 @@
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import type { CanvasCommands } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import {
   stagedResourceTitle,

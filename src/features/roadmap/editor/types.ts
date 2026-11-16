@@ -1,4 +1,4 @@
-import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/canvas-command';
 import type {
   Resource,
   RoadmapDto,

@@ -1,4 +1,4 @@
-import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/canvas-command';
 
 export type NodeActionIntent =
   | CanvasCommandOf<'hide-node' | 'show-node' | 'change-teacher-block' | 'delete-node'>
