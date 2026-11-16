@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button';
 import { cn } from 'cn';
 import styles from './speed-dial.module.css';
 
-export type SpeedDialAction = {
+type SpeedDialAction = {
   id: string;
   label: string;
   accessibleLabel?: string;

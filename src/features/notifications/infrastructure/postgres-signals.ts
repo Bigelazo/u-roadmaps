@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { prisma } from '@/shared/server/db';
 
 type Change = Record<string, unknown>;
-export type RoadmapSignal = Change & { userId: string; accessLost?: true };
+type RoadmapSignal = Change & { userId: string; accessLost?: true };
 type Subscriber = {
   userId: string;
   receive: (signal: RoadmapSignal) => void;

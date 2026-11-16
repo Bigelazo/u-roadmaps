@@ -6,9 +6,11 @@ import {
   NOTIFICATION_STREAM_ROTATION_LEAD_MS,
 } from '@/features/notifications/contracts/notification-stream';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
-import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
+import {
+  RoadmapCanvasSessionPersistenceProvider,
+  useRoadmapCanvasSession,
+} from '@/features/roadmap/session/session';
 import type { RoadmapDto } from '@/features/roadmap/types';
-import { useTestCanvasSession } from '../support/use-test-canvas-session';
 import { SimulatedNotificationStream } from '../../../support/notification-stream';
 
 const identifier = { courseCode: 'CC1001', year: 2026, semester: 2 };
@@ -37,11 +39,14 @@ const teachingRoadmap: RoadmapDto = {
 type EntryRoadmap = Promise<RoadmapDto | null>;
 
 function TeachingCanvas({ entryRoadmap }: { entryRoadmap?: EntryRoadmap }) {
-  const { roadmap } = useTestCanvasSession({
-    courseOffering: { identifier, title: 'Programación I' },
-    experience: { kind: 'teaching', term: 'current' },
-    entryRoadmap,
-  });
+  const { roadmap } = useRoadmapCanvasSession(
+    {
+      courseOffering: { identifier, title: 'Programación I' },
+      experience: { kind: 'teaching', term: 'current' },
+      entryRoadmap,
+    },
+    {},
+  );
   return roadmap ? <p>{roadmap.nodes.map((node) => node.title).join(', ')}</p> : null;
 }
 

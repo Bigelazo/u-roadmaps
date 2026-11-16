@@ -218,7 +218,12 @@ test('the editor student preview reviews a Resource locally before Completar wor
       isReviewed: undefined,
     })),
   };
-  renderDetail({ node: teachingNode, onComplete, onResourceAccess, isTeacherPreview: true });
+  renderDetail({
+    node: teachingNode,
+    onComplete,
+    onResourceAccess,
+    isNodeInformationPreview: true,
+  });
   for (const link of screen.getAllByRole('link'))
     link.addEventListener('click', (event) => event.preventDefault());
   const complete = screen.getByRole('button', { name: 'Completar' });

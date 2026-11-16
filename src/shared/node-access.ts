@@ -13,7 +13,7 @@ export function nodeAccessChangeSentence(known: string, current: string) {
   return `${predicate[0].toUpperCase()}${predicate.slice(1)}`;
 }
 
-export function nodeAccessChangePredicate(known: string, current: string) {
+function nodeAccessChangePredicate(known: string, current: string) {
   if (current === 'Retirado') return ' fue ocultado del Roadmap.';
   if (known === 'Retirado')
     return current === 'Bloqueado'

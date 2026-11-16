@@ -6,8 +6,8 @@ import type { StudentNodeStatus } from '@/features/roadmap/student/node-status';
 import { Button } from '@/shared/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 
-export const unreviewedMaterialHint = 'Revisa el material aunque sea po...';
-export const unreviewedMaterialHintDurationMs = 2500;
+const unreviewedMaterialHint = 'Revisa el material aunque sea po...';
+const unreviewedMaterialHintDurationMs = 2500;
 
 type Props = {
   status: StudentNodeStatus;

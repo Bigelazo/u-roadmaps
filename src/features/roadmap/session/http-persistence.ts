@@ -8,6 +8,7 @@ import {
   type RouteRequest,
 } from '@/features/roadmap/session/http-commands';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import { readApiErrorBody } from '@/shared/api-error';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
 type RequestOptions = {
@@ -19,26 +20,12 @@ type RequestOptions = {
 };
 
 async function failureError(response: Response, failure: string, creation = false) {
-  try {
-    const body: unknown = await response.json();
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof body.error === 'object' &&
-      body.error !== null &&
-      'message' in body.error &&
-      typeof body.error.message === 'string'
-    ) {
-      if (creation && (!('code' in body.error) || typeof body.error.code !== 'string'))
-        return new UncertainNodeCreationError();
-      return 'code' in body.error && body.error.code === 'ROADMAP_CLOSED'
-        ? new RoadmapClosedError(body.error.message)
-        : new Error(body.error.message);
-    }
-    // eslint-disable-next-line no-empty -- Keep the user-facing failure message when a route has no JSON error body.
-  } catch {}
-  return creation ? new UncertainNodeCreationError() : new Error(failure);
+  const error = await readApiErrorBody(response);
+  if (!error) return creation ? new UncertainNodeCreationError() : new Error(failure);
+  if (creation && typeof error.code !== 'string') return new UncertainNodeCreationError();
+  return error.code === 'ROADMAP_CLOSED'
+    ? new RoadmapClosedError(error.message)
+    : new Error(error.message);
 }
 
 export function createHttpRoadmapCanvasSessionPersistence(

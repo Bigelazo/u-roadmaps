@@ -4,12 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
-import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
+import {
+  RoadmapCanvasSessionPersistenceProvider,
+  useRoadmapCanvasSession,
+} from '@/features/roadmap/session/session';
 import { UncertainNodeCreationError } from '@/features/roadmap/session/placement-recovery';
 import { createNodeWithResources } from '@/features/roadmap/session/node-creation';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 import type { RoadmapDto } from '@/features/roadmap/types';
-import { useTestCanvasSession } from '../support/use-test-canvas-session';
 
 const input = {
   courseOffering: {
@@ -50,7 +52,7 @@ async function openCanvas(persistence: RoadmapCanvasSessionPersistence) {
       {children}
     </RoadmapCanvasSessionPersistenceProvider>
   );
-  const view = renderHook(() => useTestCanvasSession(input), { wrapper });
+  const view = renderHook(() => useRoadmapCanvasSession(input, {}), { wrapper });
   await waitFor(() => expect(view.result.current.roadmap).not.toBeNull());
   return view;
 }
@@ -64,7 +66,7 @@ const creation = {
 };
 
 function RecoveryCanvas() {
-  const session = useTestCanvasSession(input);
+  const session = useRoadmapCanvasSession(input, {});
   return (
     <>
       <output data-testid="recovery-position">{session.roadmap?.nodes[0].positionX}</output>

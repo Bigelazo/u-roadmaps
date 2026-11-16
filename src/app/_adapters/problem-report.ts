@@ -59,7 +59,7 @@ function mailSettings(): MailSettings {
   return { recipient, transportUrl, sender };
 }
 
-export function problemReportText(report: ProblemReport) {
+function problemReportText(report: ProblemReport) {
   return [
     report.description,
     '',

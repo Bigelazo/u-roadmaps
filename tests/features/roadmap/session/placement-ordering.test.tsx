@@ -2,12 +2,14 @@ import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
-import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
+import {
+  RoadmapCanvasSessionPersistenceProvider,
+  useRoadmapCanvasSession,
+} from '@/features/roadmap/session/session';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 import type { AnyRoadmapDto, RoadmapDto } from '@/features/roadmap/types';
 import { canvasConfirmationChoices } from '@/features/roadmap/ui/roadmap-confirmation';
 import { createNodeWithResources } from '@/features/roadmap/session/node-creation';
-import { useTestCanvasSession } from '../support/use-test-canvas-session';
 
 const input = {
   courseOffering: {
@@ -70,10 +72,13 @@ async function openCanvas(
       {children}
     </RoadmapCanvasSessionPersistenceProvider>
   );
-  const view = renderHook(({ entryRoadmap }) => useTestCanvasSession({ ...input, entryRoadmap }), {
-    wrapper,
-    initialProps: { entryRoadmap },
-  });
+  const view = renderHook(
+    ({ entryRoadmap }) => useRoadmapCanvasSession({ ...input, entryRoadmap }, {}),
+    {
+      wrapper,
+      initialProps: { entryRoadmap },
+    },
+  );
   await waitFor(() => expect(view.result.current.roadmap).not.toBeNull());
   return view;
 }

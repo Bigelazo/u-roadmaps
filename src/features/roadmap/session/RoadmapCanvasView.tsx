@@ -4,16 +4,21 @@ import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ArrowLeft, CircleAlert, CircleHelp, Eye, History, LogOut, UserGroup } from 'lucide-react';
-import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
+import { CircleAlert, CircleHelp, Eye, LogOut } from 'lucide-react';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
-import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
-import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
+import { deriveCanvasMode, type CanvasMode } from '@/features/roadmap/canvas/mode';
+import {
+  useNodeSelection,
+  type NodeSelectionFocusReturn,
+  type NodeSelectionNotice,
+  type NodeSelectionPanel,
+} from '@/features/roadmap/canvas/node-selection';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import type {
+  NodeEditorCommand,
   NodeEditorEffect,
   NodeEditorHandle,
   NodeEditorGuardReason,
@@ -35,11 +40,12 @@ import {
   type RoadmapGraphEditing,
   type RoadmapGraphEditingIntent,
   type RoadmapGraphProjection,
+  type RoadmapGraphProps,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
-import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
-import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
+import { studentNodeStatus, type StudentNodeStatus } from '@/features/roadmap/student/node-status';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
+import type { PlacementRecovery } from '@/features/roadmap/session/placement-recovery';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/canvas-command';
 import {
   canvasConfirmation,
@@ -47,6 +53,8 @@ import {
 } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { useUnlockSchedule } from '@/features/roadmap/canvas/commands/use-unlock-schedule';
 import type {
+  AnyRoadmapDto,
+  Resource,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
@@ -56,10 +64,10 @@ import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types
 import { blockedPrerequisiteNodeIds } from '@/features/roadmap/domain/scheduled-unlock';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
-import { Empty, EmptyHeader, EmptyMedia } from '@/shared/ui/empty';
 import { RoadmapCanvasLoading } from './RoadmapCanvasLoading';
+import { RoadmapCanvasHeader, RoadmapLoadError } from './RoadmapCanvasHeader';
+import { useCanvasPanelLayout } from './canvas-panel-layout';
 import { notify } from '@/shared/ui/notify';
-import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { RoadmapPanelColumn } from '@/features/roadmap/ui/RoadmapPanelColumn';
@@ -73,7 +81,6 @@ import {
 } from '@/shared/client/tutorial/tutorial-support';
 import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial-closing-popover';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
-import { termLabel } from '@/shared/course-offering';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 
 const NodeEditor = dynamic(
@@ -82,6 +89,13 @@ const NodeEditor = dynamic(
 );
 
 type Props = { input: RoadmapCanvasSessionInput };
+
+type AddNodeAtOpenPosition = (
+  node: NodeInput,
+  resources: readonly StagedResource[],
+  placeNewNode: (title: string) => NewNodePlacement,
+  onProgress: (progress: NodeCreationProgress) => void,
+) => Promise<boolean>;
 
 function useStateToast(
   tone: 'error' | 'neutral',
@@ -100,53 +114,93 @@ function useStateToast(
   useEffect(() => () => notify.close(id), [id]);
 }
 
-function useRoadmapCanvasController({ input }: Props) {
-  const { identifier, title } = input.courseOffering;
-  const { courseCode, year, semester } = identifier;
-  const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
-  const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
-  const [syncedSelectionNotice, setSyncedSelectionNotice] = useState<string | null>(null);
-  const acknowledgedRoadmapRef = useRef<string | null>(null);
-  const { acknowledge } = useNotificationAcknowledgement();
-  const canvasFocusRef = useRef<HTMLDivElement>(null);
-  const {
-    selectedNodeId,
-    isEditorOpen,
-    isStudentDetailOpen,
-    teacherPreviewNode,
-    isTeacherPreviewCompleted,
-    resourceComposerCommand,
-    teacherPreviewFocusReturn,
-  } = canvasState;
-  const editorPanel = usePersistentPanelWidth({
-    storageKey: 'u-roadmaps:roadmap-editor-panel-width',
-    initialWidth: 360,
-  });
-  const studentPanel = usePersistentPanelWidth({
-    storageKey: 'u-roadmaps:student-node-detail-width',
-    initialWidth: 426,
-  });
+const SELECTION_NOTICE_MESSAGES: Record<NodeSelectionNotice, string> = {
+  'selected-node-blocked': 'El Nodo seleccionado ahora está bloqueado. Se cerró su detalle.',
+  'selected-node-removed': 'El Nodo seleccionado ya no está disponible. Se cerró su detalle.',
+};
+
+function useNodeEditorHandle() {
   const nodeEditorRef = useRef<NodeEditorHandle>(null);
-  const focusReturnRequestIdRef = useRef(0);
-  const requestNodeFocusReturn = useCallback(() => {
-    setFocusReturnRequest(`node-surface-close-${++focusReturnRequestIdRef.current}`);
-  }, []);
   const guardEditorDraft = useCallback(
     (reason: NodeEditorGuardReason) =>
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
-  const followAppliedCommand = useCallback(
-    (command: CanvasCommand, createdNodeId?: string) => {
-      if (command.kind === 'add-node' && createdNodeId) {
-        dispatchCanvas({ type: 'selectCreatedNode', nodeId: createdNodeId });
-      } else if (command.kind === 'delete-node') {
-        dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
-        requestNodeFocusReturn();
-      }
-    },
-    [requestNodeFocusReturn],
+  const hasEditorDraft = useCallback(() => Boolean(nodeEditorRef.current?.hasDraft?.()), []);
+  return { nodeEditorRef, guardEditorDraft, hasEditorDraft };
+}
+
+function useLateCommandFollower() {
+  const followAppliedCommandRef = useRef<(command: CanvasCommand, createdNodeId?: string) => void>(
+    () => {},
   );
+  const followAppliedCommand = useCallback(
+    (command: CanvasCommand, createdNodeId?: string) =>
+      followAppliedCommandRef.current(command, createdNodeId),
+    [],
+  );
+  return { followAppliedCommandRef, followAppliedCommand };
+}
+
+function useEscapeDismissal(dismissTopmostPanel: () => boolean) {
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && dismissTopmostPanel()) event.preventDefault();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [dismissTopmostPanel]);
+}
+
+function useCanvasFocusReturn(focusReturn: NodeSelectionFocusReturn | null) {
+  const canvasFocusRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusReturn?.destination === 'canvas') {
+      requestAnimationFrame(() => canvasFocusRef.current?.focus());
+    } else if (focusReturn?.destination === 'node-information-preview-opener') {
+      requestAnimationFrame(() => focusReturn.returnFocus());
+    }
+  }, [focusReturn]);
+  return canvasFocusRef;
+}
+
+function useRoadmapAcknowledgement(
+  input: RoadmapCanvasSessionInput,
+  roadmap: AnyRoadmapDto | null,
+  isCanvasPreview: boolean,
+) {
+  const acknowledgedRoadmapRef = useRef<string | null>(null);
+  const { acknowledge } = useNotificationAcknowledgement();
+  const acknowledgesRoadmap = fetchesRoadmapNotices(input);
+  useEffect(() => {
+    if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
+    const roadmapId = roadmap.roadmap.id;
+    if (acknowledgedRoadmapRef.current === roadmapId) return;
+    acknowledgedRoadmapRef.current = roadmapId;
+    const operation = { roadmapId, entryKey: input.roadmapEntryKey };
+    void acknowledge(operation);
+  }, [acknowledge, acknowledgesRoadmap, input.roadmapEntryKey, isCanvasPreview, roadmap]);
+}
+
+function revealNodeResources() {
+  requestAnimationFrame(() =>
+    document
+      .getElementById(NODE_RESOURCES_SECTION_ID)
+      ?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }),
+  );
+}
+
+function fetchesRoadmapNotices(input: RoadmapCanvasSessionInput) {
+  return Boolean(input.notificationsEnabled) && !input.practice;
+}
+
+function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
+  return fetchesRoadmapNotices(input) || Boolean(input.practice);
+}
+
+export function RoadmapCanvasView({ input }: Props) {
+  const { nodeEditorRef, guardEditorDraft, hasEditorDraft } = useNodeEditorHandle();
+  const { followAppliedCommandRef, followAppliedCommand } = useLateCommandFollower();
   const {
     roadmap,
     error,
@@ -163,7 +217,6 @@ function useRoadmapCanvasController({ input }: Props) {
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
     onCommandApplied: followAppliedCommand,
-    canvas: { state: canvasState, dispatch: dispatchCanvas },
   });
   useStateToast(
     'error',
@@ -184,133 +237,56 @@ function useRoadmapCanvasController({ input }: Props) {
     experience: { ...input.experience, term: isClosed ? 'historical' : 'current' },
     isCanvasPreview: canvasPreviewWorkflow.isActive,
   });
-  const { isHistorical: isHistoricalRoadmap, isCanvasPreview, isStudentExperience } = canvasMode;
-  const { canEditRoadmap, canPreviewCanvas, canEnterCanvasPreview, canResetCanvasPreview } =
-    canvasMode.capabilities;
-
-  const closeSelectedNodeNow = useCallback(() => {
-    dispatchCanvas({
-      type: 'closeSelectedNode',
-      panel: canEditRoadmap ? 'editor' : 'student',
-    });
-    requestNodeFocusReturn();
-  }, [canEditRoadmap, requestNodeFocusReturn]);
-
-  const closeSelectedNode = useCallback(() => {
-    if (canEditRoadmap && selectedNodeId && !isCanvasPreview) {
-      void guardEditorDraft({ kind: 'deselect-node', nodeId: selectedNodeId }).then((proceed) => {
-        if (proceed) closeSelectedNodeNow();
-      });
-      return;
-    }
-    closeSelectedNodeNow();
-  }, [canEditRoadmap, closeSelectedNodeNow, guardEditorDraft, isCanvasPreview, selectedNodeId]);
-
-  const closeTeacherPreview = useCallback(() => {
-    const focusReturn = teacherPreviewFocusReturn;
-    dispatchCanvas({ type: 'closeTeacherPreview' });
-    requestAnimationFrame(() => focusReturn?.());
-  }, [teacherPreviewFocusReturn]);
-
-  const openResourceComposer = useCallback(
-    (nodeId: string) => {
-      if (!canEditRoadmap || isCanvasPreview) return;
-      void guardEditorDraft({ kind: 'open-resource', nodeId }).then((proceed) => {
-        if (!proceed) return;
-        dispatchCanvas({
-          type: 'openResourceComposer',
-          command: {
-            id: crypto.randomUUID(),
-            kind: 'open-resource',
-            nodeId,
-            mode: 'file',
-          },
-        });
-      });
-    },
-    [canEditRoadmap, guardEditorDraft, isCanvasPreview],
-  );
-
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !canEditRoadmap) return;
-      if (teacherPreviewNode) {
-        event.preventDefault();
-        closeTeacherPreview();
-      } else if (isEditorOpen && !isCanvasPreview) {
-        event.preventDefault();
-        dispatchCanvas({ type: 'closeEditor' });
-      }
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [canEditRoadmap, closeTeacherPreview, isCanvasPreview, isEditorOpen, teacherPreviewNode]);
+  const { isCanvasPreview, isStudentExperience } = canvasMode;
 
   const displayedRoadmap = isCanvasPreview ? canvasPreviewRoadmap : roadmap;
-  const dismissSelectionNotice = useCallback(() => setSyncedSelectionNotice(null), []);
+  const nodeSelection = useNodeSelection({
+    nodes: displayedRoadmap?.nodes,
+    mode: canvasMode,
+    guardDraft: guardEditorDraft,
+    hasDraft: hasEditorDraft,
+    reportPracticeAction: input.practice?.onAction,
+  });
+  useEffect(() => {
+    followAppliedCommandRef.current = nodeSelection.followAppliedCommand;
+  });
+  const {
+    selectedNodeId,
+    panel,
+    focusReturn,
+    dismissTopmostPanel,
+    closeSelectedNode,
+    showNodeInformationPreview,
+    openResourceComposer,
+  } = nodeSelection;
+  useEscapeDismissal(dismissTopmostPanel);
+  const canvasFocusRef = useCanvasFocusReturn(focusReturn);
   useStateToast(
     'neutral',
     'roadmap-selection-notice',
-    syncedSelectionNotice,
-    dismissSelectionNotice,
+    nodeSelection.notice ? SELECTION_NOTICE_MESSAGES[nodeSelection.notice] : null,
+    nodeSelection.dismissNotice,
   );
-  const acknowledgesRoadmap = fetchesRoadmapNotices(input);
-  useEffect(() => {
-    if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
-    const roadmapId = roadmap.roadmap.id;
-    if (acknowledgedRoadmapRef.current === roadmapId) return;
-    acknowledgedRoadmapRef.current = roadmapId;
-    const operation = { roadmapId, entryKey: input.roadmapEntryKey };
-    void acknowledge(operation);
-  }, [acknowledge, acknowledgesRoadmap, input.roadmapEntryKey, isCanvasPreview, roadmap]);
-  useEffect(() => {
-    if (!selectedNodeId || !displayedRoadmap) return;
-    const selected = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
-    const blocked = isStudentExperience && isStudentBlockedNode(selected);
-    if (selected && !blocked) return;
-    if (blocked && !isStudentDetailOpen) return;
-    dispatchCanvas({
-      type: 'reconcileSelection',
-      removed: !selected,
-      preserveEditorDraft: canEditRoadmap && Boolean(nodeEditorRef.current?.hasDraft?.()),
-    });
-    setSyncedSelectionNotice(
-      selected
-        ? 'El Nodo seleccionado ahora está bloqueado. Se cerró su detalle.'
-        : 'El Nodo seleccionado ya no está disponible. Se cerró su detalle.',
-    );
-    if (selected) requestNodeFocusReturn();
-    else requestAnimationFrame(() => canvasFocusRef.current?.focus());
-  }, [
-    canEditRoadmap,
-    displayedRoadmap,
-    isStudentDetailOpen,
-    isStudentExperience,
-    requestNodeFocusReturn,
-    selectedNodeId,
-  ]);
+  useRoadmapAcknowledgement(input, roadmap, isCanvasPreview);
+
   const handleNodeEditorIntent = useCallback(
     (intent: NodeEditorIntent) => {
       switch (intent.kind) {
         case 'close':
-          closeSelectedNodeNow();
+          void closeSelectedNode({ skipDraftGuard: true });
           return;
         case 'preview-node-information':
-          dispatchCanvas({
-            type: 'showTeacherPreview',
-            node: intent.node,
-            focusReturn: intent.returnFocus,
-          });
+          showNodeInformationPreview(intent.node, intent.returnFocus);
           return;
         default:
           void request(intent);
       }
     },
-    [closeSelectedNodeNow, request],
+    [closeSelectedNode, request, showNodeInformationPreview],
   );
   const handleGraphEditingIntent = useCallback(
     (intent: RoadmapGraphEditingIntent) => {
-      if (intent.kind === 'add-resource') openResourceComposer(intent.nodeId);
+      if (intent.kind === 'add-resource') void openResourceComposer(intent.nodeId);
       else void request(intent);
     },
     [openResourceComposer, request],
@@ -331,82 +307,9 @@ function useRoadmapCanvasController({ input }: Props) {
       : { kind: 'teaching', roadmap: displayedRoadmap as RoadmapDto, editing: graphEditing };
   }, [displayedRoadmap, graphEditing, isStudentExperience]);
 
-  return {
-    title,
-    courseCode,
-    year,
-    semester,
-    dispatchCanvas,
-    focusReturnRequest,
-    dismissSelectionNotice,
-    canvasFocusRef,
-    selectedNodeId,
-    isEditorOpen,
-    isStudentDetailOpen,
-    teacherPreviewNode,
-    isTeacherPreviewCompleted,
-    resourceComposerCommand,
-    editorPanel,
-    studentPanel,
-    nodeEditorRef,
-    guardEditorDraft,
-    roadmap,
-    error,
-    placementRecovery,
-    recoverPlacement,
-    isActive,
-    dismissError,
-    accessLost,
-    canvasCommands,
-    canvasPreviewWorkflow,
-    accessResource,
-    performEditorEffect,
-    canvasMode,
-    isHistoricalRoadmap,
-    isCanvasPreview,
-    isStudentExperience,
-    canEditRoadmap,
-    canPreviewCanvas,
-    canEnterCanvasPreview,
-    canResetCanvasPreview,
-    closeSelectedNode,
-    closeTeacherPreview,
-    displayedRoadmap,
-    handleNodeEditorIntent,
-    graphProjection,
-  };
-}
-
-function revealNodeResources() {
-  requestAnimationFrame(() =>
-    document
-      .getElementById(NODE_RESOURCES_SECTION_ID)
-      ?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }),
-  );
-}
-
-function fetchesRoadmapNotices(input: RoadmapCanvasSessionInput) {
-  return Boolean(input.notificationsEnabled) && !input.practice;
-}
-
-function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
-  return fetchesRoadmapNotices(input) || Boolean(input.practice);
-}
-
-export function RoadmapCanvasView({ input }: Props) {
-  const model = useRoadmapCanvasController({ input });
+  const selectedNode = displayedRoadmap?.nodes.find((node) => node.id === selectedNodeId);
+  const panelLayout = useCanvasPanelLayout(panel);
   const pendingCreationRef = useRef<Extract<CanvasCommand, { kind: 'add-node' }> | null>(null);
-  const {
-    canvasFocusRef,
-    selectedNodeId,
-    roadmap,
-    error,
-    dismissError,
-    accessLost,
-    canvasCommands,
-    displayedRoadmap,
-    graphProjection,
-  } = model;
 
   if (accessLost) {
     return <LostRoadmapAccess />;
@@ -420,12 +323,11 @@ export function RoadmapCanvasView({ input }: Props) {
   if (!displayedRoadmap || !graphProjection) {
     return <RoadmapCanvasLoading isCanvasPreview />;
   }
-  const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
-  const addNodeAtOpenPosition = async (
-    node: NodeInput,
-    resources: readonly StagedResource[],
-    placeNewNode: (title: string) => NewNodePlacement,
-    onProgress: (progress: NodeCreationProgress) => void,
+  const addNodeAtOpenPosition: AddNodeAtOpenPosition = async (
+    node,
+    resources,
+    placeNewNode,
+    onProgress,
   ) => {
     const creation = (pendingCreationRef.current ??= structuredClone({
       kind: 'add-node',
@@ -440,14 +342,8 @@ export function RoadmapCanvasView({ input }: Props) {
         rejected = !result.applied && !result.creationUncertain && !result.sessionEnded;
       return result;
     };
-    const outcome = await createNodeWithResources(
-      run,
-      creation,
-      resources,
-      onProgress,
-      model.isActive,
-    );
-    if (!model.isActive()) return false;
+    const outcome = await createNodeWithResources(run, creation, resources, onProgress, isActive);
+    if (!isActive()) return false;
     if (!outcome) {
       if (rejected) pendingCreationRef.current = null;
       return false;
@@ -458,7 +354,7 @@ export function RoadmapCanvasView({ input }: Props) {
       dismissError();
       notify.error(summary.message);
       if (outcome.nodeId) {
-        model.dispatchCanvas({ type: 'selectNode', nodeId: outcome.nodeId, panel: 'editor' });
+        nodeSelection.openEditor(outcome.nodeId);
         revealNodeResources();
       }
     } else if (summary) {
@@ -466,7 +362,17 @@ export function RoadmapCanvasView({ input }: Props) {
     }
     return true;
   };
-  const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
+  const completeStudentPanelNode = (nodeId: string) => {
+    if (canvasPreviewWorkflow.completeNode(nodeId)) return;
+    if (nodeSelection.completeNodeInformationPreview()) return;
+    void request({ kind: 'complete-node', nodeId });
+  };
+  const exitCanvasPreview = () => {
+    if (!canvasPreviewWorkflow.isActive) return;
+    canvasPreviewWorkflow.exit();
+    input.practice?.onAction?.({ type: 'exitCanvasPreview' });
+  };
+  const { pending } = canvasCommands;
   return (
     <SidebarProvider className="min-h-0 flex-1">
       <section
@@ -486,8 +392,7 @@ export function RoadmapCanvasView({ input }: Props) {
                 variant: 'outline',
                 className: cn(
                   'absolute top-4 right-4 z-10 sm:top-6 sm:right-6',
-                  model.isCanvasPreview &&
-                    'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
+                  isCanvasPreview && 'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
                 ),
               })}
               href={input.practice.exitHref}
@@ -499,197 +404,215 @@ export function RoadmapCanvasView({ input }: Props) {
           ) : null}
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
-            openedNodeId={isSidePanelOpen ? selectedNodeId : null}
-            enabled={fetchesRoadmapNotices(input) && !model.isCanvasPreview}
-            simulatedCounts={model.isCanvasPreview ? undefined : input.practice?.nodeChangeCounts}
+            openedNodeId={panel.kind === 'closed' ? null : selectedNodeId}
+            enabled={fetchesRoadmapNotices(input) && !isCanvasPreview}
+            simulatedCounts={isCanvasPreview ? undefined : input.practice?.nodeChangeCounts}
           >
             <RoadmapCanvasGraph
-              model={model}
               input={input}
-              addNodeAtOpenPosition={addNodeAtOpenPosition}
+              projection={graphProjection}
               roadmap={roadmap}
-              displayedRoadmap={displayedRoadmap}
-              graphProjection={graphProjection}
+              mode={canvasMode}
+              selectedNodeId={selectedNodeId}
+              focusReturn={focusReturn}
+              onSelectNode={(nodeId) => void nodeSelection.selectNode(nodeId)}
+              onClearSelectedNode={() => void closeSelectedNode()}
+              request={request}
+              addNodeAtOpenPosition={addNodeAtOpenPosition}
+              placementRecovery={placementRecovery}
+              onRecoverPlacement={() => void recoverPlacement()}
+              onViewportChange={canvasPreviewWorkflow.onViewportChange}
+              viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
+              canvasPreviewEntryButtonRef={canvasPreviewWorkflow.entryButtonRef}
+              onRequestCanvasPreviewEntry={canvasPreviewWorkflow.requestEntry}
+              onExitCanvasPreview={exitCanvasPreview}
             />
           </NodeChangeCountsProvider>
         </div>
         <RoadmapPanelColumn
-          isOpen={isSidePanelOpen}
-          width={activePanelWidth}
-          scene={model.isCanvasPreview ? 'canvas-preview' : 'roadmap'}
+          isOpen={panel.kind !== 'closed'}
+          width={panelLayout.width}
+          scene={isCanvasPreview ? 'canvas-preview' : 'roadmap'}
         >
-          <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
+          {canvasMode.isEditing && (
+            <RoadmapNodeEditorPanel
+              isOpen={panel.kind === 'editor'}
+              width={panelLayout.width}
+              onWidthChange={panelLayout.setWidth}
+              nodeEditorRef={nodeEditorRef}
+              roadmap={roadmap}
+              selectedNode={selectedNode}
+              isVisibilityPending={
+                (pending?.kind === 'hide-node' || pending?.kind === 'show-node') &&
+                pending.phase !== 'awaiting'
+              }
+              command={panel.kind === 'editor' ? panel.resourceComposerCommand : undefined}
+              perform={performEditorEffect}
+              onIntent={handleNodeEditorIntent}
+            />
+          )}
+          <RoadmapStudentPanel
+            panel={panel}
+            selectedNode={selectedNode}
+            nodeTypes={roadmap.nodeTypes}
+            isHistorical={canvasMode.isHistorical}
+            width={panelLayout.width}
+            onWidthChange={panelLayout.setWidth}
+            onCloseSelectedNode={() => void closeSelectedNode()}
+            onCloseNodeInformationPreview={nodeSelection.closeNodeInformationPreview}
+            onComplete={completeStudentPanelNode}
+            onResourceAccess={accessResource}
+          />
         </RoadmapPanelColumn>
       </section>
-      <RoadmapCanvasConfirmation model={model} />
+      <RoadmapCanvasConfirmation
+        pending={pending}
+        roadmap={roadmap}
+        onCancel={canvasCommands.cancel}
+        onConfirm={canvasCommands.confirm}
+      />
     </SidebarProvider>
   );
 }
 
-function canvasPanelLayout(
-  model: ReturnType<typeof useRoadmapCanvasController>,
-  selectedNode: RoadmapNode | StudentRoadmapNode | undefined,
-) {
-  const {
-    canvasMode,
-    isEditorOpen,
-    teacherPreviewNode,
-    isStudentExperience,
-    isStudentDetailOpen,
-    editorPanel,
-    studentPanel,
-  } = model;
-  const isEditorPanelOpen = canvasMode.isEditing && isEditorOpen;
-  const isStudentPanelOpen = Boolean(
-    teacherPreviewNode ||
-    (isStudentExperience &&
-      isStudentDetailOpen &&
-      selectedNode &&
-      !isStudentBlockedNode(selectedNode)),
-  );
-  const isSidePanelOpen = isEditorPanelOpen || isStudentPanelOpen;
-  const activePanelWidth =
-    teacherPreviewNode || isEditorPanelOpen ? editorPanel.width : studentPanel.width;
-  return { isSidePanelOpen, activePanelWidth };
-}
-
 function RoadmapCanvasConfirmation({
-  model,
+  pending,
+  roadmap,
+  onCancel,
+  onConfirm,
 }: {
-  model: ReturnType<typeof useRoadmapCanvasController>;
+  pending: CanvasCommands['pending'];
+  roadmap: AnyRoadmapDto;
+  onCancel: CanvasCommands['cancel'];
+  onConfirm: CanvasCommands['confirm'];
 }) {
-  const {
-    canvasCommands: { pending, cancel, confirm },
-    roadmap,
-  } = model;
   const schedule = useUnlockSchedule(pending?.request);
   return (
     <ConfirmationDialog
       confirmation={
-        pending && roadmap
-          ? canvasConfirmation(pending, roadmap, { schedule: schedule.draft })
-          : null
+        pending ? canvasConfirmation(pending, roadmap, { schedule: schedule.draft }) : null
       }
       pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
-      onCancel={cancel}
-      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice, schedule.input)}
+      onCancel={onCancel}
+      onAction={(choice) => void onConfirm(choice as CanvasConfirmationChoice, schedule.input)}
     />
   );
 }
 
-function RoadmapCanvasPanels({
-  model,
-  selectedNode,
+function RoadmapNodeEditorPanel({
+  isOpen,
+  width,
+  onWidthChange,
+  nodeEditorRef,
   roadmap,
+  selectedNode,
+  isVisibilityPending,
+  command,
+  perform,
+  onIntent,
 }: {
-  model: ReturnType<typeof useRoadmapCanvasController>;
+  isOpen: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
+  nodeEditorRef: RefObject<NodeEditorHandle | null>;
+  roadmap: AnyRoadmapDto;
   selectedNode: RoadmapNode | StudentRoadmapNode | undefined;
-  roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
+  isVisibilityPending: boolean;
+  command: NodeEditorCommand | undefined;
+  perform: (effect: NodeEditorEffect) => Promise<NodeEditorPerformResult>;
+  onIntent: (intent: NodeEditorIntent) => void;
 }) {
-  const {
-    canvasMode,
-    isEditorOpen,
-    editorPanel,
-    nodeEditorRef,
-    canvasCommands: { pending },
-    resourceComposerCommand,
-    performEditorEffect,
-    handleNodeEditorIntent,
-  } = model;
   const editedNode = selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined;
   return (
-    <>
-      {canvasMode.isEditing && (
-        <NodeEditorPanel
-          isOpen={canvasMode.isEditing && isEditorOpen}
-          panelWidth={editorPanel.width}
-          onPanelWidthChange={editorPanel.setWidth}
-        >
-          <NodeEditor
-            ref={nodeEditorRef}
-            session={{
-              node: editedNode,
-              nodeTypes: roadmap.nodeTypes,
-              blockedPrerequisites: editedNode
-                ? blockedPrerequisiteNodeIds({
-                    nodes: roadmap.nodes.filter(
-                      (node): node is RoadmapNode => 'isTeacherBlocked' in node,
-                    ),
-                    dependencies: roadmap.dependencies,
-                    nodeId: editedNode.id,
-                  }).length
-                : 0,
-              isVisibilityPending:
-                (pending?.kind === 'hide-node' || pending?.kind === 'show-node') &&
-                pending.phase !== 'awaiting',
-            }}
-            command={resourceComposerCommand ?? undefined}
-            perform={performEditorEffect}
-            onIntent={handleNodeEditorIntent}
-          />
-        </NodeEditorPanel>
-      )}
-      <RoadmapStudentPanel model={model} selectedNode={selectedNode} roadmap={roadmap} />
-    </>
+    <NodeEditorPanel isOpen={isOpen} panelWidth={width} onPanelWidthChange={onWidthChange}>
+      <NodeEditor
+        ref={nodeEditorRef}
+        session={{
+          node: editedNode,
+          nodeTypes: roadmap.nodeTypes,
+          blockedPrerequisites: editedNode
+            ? blockedPrerequisiteNodeIds({
+                nodes: roadmap.nodes.filter(
+                  (node): node is RoadmapNode => 'isTeacherBlocked' in node,
+                ),
+                dependencies: roadmap.dependencies,
+                nodeId: editedNode.id,
+              }).length
+            : 0,
+          isVisibilityPending,
+        }}
+        command={command}
+        perform={perform}
+        onIntent={onIntent}
+      />
+    </NodeEditorPanel>
   );
 }
 
+function studentPanelContent(
+  panel: NodeSelectionPanel,
+  selectedNode: RoadmapNode | StudentRoadmapNode | undefined,
+): {
+  node: StudentRoadmapNode | undefined;
+  status: StudentNodeStatus | null;
+  isNodeInformationPreview: boolean;
+} {
+  if (panel.kind === 'node-information-preview') {
+    return {
+      node: panel.node,
+      status: panel.isCompleted ? 'completed' : 'available',
+      isNodeInformationPreview: true,
+    };
+  }
+  if (panel.kind === 'student-detail' && selectedNode) {
+    return {
+      node: selectedNode as StudentRoadmapNode,
+      status: studentNodeStatus(selectedNode),
+      isNodeInformationPreview: false,
+    };
+  }
+  return { node: undefined, status: null, isNodeInformationPreview: false };
+}
+
 function RoadmapStudentPanel({
-  model,
+  panel,
   selectedNode,
-  roadmap,
+  nodeTypes,
+  isHistorical,
+  width,
+  onWidthChange,
+  onCloseSelectedNode,
+  onCloseNodeInformationPreview,
+  onComplete,
+  onResourceAccess,
 }: {
-  model: ReturnType<typeof useRoadmapCanvasController>;
+  panel: NodeSelectionPanel;
   selectedNode: RoadmapNode | StudentRoadmapNode | undefined;
-  roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
+  nodeTypes: AnyRoadmapDto['nodeTypes'];
+  isHistorical: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
+  onCloseSelectedNode: () => void;
+  onCloseNodeInformationPreview: () => void;
+  onComplete: (nodeId: string) => void;
+  onResourceAccess: (resource: Resource) => void;
 }) {
-  const {
-    isStudentExperience,
-    teacherPreviewNode,
-    isStudentDetailOpen,
-    isTeacherPreviewCompleted,
-    closeTeacherPreview,
-    closeSelectedNode,
-    canvasPreviewWorkflow,
-    dispatchCanvas,
-    canvasCommands,
-    accessResource,
-    isHistoricalRoadmap,
-    editorPanel,
-    studentPanel,
-  } = model;
+  const content = studentPanelContent(panel, selectedNode);
   return (
-    <>
-      {(isStudentExperience || teacherPreviewNode) && (
-        <StudentNodeDetail
-          node={
-            teacherPreviewNode ??
-            (isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined)
-          }
-          status={
-            teacherPreviewNode
-              ? isTeacherPreviewCompleted
-                ? 'completed'
-                : 'available'
-              : isStudentDetailOpen && selectedNode
-                ? studentNodeStatus(selectedNode)
-                : null
-          }
-          onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
-          onComplete={(node) => {
-            if (canvasPreviewWorkflow.completeNode(node.id)) return;
-            if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
-            else void canvasCommands.request({ kind: 'complete-node', nodeId: node.id });
-          }}
-          onResourceAccess={accessResource}
-          isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
-          isTeacherPreview={Boolean(teacherPreviewNode)}
-          nodeTypes={roadmap.nodeTypes}
-          panelWidth={teacherPreviewNode ? editorPanel.width : studentPanel.width}
-          onPanelWidthChange={teacherPreviewNode ? editorPanel.setWidth : studentPanel.setWidth}
-        />
-      )}
-    </>
+    <StudentNodeDetail
+      node={content.node}
+      status={content.status}
+      onClose={
+        content.isNodeInformationPreview ? onCloseNodeInformationPreview : onCloseSelectedNode
+      }
+      onComplete={(node) => onComplete(node.id)}
+      onResourceAccess={onResourceAccess}
+      isReadOnly={isHistorical && !content.isNodeInformationPreview}
+      isNodeInformationPreview={content.isNodeInformationPreview}
+      nodeTypes={nodeTypes}
+      panelWidth={width}
+      onPanelWidthChange={onWidthChange}
+    />
   );
 }
 
@@ -707,60 +630,54 @@ function LostRoadmapAccess() {
 }
 
 function RoadmapCanvasGraph({
-  model,
   input,
-  addNodeAtOpenPosition,
+  projection,
   roadmap,
-  displayedRoadmap,
-  graphProjection,
+  mode,
+  selectedNodeId,
+  focusReturn,
+  onSelectNode,
+  onClearSelectedNode,
+  request,
+  addNodeAtOpenPosition,
+  placementRecovery,
+  onRecoverPlacement,
+  onViewportChange,
+  viewportRestoration,
+  canvasPreviewEntryButtonRef,
+  onRequestCanvasPreviewEntry,
+  onExitCanvasPreview,
 }: {
-  model: ReturnType<typeof useRoadmapCanvasController>;
-  input: Props['input'];
-  addNodeAtOpenPosition: (
-    node: NodeInput,
-    resources: readonly StagedResource[],
-    placeNewNode: (title: string) => NewNodePlacement,
-    onProgress: (progress: NodeCreationProgress) => void,
-  ) => Promise<boolean>;
-  roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
-  displayedRoadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['displayedRoadmap']>;
-  graphProjection: RoadmapGraphProjection;
+  input: RoadmapCanvasSessionInput;
+  projection: RoadmapGraphProjection;
+  roadmap: AnyRoadmapDto;
+  mode: CanvasMode;
+  selectedNodeId: string | null;
+  focusReturn: NodeSelectionFocusReturn | null;
+  onSelectNode: (nodeId: string) => void;
+  onClearSelectedNode: () => void;
+  request: CanvasCommands['request'];
+  addNodeAtOpenPosition: AddNodeAtOpenPosition;
+  placementRecovery: PlacementRecovery | null;
+  onRecoverPlacement: () => void;
+  onViewportChange: RoadmapGraphProps['onViewportChange'];
+  viewportRestoration: RoadmapGraphProps['viewportRestoration'];
+  canvasPreviewEntryButtonRef: RefObject<HTMLButtonElement | null>;
+  onRequestCanvasPreviewEntry: () => void;
+  onExitCanvasPreview: () => void;
 }) {
-  const {
-    title,
-    courseCode,
-    year,
-    semester,
-    dispatchCanvas,
-    focusReturnRequest,
-    dismissSelectionNotice,
-    selectedNodeId,
-    guardEditorDraft,
-    canvasCommands,
-    canvasPreviewWorkflow,
-    canvasMode,
-    isHistoricalRoadmap,
-    isCanvasPreview,
-    isStudentExperience,
-    canEditRoadmap,
-    canPreviewCanvas,
-    canEnterCanvasPreview,
-    canResetCanvasPreview,
-    closeSelectedNode,
-  } = model;
+  const { isCanvasPreview, isHistorical } = mode;
+  const { canEditRoadmap, canPreviewCanvas, canEnterCanvasPreview, canResetCanvasPreview } =
+    mode.capabilities;
+  const { courseOffering } = input;
   const isCompactLayout = useCompactCanvasLayout();
   const recoveryNotice =
-    model.placementRecovery && !isCanvasPreview ? (
+    placementRecovery && !isCanvasPreview ? (
       <Alert variant="destructive" className="pointer-events-auto mt-4 max-w-sm">
         <CircleAlert aria-hidden="true" />
         <AlertDescription>
-          <p>{model.placementRecovery.message}</p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-2"
-            onClick={() => void model.recoverPlacement()}
-          >
+          <p>{placementRecovery.message}</p>
+          <Button type="button" variant="outline" className="mt-2" onClick={onRecoverPlacement}>
             Comprobar guardado
           </Button>
         </AlertDescription>
@@ -768,34 +685,15 @@ function RoadmapCanvasGraph({
     ) : null;
   return (
     <RoadmapGraph
-      projection={graphProjection}
+      projection={projection}
       notificationsEnabled={showsNodeChangeMarks(input)}
-      onSelectNode={(nodeId) => {
-        const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
-        if (isStudentExperience && isStudentBlockedNode(node)) return;
-        const select = () => {
-          dismissSelectionNotice();
-          input.practice?.onAction?.({ type: 'selectNode', nodeId });
-          dispatchCanvas({
-            type: 'selectNode',
-            nodeId,
-            panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
-          });
-        };
-        if (canEditRoadmap && !isCanvasPreview && selectedNodeId && selectedNodeId !== nodeId) {
-          void guardEditorDraft({ kind: 'replace-node', nodeId }).then((proceed) => {
-            if (proceed) select();
-          });
-          return;
-        }
-        select();
-      }}
+      onSelectNode={onSelectNode}
       selectedNodeId={selectedNodeId}
-      focusReturnRequest={focusReturnRequest}
-      onClearSelectedNode={closeSelectedNode}
+      focusReturnRequest={focusReturn?.destination === 'node' ? focusReturn.token : null}
+      onClearSelectedNode={onClearSelectedNode}
       onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
-      onViewportChange={canvasPreviewWorkflow.onViewportChange}
-      viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
+      onViewportChange={onViewportChange}
+      viewportRestoration={viewportRestoration}
       bottomLeftActions={
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
@@ -806,11 +704,11 @@ function RoadmapCanvasGraph({
                     iconOnly={isCompactLayout}
                     render={
                       <Button
-                        ref={canvasPreviewWorkflow.entryButtonRef}
+                        ref={canvasPreviewEntryButtonRef}
                         aria-label="Vista estudiante"
                         type="button"
                         variant="outline"
-                        onClick={canvasPreviewWorkflow.requestEntry}
+                        onClick={onRequestCanvasPreviewEntry}
                       >
                         <Eye data-icon="inline-start" />
                         Vista estudiante
@@ -829,21 +727,17 @@ function RoadmapCanvasGraph({
                 nodeTypes={roadmap.nodeTypes}
                 nodes={roadmap.nodes}
                 creationRecovery={
-                  model.placementRecovery?.kind === 'unsynchronized'
-                    ? null
-                    : model.placementRecovery
+                  placementRecovery?.kind === 'unsynchronized' ? null : placementRecovery
                 }
                 onSubmit={(node, resources, onProgress) =>
                   addNodeAtOpenPosition(node, resources, placeNewNode, onProgress)
                 }
-                onCreateNodeType={(nodeType) =>
-                  canvasCommands.request({ kind: 'add-node-type', nodeType })
-                }
+                onCreateNodeType={(nodeType) => request({ kind: 'add-node-type', nodeType })}
                 onUpdateNodeType={(nodeTypeId, nodeType) =>
-                  canvasCommands.request({ kind: 'update-node-type', nodeTypeId, nodeType })
+                  request({ kind: 'update-node-type', nodeTypeId, nodeType })
                 }
                 onRequestDeleteNodeType={(nodeType) =>
-                  void canvasCommands.request({ kind: 'delete-node-type', nodeTypeId: nodeType.id })
+                  void request({ kind: 'delete-node-type', nodeTypeId: nodeType.id })
                 }
               />
             )
@@ -853,12 +747,10 @@ function RoadmapCanvasGraph({
         topLeft: (
           <>
             <RoadmapCanvasHeader
-              title={title}
-              courseCode={courseCode}
-              year={year}
-              semester={semester}
+              title={courseOffering.title}
+              {...courseOffering.identifier}
               isCanvasPreview={isCanvasPreview}
-              isEditing={canvasMode.isEditing}
+              isEditing={mode.isEditing}
               showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
             />
             {recoveryNotice}
@@ -867,20 +759,16 @@ function RoadmapCanvasGraph({
         topCenter: isCanvasPreview ? (
           <CanvasPreviewToolbar
             canReset={canResetCanvasPreview}
-            isHistorical={isHistoricalRoadmap}
-            onRequestReset={() => void canvasCommands.request({ kind: 'reset-canvas-preview' })}
-            onExit={() => {
-              if (!canvasPreviewWorkflow.isActive) return;
-              canvasPreviewWorkflow.exit();
-              input.practice?.onAction?.({ type: 'exitCanvasPreview' });
-            }}
+            isHistorical={isHistorical}
+            onRequestReset={() => void request({ kind: 'reset-canvas-preview' })}
+            onExit={onExitCanvasPreview}
           />
         ) : null,
         topRight:
           isCanvasPreview || input.practice ? null : (
             <RoadmapTutorialLink
               experience={input.experience.kind}
-              origin={roadmapPath(input.courseOffering.identifier)}
+              origin={roadmapPath(courseOffering.identifier)}
             />
           ),
       }}
@@ -922,118 +810,5 @@ function RoadmapTutorialLink({
       />
       <TutorialClosingPopover />
     </>
-  );
-}
-
-function RoadmapCanvasHeader({
-  title,
-  courseCode,
-  year,
-  semester,
-  isCanvasPreview,
-  isEditing,
-  showsCourseLinks,
-}: Pick<
-  ReturnType<typeof useRoadmapCanvasController>,
-  'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
-> & { isEditing: boolean; showsCourseLinks: boolean }) {
-  const isCompact = useCompactCanvasLayout();
-  const hidesBadgeRow = isCanvasPreview && isCompact;
-  return (
-    <header>
-      <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
-        {isCanvasPreview ? (
-          <Badge className="bg-[color-mix(in_srgb,var(--background)_78%,#f97316)] text-secondary-foreground dark:bg-warning-soft">
-            Modo previsualización
-          </Badge>
-        ) : isEditing ? (
-          <Badge variant="secondary">Modo edición</Badge>
-        ) : null}
-      </div>
-      <h1
-        className={cn(
-          'font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]',
-          !hidesBadgeRow && 'mt-2',
-        )}
-      >
-        {title}
-      </h1>
-      <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-        <span>{courseCode}</span>
-        <span aria-hidden="true">·</span>
-        <span>{termLabel({ year, semester })}</span>
-      </p>
-      {showsCourseLinks ? (
-        <RoadmapCourseLinks courseCode={courseCode} year={year} semester={semester} />
-      ) : null}
-    </header>
-  );
-}
-
-function RoadmapCourseLinks({
-  courseCode,
-  year,
-  semester,
-}: Pick<ReturnType<typeof useRoadmapCanvasController>, 'courseCode' | 'year' | 'semester'>) {
-  const linkClassName = cn(
-    buttonVariants({ variant: 'ghost', size: 'sm' }),
-    'pointer-events-auto justify-start text-primary hover:bg-primary-soft/50 hover:text-primary-deep',
-  );
-  return (
-    <nav
-      aria-label="Secciones del curso"
-      className="-mx-3 mt-2 -mb-2 flex flex-wrap gap-1 border-t border-border/70 p-1 [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:-mb-1.5"
-    >
-      <Link className={linkClassName} href={versionHistoryUrl(courseCode)}>
-        <History data-icon="inline-start" />
-        Versiones
-      </Link>
-      <Link className={linkClassName} href={courseParticipantsUrl({ courseCode, year, semester })}>
-        <UserGroup data-icon="inline-start" />
-        Integrantes
-      </Link>
-    </nav>
-  );
-}
-
-function RoadmapLoadError({ input, error }: Props & { error: string }) {
-  return (
-    <section
-      data-page-width="full"
-      aria-labelledby="roadmap-load-error-title"
-      className="flex min-h-full w-full flex-1 bg-cloud text-foreground"
-    >
-      <Empty className="gap-6 rounded-none px-6 py-16">
-        <EmptyHeader className="max-w-lg gap-4">
-          <EmptyMedia className="text-destructive">
-            <CircleAlert aria-hidden="true" className="size-10" />
-          </EmptyMedia>
-          <h1
-            id="roadmap-load-error-title"
-            className="font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl"
-          >
-            No pudimos abrir el roadmap
-          </h1>
-          <p className="max-w-full text-base font-medium wrap-anywhere">
-            {input.courseOffering.title}
-          </p>
-          <div
-            role="alert"
-            className="flex max-w-full flex-col gap-2 text-base text-muted-foreground"
-          >
-            <p className="wrap-anywhere">{error}</p>
-            <p>
-              {input.practice?.exitHref
-                ? 'Vuelve a la práctica para continuar.'
-                : 'Vuelve a tus cursos para abrir el roadmap nuevamente.'}
-            </p>
-          </div>
-        </EmptyHeader>
-        <Link href={input.practice?.exitHref ?? '/academic-overview'} className={buttonVariants()}>
-          <ArrowLeft data-icon="inline-start" />
-          {input.practice?.exitHref ? 'Volver a la práctica' : 'Volver a mis cursos'}
-        </Link>
-      </Empty>
-    </section>
   );
 }

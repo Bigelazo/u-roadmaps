@@ -4,7 +4,7 @@ export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
 
 export const TUTORIAL_EXIT_ATTRIBUTE = 'data-tutorial-exit';
 
-export const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
+const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
 export type TutorialStep<Action = never> = Readonly<{
   element: string | (() => Element | null);
   title: string;

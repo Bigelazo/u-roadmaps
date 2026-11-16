@@ -5,7 +5,7 @@ import {
   uniqueAcademicOverviewCourses,
 } from './overview-courses';
 
-export const ACADEMIC_CACHE_VERSION = 1;
+const ACADEMIC_CACHE_VERSION = 1;
 export const ACADEMIC_CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 export const ACADEMIC_CACHE_PREFIX = 'u-roadmaps:academic-courses:';
 export const ACADEMIC_CACHE_IDENTITY = 'u-roadmaps:academic-identity';
