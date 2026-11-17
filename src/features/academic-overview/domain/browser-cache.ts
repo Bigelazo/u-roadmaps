@@ -104,7 +104,6 @@ export function presentCachedAcademicCourses(
       };
     });
   return {
-    source: 'CACHE',
     terms: groupAcademicOverviewCoursesByAcademicTerm(uniqueAcademicOverviewCourses(courses)),
   };
 }

@@ -59,6 +59,5 @@ export type AcademicOverviewTerm = Readonly<{
 }>;
 
 export type AcademicOverviewPage = Readonly<{
-  source: AcademicOverviewSource | 'CACHE';
   terms: AcademicOverviewTerm[];
 }>;

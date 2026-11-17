@@ -1,14 +1,5 @@
 import Link from 'next/link';
-import { Alert, AlertDescription } from '@/shared/ui/alert';
-import {
-  AlertTriangle,
-  BookOpen,
-  ChevronDown,
-  History,
-  MapPinned,
-  Route,
-  UserGroup,
-} from 'lucide-react';
+import { ChevronDown, History, MapPinned, Route, RouteOff, UserGroup } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import {
   Accordion,
@@ -26,6 +17,7 @@ import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { cn } from 'cn';
 import { PositionPlate } from '@/shared/ui/position-plate';
+import { PendingLinkContent } from '@/shared/ui/pending-link-content';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
 function CourseProgress({
@@ -78,12 +70,10 @@ type CourseHeadingLevel = 'h3' | 'h4';
 function CourseRoadmapAction({
   course,
   isPastOffering,
-  awaitsCreation,
   renderRoadmapCreation,
 }: Readonly<{
   course: AcademicOverviewCourse;
   isPastOffering: boolean;
-  awaitsCreation: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
 }>) {
   if (course.hasRoadmap) {
@@ -102,8 +92,9 @@ function CourseRoadmapAction({
           className={buttonVariants({ variant: isPastOffering ? 'outline' : 'default' })}
           href={roadmapUrl(course)}
         >
-          <Route aria-hidden="true" data-icon="inline-start" />
-          Roadmap
+          <PendingLinkContent icon={<Route aria-hidden="true" data-icon="inline-start" />}>
+            Roadmap
+          </PendingLinkContent>
         </Link>
       </>
     );
@@ -116,28 +107,16 @@ function CourseRoadmapAction({
       year: course.year,
     });
   }
-  if (awaitsCreation && !course.isPositionConfirmed && course.institutionalPosition === null) {
+  if (
+    course.role === 'TEACHER' &&
+    !course.isPastClosure &&
+    !course.isPositionConfirmed &&
+    course.institutionalPosition === null
+  ) {
     return (
       <p className="max-w-64 text-sm text-muted-foreground">
         No pudimos confirmar tu cargo con U-Campus. Si eres profesor de cátedra, recarga la página
         más tarde para crear el roadmap.
-      </p>
-    );
-  }
-  if (awaitsCreation) {
-    return (
-      <p className="max-w-64 text-sm text-muted-foreground">
-        Solo el profesor de cátedra puede crear el roadmap. Mientras tanto, revisa sus versiones
-        anteriores.
-      </p>
-    );
-  }
-  if (course.role === 'STUDENT') {
-    return (
-      <p className="max-w-64 text-sm text-muted-foreground">
-        {isPastOffering
-          ? 'Este curso cerró sin una ruta publicada.'
-          : 'Tu equipo docente aún no publica la ruta de este curso.'}
       </p>
     );
   }
@@ -153,44 +132,39 @@ function CourseActions({
   isPastOffering: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
 }>) {
-  const awaitsCreation =
-    course.role === 'TEACHER' &&
-    !course.hasRoadmap &&
-    !course.canCreateRoadmap &&
-    !course.isPastClosure;
-
   return (
     <>
       {!course.hasRoadmap ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <BookOpen aria-hidden="true" size={17} />
+        <span className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground">
+          <RouteOff aria-hidden="true" size={17} />
           Sin roadmap
-        </p>
+        </span>
       ) : null}
       <CourseRoadmapAction
         course={course}
         isPastOffering={isPastOffering}
-        awaitsCreation={awaitsCreation}
         renderRoadmapCreation={renderRoadmapCreation}
       />
-      {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
-        <Link
-          aria-label={`Historial de versiones de ${course.name}`}
-          className={buttonVariants({ variant: 'outline' })}
-          href={versionHistoryUrl(course.courseCode)}
-        >
-          <History aria-hidden="true" data-icon="inline-start" />
-          Versiones
-        </Link>
-      ) : null}
-      {course.role === 'TEACHER' && course.hasRoadmap ? (
+      {course.role === 'TEACHER' ? (
         <Link
           aria-label={`Integrantes de ${course.name}`}
           className={buttonVariants({ variant: 'outline' })}
           href={courseParticipantsUrl(course)}
         >
-          <UserGroup aria-hidden="true" data-icon="inline-start" />
-          Integrantes
+          <PendingLinkContent icon={<UserGroup aria-hidden="true" data-icon="inline-start" />}>
+            Integrantes
+          </PendingLinkContent>
+        </Link>
+      ) : null}
+      {course.role === 'TEACHER' ? (
+        <Link
+          aria-label={`Historial de versiones de ${course.name}`}
+          className={buttonVariants({ variant: 'outline' })}
+          href={versionHistoryUrl(course.courseCode)}
+        >
+          <PendingLinkContent icon={<History aria-hidden="true" data-icon="inline-start" />}>
+            Versiones
+          </PendingLinkContent>
         </Link>
       ) : null}
     </>
@@ -396,8 +370,10 @@ export function AcademicOverview({
   tutorialInvitation = false,
   notice,
   actions,
+  lastSynchronization = null,
 }: Readonly<{
   overview: AcademicOverviewPage;
+  lastSynchronization?: string | null;
   notice?: React.ReactNode;
   actions?: React.ReactNode;
   renderRoadmapCreation: RoadmapCreationAction;
@@ -409,27 +385,21 @@ export function AcademicOverview({
     <PageShell className="mx-auto max-w-[1440px] px-6">
       <div className="flex flex-col gap-10 md:gap-16">
         <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-2">
             <PageTitle className="md:text-5xl">Resumen académico</PageTitle>
-            <AcademicOverviewTutorialButton invited={tutorialInvitation} />
-          </div>
-          {actions}
-        </header>
-
-        {notice || overview.source === 'LOCAL' ? (
-          <div className="flex flex-col gap-3">
-            {notice}
-            {overview.source === 'LOCAL' ? (
-              <Alert role="status">
-                <AlertTriangle aria-hidden="true" />
-                <AlertDescription>
-                  No pudimos actualizar tus cursos desde U-Campus. Mostramos los cursos que ya
-                  tenías en U-Roadmaps; recarga la página más tarde para ver cambios recientes.
-                </AlertDescription>
-              </Alert>
+            {lastSynchronization ? (
+              <p className="text-sm text-muted-foreground">
+                Última actualización: {lastSynchronization}
+              </p>
             ) : null}
           </div>
-        ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <AcademicOverviewTutorialButton invited={tutorialInvitation} />
+            {actions}
+          </div>
+        </header>
+
+        {notice ? <div className="flex flex-col gap-3">{notice}</div> : null}
 
         {overview.terms.length === 0 ? (
           <Empty className="border bg-card py-10">
@@ -439,11 +409,8 @@ export function AcademicOverview({
               </EmptyMedia>
               <EmptyTitle>No hay cursos para mostrar</EmptyTitle>
               <EmptyDescription>
-                {overview.source === 'LOCAL'
-                  ? 'Aún no tienes cursos en U-Roadmaps. Cuando U-Campus responda, verás aquí los cursos que inscribes y los que dictas.'
-                  : overview.source === 'CACHE'
-                    ? 'No tienes cursos activos en U-Roadmaps. Actualiza tus cursos para consultar cambios en U-Campus.'
-                    : 'U-Campus no registra cursos inscritos ni cursos en los que formes parte del equipo docente.'}
+                No registramos cursos inscritos ni cursos en los que formes parte del equipo
+                docente.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

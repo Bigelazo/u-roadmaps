@@ -114,9 +114,8 @@ export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewPage> {
-  const { source, courses } = await readAcademicOverview(actor, sources);
+  const { courses } = await readAcademicOverview(actor, sources);
   return {
-    source,
     terms: groupAcademicOverviewCoursesByAcademicTerm(uniqueAcademicOverviewCourses(courses)),
   };
 }

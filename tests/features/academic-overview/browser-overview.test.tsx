@@ -20,7 +20,7 @@ const cache = createAcademicCourseCache(userId, [], Date.now());
 const complete: AcademicOverviewBrowserResponse = {
   userId,
   status: 'complete',
-  overview: { source: 'MUFASA', terms: [] },
+  overview: { terms: [] },
   cache,
 };
 const fetcher = vi.fn<typeof fetch>();
@@ -129,14 +129,17 @@ test('a valid snapshot uses a fresh local read and partial or unavailable refres
   }
 });
 
-test('a network failure replaces loading with a usable retry control', async () => {
+test('a network failure replaces loading with a usable retry control and the last synchronization', async () => {
+  const synchronizedAt = new Date(2026, 10, 3, 9, 5).getTime();
+  window.localStorage.setItem(
+    ACADEMIC_CACHE_PREFIX + userId,
+    JSON.stringify(createAcademicCourseCache(userId, [], synchronizedAt)),
+  );
   fetcher.mockRejectedValueOnce(new TypeError('Offline'));
   render(<CachedAcademicOverview userId={userId} renderRoadmapCreation={() => null} />);
-  await screen.findByText('No pudimos cargar tus cursos. Revisa tu conexión e intenta nuevamente.');
+  await screen.findByText('Última actualización: 03/11 09:05');
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Actualizar cursos' }).hasAttribute('disabled')).toBe(
-      false,
-    ),
+    expect(screen.getByRole('button', { name: 'Actualizar' }).hasAttribute('disabled')).toBe(false),
   );
 });
 

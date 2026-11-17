@@ -12,7 +12,7 @@ import {
 async function visit(page: Page, user: E2EUser) {
   await authenticateAs(page.context(), user.id);
   await page.goto('/academic-overview');
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
 }
 
 async function cacheText(page: Page, user: E2EUser) {
@@ -21,10 +21,8 @@ async function cacheText(page: Page, user: E2EUser) {
 
 async function warmReload(page: Page) {
   await page.reload();
-  await expect(
-    page.getByText('Cursos guardados en este navegador.', { exact: false }),
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByText('Última actualización:', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
 }
 
 test('cold synchronization stores only presentation fields and a warm reload makes no institutional request', async ({
@@ -49,15 +47,10 @@ test('cold synchronization stores only presentation fields and a warm reload mak
   });
   expect(JSON.stringify(stored)).not.toContain(user.rut);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await academicHistoryRequests(user)).toBe(2);
-  await expect(
-    page.getByText('Cursos guardados en este navegador.', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText('Última actualización:', { exact: false })).toBeVisible();
   expect(JSON.parse((await cacheText(page, user))!)).toEqual(stored);
-  await expect(
-    page.getByText('No pudimos actualizar tus cursos desde U-Campus.', { exact: false }),
-  ).toHaveCount(0);
 });
 
 test('expiration and explicit refresh request new history', async ({
@@ -78,10 +71,10 @@ test('expiration and explicit refresh request new history', async ({
     { key: ACADEMIC_CACHE_PREFIX + user.id, lifetime: ACADEMIC_CACHE_LIFETIME_MS },
   );
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await academicHistoryRequests(user)).toBe(4);
-  await page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await academicHistoryRequests(user)).toBe(6);
 });
 
@@ -97,15 +90,15 @@ test('two cold tabs share synchronization and concurrent HTTP refreshes are dedu
   await authenticateAs(page.context(), user.id);
   const other = await page.context().newPage();
   await Promise.all([page.goto('/academic-overview'), other.goto('/academic-overview')]);
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
-  await expect(other.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
+  await expect(other.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await academicHistoryRequests(user)).toBe(2);
   await Promise.all([
-    page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click(),
-    other.getByRole('button', { name: 'Actualizar cursos', exact: true }).click(),
+    page.getByRole('button', { name: 'Actualizar', exact: true }).click(),
+    other.getByRole('button', { name: 'Actualizar', exact: true }).click(),
   ]);
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
-  await expect(other.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
+  await expect(other.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await academicHistoryRequests(user)).toBe(4);
   const api = await apiAs(user);
   const responses = await Promise.all([
@@ -174,9 +167,7 @@ test('account changes separate histories, notify other tabs, and logout removes 
   await visit(page, first);
   const other = await page.context().newPage();
   await other.goto('/academic-overview');
-  await expect(
-    other.getByText('Cursos guardados en este navegador.', { exact: false }),
-  ).toBeVisible();
+  await expect(other.getByText('Última actualización:', { exact: false })).toBeVisible();
   await visit(page, second);
   await expect(page.getByText(offering.courseName, { exact: true })).toBeVisible();
   await expect(page.getByText(course.courseName, { exact: true })).toHaveCount(0);
@@ -228,9 +219,7 @@ for (const [storage, prepare] of Object.entries(storageScenarios)) {
     await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
     expect(await academicHistoryRequests(user)).toBe(2);
     await page.reload();
-    await expect(
-      page.getByRole('button', { name: 'Actualizar cursos', exact: true }),
-    ).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
     await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
     expect(await academicHistoryRequests(user)).toBe(4);
   });
@@ -252,10 +241,8 @@ test('partial and unavailable refreshes preserve a complete cache and omitted ac
   await visit(page, user);
   const complete = await cacheText(page, user);
   await failUcampusEndpoint(user, 'cursos_dictados');
-  await page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click();
-  await expect(
-    page.getByText('U-Campus respondió de forma parcial.', { exact: false }),
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await cacheText(page, user)).toBe(complete);
   await expect(
     page.getByRole('button', { name: `Crear roadmap de ${offering.courseName}` }),
@@ -263,17 +250,12 @@ test('partial and unavailable refreshes preserve a complete cache and omitted ac
   const api = await apiAs(user);
   await ok(await api.get(course.apiPath('/simulation')));
   await failUcampusEndpoint(user, 'cursos_inscritos');
-  await page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click();
-  await expect(
-    page.getByText('No pudimos actualizar tus cursos desde U-Campus.', { exact: false }),
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await cacheText(page, user)).toBe(complete);
   await controlAcademicHistory(user, { recover: true });
-  await page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
-  await expect(
-    page.getByText('No pudimos actualizar tus cursos desde U-Campus.', { exact: false }),
-  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await cacheText(page, user)).not.toBe(complete);
 });
 
@@ -305,9 +287,7 @@ test('stale and tampered browser information never grants server permissions or 
   );
   await warmReload(page);
   await expect(page.getByText(course.courseName, { exact: true })).toHaveCount(0);
-  await expect(
-    page.getByText('No tienes cursos activos en U-Roadmaps.', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText('No registramos cursos inscritos', { exact: false })).toBeVisible();
   await ok(await api.get(course.apiPath()), 403);
   expect(await academicHistoryRequests(user)).toBe(2);
 });
@@ -334,13 +314,12 @@ test('loading, institutional failure and recovery retain the desktop and mobile 
   await page.screenshot({ path: testInfo.outputPath('stable-loading-desktop.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('stable-loading-mobile.png') });
-  await expect(
-    page.getByText('No pudimos actualizar tus cursos desde U-Campus.', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
+  await expect(page.getByText('Última actualización:', { exact: false })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('stable-failure-mobile.png') });
   await controlAcademicHistory(user, { recover: true });
-  await page.getByRole('button', { name: 'Actualizar cursos', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('stable-overview-mobile.png') });
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -393,16 +372,14 @@ test('an unavailable cold history remains uncached and retries on the next visit
   await failUcampusEndpoint(user, 'cursos_inscritos');
   await visit(page, user);
   await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
-  await expect(
-    page.getByText('No pudimos actualizar tus cursos desde U-Campus.', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText('Última actualización:', { exact: false })).toHaveCount(0);
   expect(await cacheText(page, user)).toBeNull();
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Actualizar cursos', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
   expect(await academicHistoryRequests(user)).toBe(4);
 });
 
-test('a warm stored position explains creation rights without claiming a failed institutional check', async ({
+test('a warm stored position does not claim a failed institutional check', async ({
   page,
   course,
   createCourse,
@@ -417,7 +394,6 @@ test('a warm stored position explains creation rights without claiming a failed 
   await visit(page, user);
   await warmReload(page);
   const row = page.getByRole('listitem').filter({ hasText: offering.courseCode });
-  await expect(row).toContainText('Solo el profesor de cátedra puede crear el roadmap.');
   await expect(row).not.toContainText('No pudimos confirmar');
   expect(await academicHistoryRequests(user)).toBe(2);
 });

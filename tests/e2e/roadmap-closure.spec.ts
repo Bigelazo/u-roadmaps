@@ -322,7 +322,6 @@ test('the Academic overview offers Roadmap creation only before the offering clo
   ];
   const closed = await createCourse({ ...closedTerm, roadmap: false, participants: asProfessor });
   await closedTerm.setFreezeDate(dayOffset(-1));
-  const onlyProfessor = 'Solo el profesor de cátedra puede crear el roadmap.';
   const createButton = (courseName: string) =>
     page.getByRole('button', { name: `Crear roadmap de ${courseName}` });
   const historyLink = (courseName: string) =>
@@ -332,7 +331,6 @@ test('the Academic overview offers Roadmap creation only before the offering clo
   await page.goto('/academic-overview');
   await expect(historyLink(closed.courseName)).toBeVisible();
   await expect(createButton(closed.courseName)).toHaveCount(0);
-  await expect(page.getByText(onlyProfessor)).toHaveCount(0);
 
   const open = await createCourse({ ...openTerm, roadmap: false, participants: asProfessor });
   await page.goto('/academic-overview');

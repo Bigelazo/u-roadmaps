@@ -58,7 +58,6 @@ describe('bounded personal course snapshots', () => {
   });
   test('projection retains current participation fields and never resurrects a cached offering', () => {
     const local: AcademicOverviewPage = {
-      source: 'LOCAL',
       terms: [
         {
           year: 2026,
@@ -90,7 +89,6 @@ describe('bounded personal course snapshots', () => {
       now,
     );
     const result = presentCachedAcademicCourses(local, cache);
-    expect(result.source).toBe('CACHE');
     expect(result.terms[0].courses).toEqual([
       {
         ...local.terms[0].courses[0],
