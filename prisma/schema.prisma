@@ -73,13 +73,15 @@ model RoadmapClosureTeachingStaff {
 model AcademicTerm {
   year              Int
   semester          Int
-  lastClassDay      DateTime @db.Date
-  examStartDay      DateTime @db.Date
-  examEndDay        DateTime @db.Date
-  roadmapFreezeDate DateTime @db.Date
+  classStartDay     DateTime? @db.Date
+  recesses          Json      @default("[]")
+  lastClassDay      DateTime  @db.Date
+  examStartDay      DateTime  @db.Date
+  examEndDay        DateTime  @db.Date
+  roadmapFreezeDate DateTime  @db.Date
   sourcePageUrl     String
   sourcePdfUrl      String
-  syncedAt          DateTime @updatedAt
+  syncedAt          DateTime  @updatedAt
 
   @@id([year, semester])
 }

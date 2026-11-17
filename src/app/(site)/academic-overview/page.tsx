@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { isFirstVisitInvitationDue } from '@/features/roadmap/server';
+import { readAcademicWeekLabel } from '@/features/academic-overview/server';
 import { AcademicOverviewClient } from './AcademicOverviewClient';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
@@ -24,6 +25,7 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
         ) : null
       }
       tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
+      academicWeek={await readAcademicWeekLabel()}
     />
   );
 }

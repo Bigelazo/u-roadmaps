@@ -249,6 +249,8 @@ export const fixtureAcademicTerms = [
 ].map(({ year, semester, day }) => ({
   year,
   semester,
+  classStartDay: new Date(semester === 1 ? `${year}-03-09` : `${year}-08-10`),
+  recesses: year === 2026 && semester === 2 ? [{ start: '2026-09-14', end: '2026-09-18' }] : [],
   lastClassDay: new Date(day),
   examStartDay: new Date(day),
   examEndDay: new Date(day),

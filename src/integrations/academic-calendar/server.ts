@@ -10,7 +10,11 @@ export type AcademicTermIdentifier = {
   semester: Semester;
 };
 
+export type AcademicRecess = { start: string; end: string };
+
 export type AcademicTermDates = {
+  classStartDay: string;
+  recesses: AcademicRecess[];
   lastClassDay: string;
   examStartDay: string;
   examEndDay: string;
@@ -37,7 +41,7 @@ const santiagoDateFormatter = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
-function santiagoDate(now: Date) {
+export function santiagoDate(now: Date) {
   const parts = santiagoDateFormatter.formatToParts(now);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((candidate) => candidate.type === type)?.value ?? '';
@@ -162,15 +166,35 @@ export function extractAcademicTermDates(pdfText: string): AcademicTermDates {
     throw new Error('No se pudo extraer el período de exámenes del PDF.');
   }
 
+  const semesterText = text.slice(0, lastClassMatch.index);
+  const classStartMatch = semesterText.match(
+    /(\d{1,2}\/\d{1,2}\/\d{4})[^\n]{0,100}INICIO\s+DE\s+CLASES/i,
+  );
+  if (!classStartMatch) {
+    throw new Error('No se pudo extraer el inicio de clases del PDF.');
+  }
+
   const examEndDay = calendarDay(examMatch[2]);
   const examEndYear = Number(examEndDay.slice(0, 4));
   const lastClassDay = calendarDay(lastClassMatch[1]);
   const examStartDay = calendarDay(examMatch[1], examEndYear);
-  if (examStartDay > examEndDay || lastClassDay > examEndDay) {
+  const classStartDay = calendarDay(classStartMatch[1]);
+  if (examStartDay > examEndDay || lastClassDay > examEndDay || classStartDay > lastClassDay) {
     throw new Error('Las fechas extraídas del calendario no tienen un orden válido.');
   }
 
+  const recesses = [
+    ...semesterText.matchAll(
+      /(\d{1,2}\/\d{1,2}(?:\/\d{4})?)\s*(?:-|–|al)\s*(\d{1,2}\/\d{1,2}\/\d{4})[^\n]{0,20}RECESO\s+ACAD[ÉE]MICO/gi,
+    ),
+  ].map((match) => {
+    const end = calendarDay(match[2]);
+    return { start: calendarDay(match[1], Number(end.slice(0, 4))), end };
+  });
+
   return {
+    classStartDay,
+    recesses,
     lastClassDay,
     examStartDay,
     examEndDay,

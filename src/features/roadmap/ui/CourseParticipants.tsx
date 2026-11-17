@@ -76,7 +76,10 @@ function AverageCompletion({ participants }: Readonly<{ participants: Participan
   );
 }
 
-export function CourseParticipants({ participants }: Readonly<{ participants: Participants }>) {
+export function CourseParticipants({
+  participants,
+  academicWeek = null,
+}: Readonly<{ participants: Participants; academicWeek?: string | null }>) {
   const { course, students, teachingStaff } = participants;
   return (
     <PageShell className="mx-auto flex max-w-5xl flex-col gap-10 px-4 sm:px-6">
@@ -84,6 +87,7 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
         courseName={course.name}
         courseCode={course.courseCode}
         courseDetail={`${course.courseCode} · ${termLabel(course)}`}
+        academicWeek={academicWeek}
         offering={{ ...course, hasRoadmap: participants.hasRoadmap }}
         current="participants"
         section="Integrantes del curso"

@@ -8,6 +8,7 @@ import type {
 } from './types';
 
 export { createAcademicCourseCache } from './domain/browser-cache';
+export { readAcademicWeekLabel } from './infrastructure/read-academic-week';
 export type { AcademicOverviewBrowserResponse } from './types';
 
 export type { AcademicOverviewActor, AcademicOverviewSources } from './types';

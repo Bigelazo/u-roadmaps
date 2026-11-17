@@ -66,6 +66,7 @@ export type RoadmapCanvasSessionInput = {
   readonly courseOffering: {
     readonly identifier: CourseOfferingIdentifier;
     readonly title: string;
+    readonly academicWeek?: string | null;
   };
   readonly experience: RoadmapCanvasExperience;
   readonly practice?: {

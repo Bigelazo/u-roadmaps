@@ -15,6 +15,8 @@ function publishing(examEndDay: string) {
     requested.push(identifier);
     return {
       ...identifier,
+      classStartDay: '1500-08-03',
+      recesses: [],
       lastClassDay: '1500-11-28',
       examStartDay: '1500-11-30',
       examEndDay,

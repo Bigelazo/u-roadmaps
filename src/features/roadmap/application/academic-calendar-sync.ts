@@ -21,9 +21,9 @@ function dateAtUtcMidday(day: string) {
 async function isStored(term: AcademicTermIdentifier) {
   const stored = await prisma.academicTerm.findUnique({
     where: { year_semester: term },
-    select: { year: true },
+    select: { classStartDay: true },
   });
-  return stored !== null;
+  return stored?.classStartDay != null;
 }
 
 export async function syncAcademicCalendar({
@@ -45,6 +45,8 @@ export async function syncAcademicCalendar({
 
   const published = await fetchTerm(term);
   const dates = {
+    classStartDay: dateAtUtcMidday(published.classStartDay),
+    recesses: published.recesses,
     lastClassDay: dateAtUtcMidday(published.lastClassDay),
     examStartDay: dateAtUtcMidday(published.examStartDay),
     examEndDay: dateAtUtcMidday(published.examEndDay),

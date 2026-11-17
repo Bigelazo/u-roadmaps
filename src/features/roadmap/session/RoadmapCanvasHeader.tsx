@@ -13,6 +13,7 @@ import { termLabel, type CourseOfferingIdentifier } from '@/shared/course-offeri
 
 export function RoadmapCanvasHeader({
   title,
+  academicWeek,
   courseCode,
   year,
   semester,
@@ -21,6 +22,7 @@ export function RoadmapCanvasHeader({
   showsCourseLinks,
 }: CourseOfferingIdentifier & {
   title: string;
+  academicWeek?: string | null;
   isCanvasPreview: boolean;
   isEditing: boolean;
   showsCourseLinks: boolean;
@@ -50,6 +52,12 @@ export function RoadmapCanvasHeader({
         <span>{courseCode}</span>
         <span aria-hidden="true">·</span>
         <span>{termLabel({ year, semester })}</span>
+        {academicWeek ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{academicWeek}</span>
+          </>
+        ) : null}
       </p>
       {showsCourseLinks ? (
         <RoadmapCourseLinks courseCode={courseCode} year={year} semester={semester} />

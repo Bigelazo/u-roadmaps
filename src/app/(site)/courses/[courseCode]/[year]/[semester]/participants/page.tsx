@@ -6,6 +6,7 @@ import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
 import { ApplicationError } from '@/shared/errors/server';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
+import { readAcademicWeekLabel } from '@/features/academic-overview/server';
 
 export default async function CourseParticipantsPage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]/participants'>,
@@ -21,5 +22,9 @@ export default async function CourseParticipantsPage(
     throw error;
   });
   if (!participants) notFound();
-  return <CourseParticipants participants={participants} />;
+  const academicWeek = await readAcademicWeekLabel({
+    year: identifier.year,
+    semester: identifier.semester,
+  });
+  return <CourseParticipants participants={participants} academicWeek={academicWeek} />;
 }

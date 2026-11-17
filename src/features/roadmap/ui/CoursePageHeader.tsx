@@ -70,6 +70,7 @@ export function CoursePageHeader({
   courseName,
   courseCode,
   courseDetail,
+  academicWeek,
   offering,
   current,
   section,
@@ -77,6 +78,7 @@ export function CoursePageHeader({
   courseName: string;
   courseCode: string;
   courseDetail: string;
+  academicWeek?: string | null;
   offering: Offering | null;
   current: CourseSection;
   section: string;
@@ -86,7 +88,9 @@ export function CoursePageHeader({
       <div className="grid gap-4">
         <div>
           <PageTitle className="text-balance md:text-5xl">{courseName}</PageTitle>
-          <p className="mt-2 text-muted-foreground">{courseDetail}</p>
+          <p className="mt-2 text-muted-foreground">
+            {[courseDetail, academicWeek].filter(Boolean).join(' · ')}
+          </p>
         </div>
         <CourseSections courseCode={courseCode} offering={offering} current={current} />
       </div>

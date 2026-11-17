@@ -32,13 +32,23 @@ describe('academic calendar', () => {
   it('extracts the main semester end dates, before appended summer dates', () => {
     expect(
       extractAcademicTermDates(`
+        03/08/2026 INICIO DE CLASES
+        29/08 - 05/09/2026 SEMANA OLÍMPICA - Durante esta semana, no deberán realizarse actividades
+        14/09 - 20/09/2026 1º RECESO ACADÉMICO FIESTAS PATRIAS
+        26/10 - 01/11/2026 2° RECESO ACADÉMICO (válido para estudiantes nuevos/as y antiguos/as)
         28/11/2026 ÚLTIMO DÍA DE CLASES
         30/11- 12/12/2026 EXÁMENES
         PERIODO DE VERANO 2026-2027
+        14/12/2026 INICIO DE CLASES
         23/01/2027 ÚLTIMO DÍA DE CLASES
         25/01-30/01/2027 EXÁMENES
       `),
     ).toEqual({
+      classStartDay: '2026-08-03',
+      recesses: [
+        { start: '2026-09-14', end: '2026-09-20' },
+        { start: '2026-10-26', end: '2026-11-01' },
+      ],
       lastClassDay: '2026-11-28',
       examStartDay: '2026-11-30',
       examEndDay: '2026-12-12',
@@ -56,7 +66,8 @@ describe('academic calendar', () => {
             ? new Response(calendarPage)
             : new Response(new Uint8Array([1, 2, 3]));
         },
-        extractText: async () => '28/11/2026 ÚLTIMO DÍA DE CLASES\n30/11- 12/12/2026 EXÁMENES',
+        extractText: async () =>
+          '03/08/2026 INICIO DE CLASES\n28/11/2026 ÚLTIMO DÍA DE CLASES\n30/11- 12/12/2026 EXÁMENES',
       },
     );
 

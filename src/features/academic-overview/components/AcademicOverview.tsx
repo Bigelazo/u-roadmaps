@@ -370,9 +370,11 @@ export function AcademicOverview({
   tutorialInvitation = false,
   notice,
   actions,
+  academicWeek = null,
   lastSynchronization = null,
 }: Readonly<{
   overview: AcademicOverviewPage;
+  academicWeek?: string | null;
   lastSynchronization?: string | null;
   notice?: React.ReactNode;
   actions?: React.ReactNode;
@@ -387,9 +389,14 @@ export function AcademicOverview({
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-col gap-2">
             <PageTitle className="md:text-5xl">Resumen académico</PageTitle>
-            {lastSynchronization ? (
+            {academicWeek || lastSynchronization ? (
               <p className="text-sm text-muted-foreground">
-                Última actualización: {lastSynchronization}
+                {[
+                  academicWeek,
+                  lastSynchronization && `Última actualización: ${lastSynchronization}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             ) : null}
           </div>

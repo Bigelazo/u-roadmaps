@@ -11,6 +11,7 @@ import {
   readRoadmapForParticipant,
 } from '@/features/roadmap/server';
 import { parseCourseOfferingIdentifier } from '@/shared/course-offering';
+import { readAcademicWeekLabel } from '@/features/academic-overview/server';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
@@ -70,6 +71,10 @@ export default async function CoursePage(
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);
   const courseName = courseOffering.course.name ?? identifier.courseCode;
+  const academicWeek = await readAcademicWeekLabel({
+    year: identifier.year,
+    semester: identifier.semester,
+  });
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
   const entryRoadmap =
     courseOffering.roadmap && participation
@@ -89,7 +94,7 @@ export default async function CoursePage(
           notificationsEnabled
           roadmapEntryKey={roadmapEntryKey}
           entryRoadmap={entryRoadmap}
-          courseOffering={{ identifier, title: courseName }}
+          courseOffering={{ identifier, title: courseName, academicWeek }}
           experience={{
             kind: isTeaching ? 'teaching' : 'student',
             term: isHistorical ? 'historical' : 'current',

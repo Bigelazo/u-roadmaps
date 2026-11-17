@@ -732,6 +732,7 @@ function RoadmapCanvasGraph({
           <>
             <RoadmapCanvasHeader
               title={courseOffering.title}
+              academicWeek={courseOffering.academicWeek}
               {...courseOffering.identifier}
               isCanvasPreview={isCanvasPreview}
               isEditing={mode.isEditing}
