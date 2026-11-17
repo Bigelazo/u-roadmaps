@@ -131,7 +131,8 @@ function highlightOnly() {
 
 function openCreationMenu() {
   const button = document.querySelector<HTMLButtonElement>(creationButton);
-  if (button?.getAttribute('aria-expanded') !== 'true') button?.click();
+  if (button?.getAttribute('aria-expanded') !== 'true')
+    button?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
 }
 
 function closeCreationMenu() {

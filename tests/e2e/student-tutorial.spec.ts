@@ -51,15 +51,16 @@ async function completionsOf(userId: string) {
   );
 }
 
-test('a student walks through the tutorial from their Roadmap and is pointed back to it', async ({
+test('a student walks through the tutorial and returns to their Roadmap', async ({
   page,
   course,
 }) => {
   const student = course.users.studentWithoutProgress;
   await enterRoadmap(page, course.pagePath(), student.id);
 
-  await page.getByRole('link', { name: 'Abrir tutorial' }).click();
-  await expect(page).toHaveURL(/\/practice-roadmap\/student\?origin=/);
+  await page.goto(
+    `/practice-roadmap/student?${new URLSearchParams({ origin: course.pagePath() })}`,
+  );
   await expect(page.getByRole('button', { name: /^Avisos/ })).toBeVisible();
 
   await expectStep(page, 0);
@@ -106,10 +107,7 @@ test('a student walks through the tutorial from their Roadmap and is pointed bac
 
   await page.getByRole('link', { name: 'Salir' }).click();
   await expect(page).toHaveURL(new RegExp(`${course.pagePath()}$`));
-  await expect(tourPopover(page)).toContainText('repetir el tutorial');
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveClass(
-    /driver-active-element/,
-  );
+  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
 });
 
 test('leaving the tutorial asks for confirmation first', async ({ page, createUser }) => {

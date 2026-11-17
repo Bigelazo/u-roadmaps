@@ -72,7 +72,7 @@ test('dismissing the invitation also records it', async ({ page, createUser }) =
   await expect(invitation(page)).toHaveCount(0);
 });
 
-test('opening a tutorial from a Roadmap canvas first prevents the invitation', async ({
+test('opening a tutorial before visiting the Academic overview prevents the invitation', async ({
   page,
   course,
 }) => {
@@ -87,8 +87,9 @@ test('opening a tutorial from a Roadmap canvas first prevents the invitation', a
   await page.getByRole('button', { name: 'Ir al editor' }).click();
   await expect(invitation(page)).toHaveCount(0);
 
-  await page.getByRole('link', { name: 'Abrir tutorial' }).click();
-  await expect(page).toHaveURL(/\/practice-roadmap\/teaching\?origin=/);
+  await page.goto(
+    `/practice-roadmap/teaching?${new URLSearchParams({ origin: course.pagePath() })}`,
+  );
   await expect(page.locator('.driver-popover-title')).toHaveText('Muévete por el mapa');
 
   await page.goto('/academic-overview');

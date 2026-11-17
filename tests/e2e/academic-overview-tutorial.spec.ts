@@ -15,13 +15,9 @@ for (const { option, experience } of choices) {
     await authenticateAs(page.context(), user.id);
     await page.goto('/academic-overview');
 
-    const icon = page.getByRole('button', { name: 'Abrir tutorial' });
-    await expect(icon).toBeVisible();
-    await expect(icon).toHaveText('');
-    await expect(
-      icon.locator('svg.lucide-circle-question-mark, svg.lucide-circle-help'),
-    ).toHaveCount(1);
-    await icon.click();
+    const button = page.getByRole('button', { name: 'Tutorial', exact: true });
+    await expect(button.locator('svg.lucide-badge-question-mark')).toHaveCount(1);
+    await button.click();
 
     const choice = page.getByRole('dialog', { name: '¿Deseas realizar el tutorial?' });
     await expect(choice.getByRole('button', { name: 'Docente' })).toBeVisible();
@@ -41,9 +37,6 @@ for (const { option, experience } of choices) {
 
     await page.getByRole('link', { name: 'Salir' }).click();
     await expect(page).toHaveURL(/\/academic-overview$/);
-    await expect(page.locator('.driver-popover')).toContainText('repetir el tutorial');
-    await expect(page.getByRole('button', { name: 'Abrir tutorial' })).toHaveClass(
-      /driver-active-element/,
-    );
+    await expect(page.locator('.driver-popover')).toHaveCount(0);
   });
 }

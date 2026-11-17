@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react';
 
-export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
-
 export const TUTORIAL_EXIT_ATTRIBUTE = 'data-tutorial-exit';
 
-const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
 export type TutorialStep<Action = never> = Readonly<{
   element: string | (() => Element | null);
   title: string;
@@ -56,28 +53,6 @@ export async function waitForElement(element: TutorialStep['element'], timeoutMs
 
 export function clickElement(selector: string) {
   document.querySelector<HTMLElement>(selector)?.click();
-}
-
-export function markTutorialClosingPopover() {
-  try {
-    sessionStorage.setItem(closingPopoverKey, '1');
-    // eslint-disable-next-line no-empty -- Without storage the origin simply shows no closing popover.
-  } catch {}
-}
-
-export function readTutorialClosingPopover() {
-  try {
-    return sessionStorage.getItem(closingPopoverKey) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function clearTutorialClosingPopover() {
-  try {
-    sessionStorage.removeItem(closingPopoverKey);
-    // eslint-disable-next-line no-empty -- Without storage there is no pending closing popover to clear.
-  } catch {}
 }
 
 export const TUTORIAL_REVEAL_EVENT = 'u-roadmaps:tutorial-reveal';

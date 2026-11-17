@@ -47,11 +47,11 @@ test('the first Roadmap creation invites to do the teaching tutorial, and no lat
   await expect(invitation).toBeHidden();
 
   await page.reload();
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toBeVisible();
+  await expect(page.getByLabel('Lienzo del roadmap')).toBeVisible();
   await expect(invitation).toHaveCount(0);
 
   await createEmptyRoadmap(page, second);
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toBeVisible();
+  await expect(page.getByLabel('Lienzo del roadmap')).toBeVisible();
   await expect(page.getByRole('alertdialog', { name: invitationName })).toHaveCount(0);
 });
 
@@ -77,10 +77,7 @@ test('accepting opens the teaching tutorial and "Salir" returns to the new Roadm
 
   await page.getByRole('link', { name: 'Salir' }).click();
   await expect(page).toHaveURL(new RegExp(`${offeringPath(offering)}$`));
-  await expect(page.locator('.driver-popover')).toContainText('repetir el tutorial');
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveClass(
-    /driver-active-element/,
-  );
+  await expect(page.getByLabel('Lienzo del roadmap')).toBeVisible();
 });
 
 test('a professor who opened the teaching tutorial before is invited to repeat it', async ({

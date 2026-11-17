@@ -144,6 +144,9 @@
   opacity: 0;
   transition: none;
 }
+.u-roadmaps-tour-settling [data-slot='speed-dial'] [role='menuitem'] {
+  transition: none !important;
+}
 .driver-active [data-slot='toast']:is([data-starting-style], [data-ending-style]) {
   transform: none !important;
   opacity: 0;

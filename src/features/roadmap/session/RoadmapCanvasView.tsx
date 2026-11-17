@@ -7,7 +7,7 @@ import { NodeChangeCountsProvider } from '@/features/notifications/client';
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, LogOut } from 'lucide-react';
+import { CircleAlert, Eye, LogOut } from 'lucide-react';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode, type CanvasMode } from '@/features/roadmap/canvas/mode';
 import {
@@ -73,12 +73,7 @@ import { RoadmapPanelColumn } from '@/features/roadmap/ui/RoadmapPanelColumn';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
-import {
-  TUTORIAL_EXIT_ATTRIBUTE,
-  TUTORIAL_TRIGGER_ATTRIBUTE,
-  markTutorialClosingPopover,
-} from '@/shared/client/tutorial/tutorial-support';
-import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial-closing-popover';
+import { TUTORIAL_EXIT_ATTRIBUTE } from '@/shared/client/tutorial/tutorial-support';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 
@@ -395,7 +390,6 @@ export function RoadmapCanvasView({ input }: Props) {
                 ),
               })}
               href={input.practice.exitHref}
-              onClick={markTutorialClosingPopover}
             >
               <LogOut data-icon="inline-start" />
               Salir
@@ -754,51 +748,7 @@ function RoadmapCanvasGraph({
             onExit={onExitCanvasPreview}
           />
         ) : null,
-        topRight:
-          isCanvasPreview || input.practice ? null : (
-            <RoadmapTutorialLink
-              experience={input.experience.kind}
-              origin={roadmapPath(courseOffering.identifier)}
-            />
-          ),
       }}
     />
-  );
-}
-
-function roadmapPath({
-  courseCode,
-  year,
-  semester,
-}: RoadmapCanvasSessionInput['courseOffering']['identifier']) {
-  return `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`;
-}
-
-function RoadmapTutorialLink({
-  experience,
-  origin,
-}: {
-  experience: RoadmapCanvasSessionInput['experience']['kind'];
-  origin: string;
-}) {
-  return (
-    <>
-      <IconTooltip
-        label="Abrir tutorial"
-        delay={150}
-        render={
-          <Link
-            {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
-            aria-label="Abrir tutorial"
-            className={buttonVariants({ variant: 'outline', size: 'icon' })}
-            href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
-            prefetch={false}
-          >
-            <CircleHelp />
-          </Link>
-        }
-      />
-      <TutorialClosingPopover />
-    </>
   );
 }

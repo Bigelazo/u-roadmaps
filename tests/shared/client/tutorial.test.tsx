@@ -3,12 +3,6 @@ import type { Config, DriveStep } from 'driver.js';
 import { StrictMode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
-import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial-closing-popover';
-import {
-  markTutorialClosingPopover,
-  readTutorialClosingPopover,
-  TUTORIAL_TRIGGER_ATTRIBUTE,
-} from '@/shared/client/tutorial/tutorial-support';
 import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
 
 const mock = vi.hoisted(() => ({
@@ -230,25 +224,6 @@ it('closes a menu left open by the previous step before showing the next one', a
   document.removeEventListener('keydown', closeOnEscape);
   expect(menu.isConnected).toBe(false);
   expect(mock.index).toBe(4);
-});
-
-it('shows the closing popover under StrictMode and forgets it once shown', async () => {
-  markTutorialClosingPopover();
-  const trigger = document.body.appendChild(document.createElement('a'));
-  trigger.setAttribute(TUTORIAL_TRIGGER_ATTRIBUTE, '');
-
-  render(
-    <StrictMode>
-      <TutorialClosingPopover />
-    </StrictMode>,
-  );
-  await vi.waitFor(() => expect(mock.highlight).toHaveBeenCalledOnce());
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-
-  expect(mock.highlight).toHaveBeenCalledOnce();
-  expect(readTutorialClosingPopover()).toBe(false);
 });
 
 it('releases the step once on leaving even when the engine skips its destroyed hook', async () => {

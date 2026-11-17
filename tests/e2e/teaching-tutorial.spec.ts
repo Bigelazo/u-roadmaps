@@ -1,6 +1,5 @@
 import { observeTutorialExit, tutorialExitFailures } from './tutorial-presentation-observer';
 import type { Locator, Page } from '@playwright/test';
-import { literal, queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
 import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
@@ -551,50 +550,13 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   expect(activityRequests).toEqual([]);
 });
 
-test('the canvas question-mark icon opens the teaching tutorial and points back to the Roadmap', async ({
-  page,
-  course,
-}) => {
-  const before = await roadmapShape(course.roadmapId);
+test('the Roadmap canvas offers no tutorial entry in either view', async ({ page, course }) => {
   await enterRoadmap(page, course.pagePath(), course.users.teacher.id);
+  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
   await expect(page.getByText('Vista estudiantil')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Ir al editor' }).click();
-
-  await page.getByRole('link', { name: 'Abrir tutorial' }).click();
-  await expect(page).toHaveURL(/\/practice-roadmap\/teaching\?origin=/);
-  await expectStep(page, 'Muévete por el mapa');
-  await next(page, 'Centrar mapa');
-  await page.getByRole('button', { name: 'Centrar mapa' }).click();
-  await next(page, 'Nodos');
-
-  await page.getByRole('link', { name: 'Salir' }).click();
-  await expect(page).toHaveURL(new RegExp(`${course.pagePath()}$`));
-  await expect(tourPopover(page)).toContainText('repetir el tutorial');
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveClass(
-    /driver-active-element/,
-  );
-  expect(await roadmapShape(course.roadmapId)).toEqual(before);
-  expect(
-    await queryJson<number>(
-      `SELECT count(*)::int FROM "RoadmapNotice" WHERE "roadmapId" = ${literal(course.roadmapId)};`,
-    ),
-  ).toBe(0);
 });
-
-async function roadmapShape(roadmapId: string) {
-  return queryJson<unknown>(`
-    SELECT json_build_object(
-      'nodes', (SELECT count(*) FROM "RoadmapNode" WHERE "roadmapId" = ${literal(roadmapId)}),
-      'dependencies', (
-        SELECT count(*) FROM "Dependency" d
-        JOIN "RoadmapNode" n ON n.id = d."sourceNodeId"
-        WHERE n."roadmapId" = ${literal(roadmapId)}
-      )
-    );
-  `);
-}
 
 test('the highlighted creation menu stays behind its floating button', async ({
   page,
