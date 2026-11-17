@@ -61,7 +61,6 @@ import type {
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-import { blockedPrerequisiteNodeIds } from '@/features/roadmap/domain/scheduled-unlock';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { RoadmapCanvasLoading } from './RoadmapCanvasLoading';
@@ -530,15 +529,6 @@ function RoadmapNodeEditorPanel({
         session={{
           node: editedNode,
           nodeTypes: roadmap.nodeTypes,
-          blockedPrerequisites: editedNode
-            ? blockedPrerequisiteNodeIds({
-                nodes: roadmap.nodes.filter(
-                  (node): node is RoadmapNode => 'isTeacherBlocked' in node,
-                ),
-                dependencies: roadmap.dependencies,
-                nodeId: editedNode.id,
-              }).length
-            : 0,
           isVisibilityPending,
         }}
         command={command}

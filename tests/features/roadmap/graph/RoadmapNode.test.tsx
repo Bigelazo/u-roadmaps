@@ -155,7 +155,7 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   rerenderWith(menuProps(true));
   expect(screen.getByRole('group', { name: 'Menú de acciones del nodo' })).toBeTruthy();
 
-  await user.click(screen.getByRole('button', { name: 'Bloquear nodo' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear' }));
   expect(onAction).toHaveBeenCalledWith({
     kind: 'change-teacher-block',
     nodeId: 'teacher-node',
@@ -168,7 +168,7 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   const resourceAction = screen.getByRole('button', { name: 'Agregar recurso' });
   await user.click(resourceAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'add-resource', nodeId: 'teacher-node' });
-  const deleteAction = screen.getByRole('button', { name: 'Eliminar nodo' });
+  const deleteAction = screen.getByRole('button', { name: 'Eliminar' });
   await user.click(deleteAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: 'teacher-node' });
   await user.click(visibilityAction);
@@ -200,7 +200,7 @@ test('offers showing a hidden node without an access action', async () => {
   rerenderWith(menuProps(true));
 
   expect(screen.getByTestId('node-action-trigger-close')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Bloquear nodo' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bloquear' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Desbloquear' })).toBeNull();
   const visibilityAction = screen.getByRole('button', { name: 'Mostrar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
@@ -208,7 +208,7 @@ test('offers showing a hidden node without an access action', async () => {
   expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('3');
   await user.click(visibilityAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'show-node', nodeId: 'hidden-teacher-node' });
-  expect(screen.getByRole('button', { name: 'Eliminar nodo' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Eliminar' })).toBeTruthy();
 });
 
 test('offers the contextual unblock action for a visible teacher-blocked node', async () => {
@@ -636,7 +636,7 @@ test.each([
   {
     hidden: false,
     blocked: false,
-    label: 'Bloquear nodo',
+    label: 'Bloquear',
     current: 'lock-keyhole-open',
     preview: 'lock-keyhole',
   },
@@ -680,7 +680,7 @@ test.each([
     );
 
     const trigger = screen.getByRole('button', { name: label });
-    const id = label === 'Bloquear nodo' || label === 'Desbloquear' ? 'access' : 'visibility';
+    const id = label === 'Bloquear' || label === 'Desbloquear' ? 'access' : 'visibility';
     const currentIcon = within(trigger).getByTestId(`node-action-${id}-current-icon`);
     const previewIcon = within(trigger).getByTestId(`node-action-${id}-preview-icon`);
     expect(currentIcon.innerHTML).toMatch(new RegExp(`lucide-${current}[" ]`));

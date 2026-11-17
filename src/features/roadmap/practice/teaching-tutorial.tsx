@@ -391,10 +391,10 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
   let createdNodeId: string | null = null;
   let unlockOperation: TeacherBlockOperation | null = null;
   const createdNode = () => createdNodeId;
-  const blockControl = nodeActionControl(() => practiceNodeIds.b, 'Bloquear nodo', 'Bloquear nodo');
+  const blockControl = nodeActionControl(() => practiceNodeIds.b, 'Bloquear', 'Bloquear nodo');
   const unlockControl = nodeActionControl(() => practiceNodeIds.e, 'Desbloquear');
   const hideControl = nodeActionControl(() => practiceNodeIds.g, 'Ocultar para estudiantes');
-  const deleteControl = nodeActionControl(createdNode, 'Eliminar nodo');
+  const deleteControl = nodeActionControl(createdNode, 'Eliminar');
   const [moveAroundStep, centerMapStep] = mapNavigationSteps;
   return [
     { ...moveAroundStep, onEnter: panAndZoomOnly },
@@ -522,7 +522,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       description: nodeActionDescription(
         blockControl,
         <>
-          Elige <TutorialAction icon={LockKeyhole}>Bloquear nodo</TutorialAction>.
+          Elige <TutorialAction icon={LockKeyhole}>Bloquear</TutorialAction>.
         </>,
         <>Debido a que este nodo posee otros dependientes a él, estos también serán bloqueados.</>,
       ),
@@ -557,7 +557,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         <>
           Elige <TutorialAction icon={LockKeyholeOpen}>Desbloquear</TutorialAction>.
         </>,
-        'Desbloquear un nodo que posee prerrequisitos que siguen bloqueados también los desbloqueará. Puedes elegir además entre desbloquear solo este nodo, o incluir además a los dependientes de él.',
+        'Desbloquear un nodo que posee prerrequisitos que siguen bloqueados también los desbloqueará. También puedes programar la fecha y hora de su desbloqueo. Para continuar, realiza el desbloqueo ahora.',
       ),
       advanceWhen: (action) => {
         if (
@@ -639,7 +639,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         <>
           Elige{' '}
           <TutorialAction icon={Trash2} intent="destructive">
-            Eliminar nodo
+            Eliminar
           </TutorialAction>
           .
         </>,

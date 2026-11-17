@@ -9,7 +9,7 @@ export function nodeMenuActions(
   teacherBlocked: boolean,
   onAction: NodeActionCallbacks['onAction'],
 ) {
-  const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear nodo';
+  const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear';
   const visibilityLabel = hidden ? 'Mostrar para estudiantes' : 'Ocultar para estudiantes';
   return [
     ...(!hidden
@@ -47,7 +47,7 @@ export function nodeMenuActions(
     },
     {
       id: 'delete',
-      label: 'Eliminar nodo',
+      label: 'Eliminar',
       Icon: Trash2,
       RestIcon: null,
       onSelect: () => onAction?.({ kind: 'delete-node', nodeId }),

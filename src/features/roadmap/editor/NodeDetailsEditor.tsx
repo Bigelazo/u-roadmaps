@@ -1,9 +1,7 @@
-import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/scheduled-unlock-hint';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import { useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
 import { cn } from 'cn';
 import {
-  CalendarClock,
   Eye,
   EyeOff,
   LockKeyhole,
@@ -14,14 +12,13 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { FieldGroup } from '@/shared/ui/field';
 import { Separator } from '@/shared/ui/separator';
 import { NodeDescriptionField, NodeTitleField, NodeTypeField } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
-import { UnlockDateTimePicker } from '@/features/roadmap/ui/UnlockScheduleField';
 
 function NodeHeader() {
   const { node, nodeTypes, closeNode } = useNodeEditorContext();
@@ -175,60 +172,16 @@ function NodeForm() {
   );
 }
 
-function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
-  const { blockedPrerequisites, scheduleTeacherUnlock } = useNodeEditorContext();
-  const [draft, setDraft] = useState(() => (scheduledAt ? new Date(scheduledAt) : null));
-  const canSchedule = draft !== null && draft.toISOString() !== scheduledAt;
-
-  return (
-    <form
-      className="flex flex-col gap-2 border-t border-border pt-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (canSchedule && draft.getTime() > Date.now()) scheduleTeacherUnlock(draft.toISOString());
-      }}
-    >
-      <Field>
-        <div className="flex items-center gap-2.5">
-          <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <FieldLabel htmlFor="node-unlock-date" className="font-semibold">
-            Desbloqueo programado
-          </FieldLabel>
-        </div>
-        <UnlockDateTimePicker id="node-unlock-date" value={draft} onValueChange={setDraft} />
-        <FieldDescription>{scheduledUnlockPrerequisiteHint(blockedPrerequisites)}</FieldDescription>
-        <div className="flex flex-wrap justify-end gap-2">
-          {scheduledAt && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => scheduleTeacherUnlock(null)}
-            >
-              Quitar programación
-            </Button>
-          )}
-          <Button type="submit" variant="outline" size="sm" disabled={!canSchedule}>
-            {scheduledAt ? 'Reprogramar' : 'Programar'}
-          </Button>
-        </div>
-      </Field>
-    </form>
-  );
-}
-
 function AccessRow({
   Icon,
   label,
   description,
   action,
-  children,
 }: {
   Icon: ComponentType<{ className?: string }>;
   label: string;
   description: string;
   action?: ReactNode;
-  children?: ReactNode;
 }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 py-3">
@@ -236,7 +189,6 @@ function AccessRow({
       <p className="text-sm font-semibold">{label}</p>
       {action ?? <span />}
       <p className="col-span-2 col-start-2 text-sm text-muted-foreground">{description}</p>
-      {children ? <div className="col-span-3 pt-2">{children}</div> : null}
     </div>
   );
 }
@@ -301,18 +253,11 @@ function NodeTeacherBlock() {
             onClick={() => requestTeacherBlock(node.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK')}
           >
             <TeacherBlockIcon data-icon="inline-start" />
-            {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear nodo'}
+            {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear'}
           </Button>
         ) : undefined
       }
-    >
-      {node.isVisible && node.isTeacherBlocked && (
-        <NodeUnlockSchedule
-          key={`${node.id}:${node.teacherUnlockAt ?? ''}`}
-          scheduledAt={node.teacherUnlockAt ?? null}
-        />
-      )}
-    </AccessRow>
+    />
   );
 }
 

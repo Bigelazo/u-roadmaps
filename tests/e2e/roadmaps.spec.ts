@@ -385,7 +385,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
 
   const sourceNode = page.locator(`.react-flow__node[data-id="${sourceNodeId}"]`);
   await sourceNode.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
-  const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar nodo' });
+  const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar' });
   await expect(requestDelete).toBeVisible();
 
   const deletionPreviewPath = `/nodes/${sourceNodeId}?operation=DELETE`;

@@ -348,10 +348,10 @@ test('keeps radial node actions evenly sized and separated', async ({ page, cour
 
   const controls = [
     node.getByRole('button', { name: 'Cerrar menú de acciones del nodo' }),
-    page.getByRole('button', { name: 'Bloquear nodo' }),
+    page.getByRole('button', { name: 'Bloquear' }),
     page.getByRole('button', { name: 'Ocultar para estudiantes' }),
     page.getByRole('button', { name: 'Agregar recurso' }),
-    page.getByRole('button', { name: 'Eliminar nodo' }),
+    page.getByRole('button', { name: 'Eliminar' }),
   ];
   const boxes = await Promise.all(
     controls.map(async (control) => {

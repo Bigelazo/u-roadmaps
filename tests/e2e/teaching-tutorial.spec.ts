@@ -390,10 +390,10 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await next(page, 'Bloquea un nodo');
 
   await blockMenuTrigger.click();
-  const blockAction = blockNode.getByRole('button', { name: 'Bloquear nodo', exact: true });
+  const blockAction = blockNode.getByRole('button', { name: 'Bloquear', exact: true });
   await expect(blockAction).toHaveClass(/driver-active-element/);
   await expect(tourPopover(page).locator('.driver-popover-description')).toHaveText(
-    'Elige Bloquear nodo.',
+    'Elige Bloquear.',
   );
   await blockAction.click();
   const confirmation = page.getByRole('alertdialog');
@@ -439,7 +439,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
     'Control 1',
     'Desbloquear',
     'Desbloquear 3 nodos',
-    'Desbloquear un nodo que posee prerrequisitos que siguen bloqueados también los desbloqueará. Puedes elegir además entre desbloquear solo este nodo, o incluir además a los dependientes de él.',
+    'Desbloquear un nodo que posee prerrequisitos que siguen bloqueados también los desbloqueará. También puedes programar la fecha y hora de su desbloqueo. Para continuar, realiza el desbloqueo ahora.',
   );
   await expectStep(page, 'Desbloqueo programado');
   await expect(page.getByLabel('Panel de edición del roadmap', { exact: true })).toBeHidden();
@@ -479,7 +479,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
 
   const createdNode = practiceNode(page, 'Nodo de práctica');
   await createdNode.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
-  const deleteAction = createdNode.getByRole('button', { name: 'Eliminar nodo', exact: true });
+  const deleteAction = createdNode.getByRole('button', { name: 'Eliminar', exact: true });
   await expect(tourPopover(page).locator('svg.lucide-trash-2')).toHaveCSS(
     'color',
     await deleteAction.evaluate((element) => getComputedStyle(element).color),
@@ -490,7 +490,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await expectOnlyNodeActionInteractive(
     page,
     'Nodo de práctica',
-    'Eliminar nodo',
+    'Eliminar',
     'Eliminar nodo',
     'Antes de eliminar podrás ver la cantidad de recursos y dependencias asociadas que se perderán.',
   );

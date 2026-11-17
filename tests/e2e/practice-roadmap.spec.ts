@@ -131,7 +131,7 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await connect(page, titles.g, 'Nodo de práctica');
   await expect(edges).toHaveCount(9);
 
-  await nodeAction(page, titles.b, 'Bloquear nodo');
+  await nodeAction(page, titles.b, 'Bloquear');
   await page
     .getByRole('alertdialog', { name: /^¿Bloquear / })
     .getByRole('button', { name: 'Bloquear nodo' })
@@ -157,7 +157,7 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await expect(practiceNode(page, titles.a).getByRole('img', { name: '1 enlace' })).toBeVisible();
 
   await page.keyboard.press('Escape');
-  await nodeAction(page, titles.d, 'Eliminar nodo');
+  await nodeAction(page, titles.d, 'Eliminar');
   await page
     .getByRole('alertdialog')
     .getByRole('button', { name: 'Eliminar nodo', exact: true })
@@ -167,7 +167,7 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await openPractice(page, 'teaching');
   await expect(practiceNode(page, 'Nodo de práctica')).toHaveCount(0);
   await expect(practiceNode(page, titles.d)).toBeVisible();
-  await expectNodeAction(page, titles.b, 'Bloquear nodo');
+  await expectNodeAction(page, titles.b, 'Bloquear');
   expect(await rowsOwnedBy(user.id)).toBe(0);
 });
 

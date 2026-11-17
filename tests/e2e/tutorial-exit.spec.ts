@@ -91,7 +91,7 @@ for (const viewport of [
       );
       await page.screenshot({ path: `test-results/tutorial-editor-back-${viewport.width}.png` });
       await next('Bloquea un nodo');
-      await action('Conceptos básicos', 'Bloquear nodo');
+      await action('Conceptos básicos', 'Bloquear');
       await page.getByRole('alertdialog').getByRole('button', { name: 'Bloquear nodo' }).tap();
       await expect(heading).toHaveText('Bloqueo propagado');
       await next('Desbloquea un nodo');
@@ -109,7 +109,7 @@ for (const viewport of [
         .tap();
       await expect(heading).toHaveText('Agregar recursos');
       await next('Elimina tu nodo');
-      await action('Mi nodo de práctica', 'Eliminar nodo');
+      await action('Mi nodo de práctica', 'Eliminar');
       await page.getByRole('alertdialog').getByRole('button', { name: 'Eliminar nodo' }).tap();
       await expect(heading).toHaveText('Vista estudiante');
       await page.getByRole('button', { name: 'Vista estudiante', exact: true }).tap();

@@ -77,15 +77,12 @@ export type NodeEditorIntent =
       node: StudentAccessibleRoadmapNode;
       returnFocus: () => void;
     }
-  | CanvasCommandOf<
-      'hide-node' | 'show-node' | 'change-teacher-block' | 'schedule-teacher-unlock' | 'delete-node'
-    >;
+  | CanvasCommandOf<'hide-node' | 'show-node' | 'change-teacher-block' | 'delete-node'>;
 
 export type NodeEditorSession = {
   node: RoadmapNode | undefined;
   nodeTypes: RoadmapDto['nodeTypes'];
   isVisibilityPending: boolean;
-  blockedPrerequisites: number;
 };
 
 export type NodeEditorProps = {

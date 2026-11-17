@@ -197,7 +197,7 @@ function renderEditor(
     .mockResolvedValue({ status: 'committed' });
   const onIntent = vi.fn<(intent: NodeEditorIntent) => void>();
   const props: NodeEditorProps = {
-    session: { node, nodeTypes, isVisibilityPending: false, blockedPrerequisites: 0 },
+    session: { node, nodeTypes, isVisibilityPending: false },
     perform,
     onIntent,
     ...overrides,
@@ -223,7 +223,6 @@ function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'sessi
       node: { ...node, ...overrides } as RoadmapNode,
       nodeTypes,
       isVisibilityPending: false,
-      blockedPrerequisites: 0,
     },
   };
 }
@@ -357,153 +356,6 @@ test('rejects an incomplete link address in Spanish', async () => {
   expect(perform).not.toHaveBeenCalled();
 });
 
-function prerequisiteHint(_: string, element: Element | null) {
-  return (
-    element?.getAttribute('data-slot') === 'field-description' &&
-    element.textContent ===
-      'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no será desbloqueado.'
-  );
-}
-
-test.each([
-  [1, 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'],
-  [3, 'Sus 3 prerrequisitos bloqueados también se desbloquearán a esa hora.'],
-])(
-  'tells that scheduling also unlocks %i blocked prerequisites at that time',
-  (blockedPrerequisites, hint) => {
-    const { session } = withNode({ isTeacherBlocked: true });
-    renderEditor({ session: { ...session, blockedPrerequisites } });
-
-    expect(screen.getByText(hint)).toBeTruthy();
-    expect(screen.queryByText(prerequisiteHint)).toBeNull();
-  },
-);
-
-test('schedules the unlock day and time of a teacher-blocked Node in Chilean time, and removes it', async () => {
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
-  try {
-    const user = userEvent.setup();
-    const { onIntent, unmount } = renderEditor();
-
-    const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
-    expect(schedule.disabled).toBe(true);
-    expect(
-      within(screen.getByText(prerequisiteHint)).getByText('no', { selector: 'strong' }),
-    ).toBeTruthy();
-    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
-    expect(screen.getByText('Noviembre 2026')).toBeTruthy();
-    const pastDay = screen.getByRole('button', { name: /, 6 de noviembre de 2026/ });
-    expect((pastDay as HTMLButtonElement).disabled).toBe(true);
-    await user.click(screen.getByRole('button', { name: /21 de noviembre de 2026/ }));
-    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
-    await user.click(await screen.findByRole('option', { name: '14:30' }));
-    await user.click(schedule);
-    expect(onIntent).toHaveBeenCalledWith({
-      kind: 'schedule-teacher-unlock',
-      nodeId: node.id,
-      unlockAt: '2026-11-21T17:30:00.000Z',
-    });
-    unmount();
-
-    const view = renderEditor(
-      withNode({ isTeacherBlocked: true, teacherUnlockAt: '2026-11-21T17:30:00.000Z' }),
-    );
-    expect(
-      (await screen.findByRole('button', { name: 'Día del desbloqueo: Sábado, 21 de Noviembre' }))
-        .textContent,
-    ).toBe('Sábado, 21 de Noviembre');
-    expect(
-      within(screen.getByRole('combobox', { name: 'Hora del desbloqueo' })).getByText('14:30'),
-    ).toBeTruthy();
-    expect(screen.queryByText(/Chile/)).toBeNull();
-    expect(screen.getByText(prerequisiteHint)).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Quitar programación' }));
-    expect(view.onIntent).toHaveBeenCalledWith({
-      kind: 'schedule-teacher-unlock',
-      nodeId: node.id,
-      unlockAt: null,
-    });
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
-test('defaults the unlock time to 23:59, listed right after 23:45', async () => {
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
-  try {
-    const user = userEvent.setup();
-    const { onIntent } = renderEditor();
-
-    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
-    await user.click(screen.getByRole('button', { name: /21 de noviembre de 2026/ }));
-    const time = screen.getByRole('combobox', { name: 'Hora del desbloqueo' });
-    expect(within(time).getByText('23:59')).toBeTruthy();
-    await user.click(time);
-    const options = (await screen.findAllByRole('option')).map((option) => option.textContent);
-    expect(options.slice(-2)).toEqual(['23:45', '23:59']);
-    await user.click(screen.getByRole('option', { name: '23:59' }));
-    await user.click(screen.getByRole('button', { name: 'Programar' }));
-    expect(onIntent).toHaveBeenCalledWith({
-      kind: 'schedule-teacher-unlock',
-      nodeId: node.id,
-      unlockAt: '2026-11-22T02:59:00.000Z',
-    });
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
-test('keeps 23:59 available on the current Chilean day after 23:45 has passed', async () => {
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-08T02:50:00.000Z') });
-  try {
-    const user = userEvent.setup();
-    const { onIntent } = renderEditor();
-
-    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
-    await user.click(screen.getByRole('button', { name: /, 7 de noviembre de 2026/ }));
-    expect(
-      within(screen.getByRole('combobox', { name: 'Hora del desbloqueo' })).getByText('23:59'),
-    ).toBeTruthy();
-    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
-    expect(
-      (await screen.findByRole('option', { name: '23:45' })).getAttribute('aria-disabled'),
-    ).toBe('true');
-    expect(screen.getByRole('option', { name: '23:59' }).getAttribute('aria-disabled')).not.toBe(
-      'true',
-    );
-    await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: 'Programar' }));
-    expect(onIntent).toHaveBeenCalledWith({
-      kind: 'schedule-teacher-unlock',
-      nodeId: node.id,
-      unlockAt: '2026-11-08T02:59:00.000Z',
-    });
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
-test('offers only future times on the current Chilean day', async () => {
-  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
-  try {
-    const user = userEvent.setup();
-    renderEditor();
-
-    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
-    await user.click(screen.getByRole('button', { name: /, 7 de noviembre de 2026/ }));
-    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
-
-    expect(
-      (await screen.findByRole('option', { name: '12:00' })).getAttribute('aria-disabled'),
-    ).toBe('true');
-    expect(screen.getByRole('option', { name: '12:15' }).getAttribute('aria-disabled')).not.toBe(
-      'true',
-    );
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
 test.each([
   { isVisible: true, label: 'Ocultar', command: 'hide-node' },
   { isVisible: false, label: 'Mostrar', command: 'show-node' },
@@ -515,8 +367,8 @@ test.each([
   expect(onIntent).toHaveBeenCalledWith({ kind: command, nodeId: node.id });
 });
 
-test('offers no unlock schedule while a Node has no teacher block', () => {
-  renderEditor(withNode({ isTeacherBlocked: false }));
+test('leaves unlock scheduling to the unlock dialog, even for a teacher-blocked Node', () => {
+  renderEditor(withNode({ isTeacherBlocked: true }));
 
   expect(screen.queryByLabelText('Desbloqueo programado')).toBeNull();
 });

@@ -80,10 +80,10 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole('button')).toHaveText([
     'Cerrar acciones',
-    'Bloquear nodo',
+    'Bloquear',
     'Ocultar para estudiantes',
     'Agregar recurso',
-    'Eliminar nodo',
+    'Eliminar',
   ]);
   await expect(page.getByRole('group', { name: 'Menú de acciones del nodo' })).toHaveCount(0);
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
@@ -94,11 +94,11 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
       return box ? box.y + box.height : 0;
     })
     .toBeCloseTo(844, 0);
-  await sheet.getByRole('button', { name: 'Eliminar nodo' }).focus();
+  await sheet.getByRole('button', { name: 'Eliminar' }).focus();
   await page.keyboard.press('Tab');
   await expect(sheet.getByRole('button', { name: 'Cerrar acciones' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(sheet.getByRole('button', { name: 'Eliminar nodo' })).toBeFocused();
+  await expect(sheet.getByRole('button', { name: 'Eliminar' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(trigger).toBeFocused();
@@ -111,7 +111,7 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   await expect(trigger).toBeFocused();
 
   await trigger.tap();
-  await sheet.getByRole('button', { name: 'Bloquear nodo' }).tap();
+  await sheet.getByRole('button', { name: 'Bloquear' }).tap();
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toBeVisible();
   await expect(sheet).toBeHidden();
@@ -148,7 +148,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
     'Cerrar acciones',
     'Mostrar para estudiantes',
     'Agregar recurso',
-    'Eliminar nodo',
+    'Eliminar',
   ]);
   await sheet.getByRole('button', { name: 'Mostrar para estudiantes' }).tap();
   await expect(confirmation).toContainText(
@@ -181,7 +181,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 
   await trigger.tap();
-  await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
+  await sheet.getByRole('button', { name: 'Eliminar' }).tap();
   await expect(confirmation).toContainText('Touch prerequisite');
   await confirmNodeDeletion(page, offering, first.id);
   await expect(node).toHaveCount(0);
@@ -209,7 +209,7 @@ test('touch deletion prevents duplicate mutations and recovers after a failed re
   const node = page.locator(`.react-flow__node[data-id="${first.id}"]`);
   await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Menú de acciones del nodo' });
-  await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
+  await sheet.getByRole('button', { name: 'Eliminar' }).tap();
   const confirmation = page.getByRole('alertdialog');
   const remove = confirmation.getByRole('button', { name: 'Eliminar nodo', exact: true });
   await remove.tap();
@@ -226,7 +226,7 @@ test('touch deletion prevents duplicate mutations and recovers after a failed re
   await error.getByRole('button', { name: 'Cerrar notificación', includeHidden: true }).tap();
   await page.unroute(path);
   await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).tap();
-  await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
+  await sheet.getByRole('button', { name: 'Eliminar' }).tap();
   await confirmNodeDeletion(page, offering, first.id);
   await expect(node).toHaveCount(0);
 });

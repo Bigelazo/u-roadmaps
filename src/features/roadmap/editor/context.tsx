@@ -14,7 +14,6 @@ type NodeEditorContextValue = {
   unsavedFields: readonly ('title' | 'description' | 'nodeTypeId')[];
   canSaveNode: boolean;
   isVisibilityPending: boolean;
-  blockedPrerequisites: number;
   pendingEditorEffect: NodeEditorState['pendingEditorEffect'];
   previewButtonRef: RefObject<HTMLButtonElement | null>;
   changeNodeDraft: (value: NodeUpdate) => void;
@@ -30,7 +29,6 @@ type NodeEditorContextValue = {
   requestResourceDeletion: (resource: Resource) => void;
   toggleVisibility: () => void;
   requestTeacherBlock: (operation: 'BLOCK' | 'UNBLOCK') => void;
-  scheduleTeacherUnlock: (unlockAt: string | null) => void;
   requestNodeDeletion: () => void;
   closeNode: () => void;
   previewNodeInformation: () => void;
