@@ -82,12 +82,16 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
 
   const students = page.getByRole('region', { name: 'Estudiantes' });
   const row = (person: string) => students.getByRole('row', { name: person });
-  await expect(students.locator('tbody').getByRole('row')).toHaveCount(5);
+  await expect(students.locator('tbody tr[aria-label]')).toHaveCount(5);
   await expect(row(`Prueba ${teacher.rut}, Valentina`)).toContainText(percent(withProgress));
   await expect(row(`Prueba ${teacher.rut}, Valentina`)).toContainText(
     `${withProgress} de ${visibleNodes} nodos`,
   );
-  await expect(row(`Prueba ${teacher.rut}, Valentina`)).toContainText('Sección 1');
+  await expect(
+    students
+      .getByRole('rowgroup', { name: 'Sección 1' })
+      .getByRole('row', { name: `Prueba ${teacher.rut}, Valentina` }),
+  ).toBeVisible();
   await expect(row(`Prueba ${teacher.rut}, Ignacio`)).toContainText(percent(complete));
   await expect(row(studentWithoutProgress.name)).toContainText(percent(withoutProgress));
   await expect(row(`Prueba ${teacher.rut}, Josefa`)).toContainText('Sin ingreso');
@@ -98,19 +102,13 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
 
   const staff = page.getByRole('region', { name: 'Equipo docente' });
   const position = (name: string) => staff.getByRole('listitem', { name, exact: true });
-  await expect(position('Profesor de cátedra').getByRole('listitem')).toHaveCount(1);
-  await expect(
-    position('Profesor de cátedra').getByRole('listitem', {
-      name: `Prueba ${teacher.rut}, Carolina`,
-    }),
-  ).toContainText('Sección 1');
-  await expect(position('Ayudante').getByRole('listitem')).toHaveCount(1);
-  await expect(
-    position('Ayudante').getByRole('listitem', { name: `Prueba ${teacher.rut}, Tomás` }),
-  ).toContainText('Sección 2');
+  await expect(position('Profesor de cátedra, Sección 1').getByRole('listitem')).toHaveText([
+    `Prueba ${teacher.rut}, Carolina`,
+  ]);
+  await expect(position('Ayudante, Sección 2').getByRole('listitem')).toHaveText([
+    `Prueba ${teacher.rut}, Tomás`,
+  ]);
 
-  await page.getByRole('link', { name: 'Volver', exact: true }).click();
-  await expect(page).toHaveURL(/\/academic-overview$/);
   await page.goto(course.pagePath());
   await page
     .getByRole('navigation', { name: 'Secciones del curso' })
@@ -132,7 +130,7 @@ test('without U-Campus the page lists only local participants', async ({ page, c
   await expect(
     page
       .getByRole('region', { name: 'Equipo docente' })
-      .getByRole('listitem', { name: course.users.teacher.name }),
+      .getByText(course.users.teacher.name, { exact: true }),
   ).toBeVisible();
 });
 

@@ -16,11 +16,6 @@ function plural(count: number, singular: string, pluralForm: string) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
-function sectionsLabel(sections: readonly string[]) {
-  if (sections.length === 0) return null;
-  return `${sections.length === 1 ? 'Sección' : 'Secciones'} ${sections.join(', ')}`;
-}
-
 function ProgressTrack({ ratio, label }: Readonly<{ ratio: number; label: string }>) {
   const value = Math.round(ratio * 100);
   return (
@@ -112,7 +107,7 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
           layout="card"
           staff={teachingStaff}
           memberKey={(member) => member.key}
-          memberDetail={(member) => sectionsLabel(member.sections)}
+          bySection
         />
       </section>
 

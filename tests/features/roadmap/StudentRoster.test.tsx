@@ -54,7 +54,11 @@ test('retains observer and entry exceptions, and exposes completion independentl
 test('without a roadmap, keeps names and sections without presenting progress', () => {
   render(<StudentRoster students={students} visibleNodes={0} hasRoadmap={false} />);
   expect(screen.getByRole('row', { name: 'Neira, Álvaro' })).toBeTruthy();
-  expect(screen.getByRole('columnheader', { name: 'Sección' })).toBeTruthy();
+  expect(
+    within(screen.getByRole('rowgroup', { name: 'Sección 1' })).getByRole('row', {
+      name: 'Neira, Álvaro',
+    }),
+  ).toBeTruthy();
   expect(screen.queryByRole('columnheader', { name: 'Avance' })).toBeNull();
   expect(screen.queryByRole('progressbar')).toBeNull();
 });
