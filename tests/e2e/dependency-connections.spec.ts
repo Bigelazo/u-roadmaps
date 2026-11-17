@@ -201,8 +201,8 @@ test('clicking the connector and then a Node creates the Dependency without drag
   await expectSettled(source.getByTestId('roadmap-card'));
   await source.getByTestId('roadmap-card').hover();
   await source.locator('[data-node-connector="right"]').click();
-  const banner = page.locator('[data-arrow-mode-controls] [role="status"]');
-  await expect(banner).toContainText('Haz clic en el nodo que requiere Origen por clic');
+  await expect(source).toHaveClass(/roadmap-node--arrow-source/);
+  await expect(page.locator('[data-arrow-mode-controls]')).toHaveCount(0);
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
   const saved = page.waitForResponse(
     (response) =>
@@ -211,7 +211,7 @@ test('clicking the connector and then a Node creates the Dependency without drag
   await target.locator('p').click();
   expect((await saved).status()).toBe(201);
   await expect(page.locator('.react-flow__edge')).toHaveCount(1);
-  await expect(banner).toHaveCount(0);
+  await expect(source).not.toHaveClass(/roadmap-node--arrow-source/);
 
   await target.getByTestId('roadmap-card').click();
   await page.mouse.move(0, 0);

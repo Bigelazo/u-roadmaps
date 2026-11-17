@@ -72,7 +72,6 @@ import {
   type DependencyAnimationControls,
 } from '@/features/roadmap/graph/DependencyAnimation';
 import {
-  arrowModeMessage,
   useWholeNodeConnection,
   type ConnectionRejection,
 } from '@/features/roadmap/graph/use-whole-node-connection';
@@ -1080,14 +1079,8 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     onConnect: connectNodes,
     onReject: notifyConnectionRejection,
   });
-  const {
-    connectionNodes,
-    nodeConnector,
-    targetRect,
-    rejectedTargetRect,
-    arrowSourceNode,
-    arrowSourceRect,
-  } = useConnectionPreviewNodes(flow.nodes, connection);
+  const { connectionNodes, nodeConnector, targetRect, rejectedTargetRect, arrowSourceRect } =
+    useConnectionPreviewNodes(flow.nodes, connection);
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && touchMoveMode) {
@@ -1311,7 +1304,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
             </span>
           </div>
         ) : null}
-        <ArrowModeControls connection={connection} arrowSourceNode={arrowSourceNode} />
+        <ArrowModeControls connection={connection} />
       </div>
       {model.useActionSheet ? (
         <NodeActionSheet
@@ -1622,12 +1615,10 @@ function NodeMovementControl({
 
 function ArrowModeControls({
   connection,
-  arrowSourceNode,
 }: {
   connection: ReturnType<typeof useWholeNodeConnection>;
-  arrowSourceNode: RoadmapFlowNode | undefined;
 }) {
-  return connection.arrowSourceId ? (
+  return connection.arrowSourceId && connection.arrowInput === 'touch' ? (
     <div
       data-arrow-mode-controls
       className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center [@media(max-height:500px)]:top-2"
@@ -1640,20 +1631,6 @@ function ArrowModeControls({
         <span>
           {connection.arrowRejection ? (
             <DependencyRejectionMessage {...connection.arrowRejection} />
-          ) : connection.arrowInput === 'pointer' &&
-            arrowSourceNode &&
-            connection.arrowMessage === arrowModeMessage ? (
-            <>
-              Haz clic en el nodo que requiere{' '}
-              <NodeName
-                title={arrowSourceNode.data.title}
-                nodeType={{
-                  name: arrowSourceNode.data.typeName,
-                  icon: arrowSourceNode.data.typeIcon,
-                  color: arrowSourceNode.data.typeColor,
-                }}
-              />
-            </>
           ) : (
             connection.arrowMessage
           )}
@@ -1716,7 +1693,6 @@ function useConnectionPreviewNodes(
     nodeConnector,
     targetRect,
     rejectedTargetRect,
-    arrowSourceNode,
     arrowSourceRect,
   };
 }

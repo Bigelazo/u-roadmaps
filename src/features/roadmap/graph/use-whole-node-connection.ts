@@ -203,6 +203,12 @@ export function useWholeNodeConnection({
         cancelArrowMode();
         return;
       }
+      if (!isValidConnection({ source: from, target }) && arrowInput === 'pointer') {
+        const rejection = reportableRejection(from, target);
+        cancelArrowMode();
+        if (rejection) onReject(rejection);
+        return;
+      }
       if (!isValidConnection({ source: from, target })) {
         setArrowRejection(reportableRejection(from, target));
         setArrowMessage('Elige otro nodo como destino');
@@ -214,7 +220,7 @@ export function useWholeNodeConnection({
       cancelArrowMode();
       onConnect({ source: from, target, sourceHandle: null, targetHandle: null });
     },
-    [cancelArrowMode, isValidConnection, onConnect, reportableRejection],
+    [arrowInput, cancelArrowMode, isValidConnection, onConnect, onReject, reportableRejection],
   );
   const onConnectStart: OnConnectStart = useCallback(
     (_event, parameters) => {

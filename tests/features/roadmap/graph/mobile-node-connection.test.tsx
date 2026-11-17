@@ -1,7 +1,10 @@
 import { useLayoutEffect } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { useWholeNodeConnection } from '@/features/roadmap/graph/use-whole-node-connection';
+import {
+  useWholeNodeConnection,
+  type ConnectionRejection,
+} from '@/features/roadmap/graph/use-whole-node-connection';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { Connection } from '@xyflow/react';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
@@ -34,6 +37,7 @@ function Harness({
   edges = [],
   sourceStatus = 'visible',
   onCommit,
+  onReject = () => {},
 }: {
   onConnect: (connection: Connection) => void;
   onOpen: () => void;
@@ -41,6 +45,7 @@ function Harness({
   enabled?: boolean;
   edges?: RoadmapFlowEdge[];
   sourceStatus?: 'visible' | 'hidden' | 'removed';
+  onReject?: (rejection: ConnectionRejection) => void;
   onCommit?: (snapshot: {
     source: string | null;
     target: string | null;
@@ -68,7 +73,7 @@ function Harness({
     edges,
     enabled,
     onConnect,
-    onReject: () => {},
+    onReject,
   });
   useLayoutEffect(() => {
     onCommit?.({
@@ -96,6 +101,9 @@ function Harness({
       <div className="react-flow__node nopan" data-id="target">
         <span onClick={onOpen}>Cuerpo de destino</span>
       </div>
+      <button type="button" onClick={() => connection.startArrowMode('source')}>
+        Conector del origen
+      </button>
       <div data-arrow-mode-controls>
         <button type="button" onClick={connection.cancelArrowMode}>
           Cancelar modo flecha
@@ -254,6 +262,27 @@ test('tapping a target that already depends on the source keeps arrow mode and e
   fireEvent.touchEnd(target, ended());
   expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('source');
   expect(screen.getByLabelText('Motivo del rechazo').textContent).toBe('DEPENDENCY_CONFLICT');
+  expect(onConnect).not.toHaveBeenCalled();
+});
+
+test('clicking a rejected target in pointer arrow mode exits it and reports the rejection like a drag', () => {
+  const onConnect = vi.fn();
+  const onReject = vi.fn();
+  render(
+    <Harness
+      onConnect={onConnect}
+      onOpen={vi.fn()}
+      onReject={onReject}
+      edges={[{ id: 'existing', source: 'source', target: 'target' }]}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Conector del origen' }));
+  expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('source');
+  const target = screen.getByText('Cuerpo de destino');
+  hitTarget = target;
+  fireEvent.click(target);
+  expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('');
+  expect(onReject).toHaveBeenCalledWith(expect.objectContaining({ reason: 'DEPENDENCY_CONFLICT' }));
   expect(onConnect).not.toHaveBeenCalled();
 });
 

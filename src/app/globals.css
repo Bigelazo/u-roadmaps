@@ -273,7 +273,8 @@ body:has([data-viewport-page]) [data-global-navigation] {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  [data-slot='roadmap-card'][data-connection-enabled='true'][data-connection-hovered='true']
+  .react-flow__node:not(.roadmap-node--connection-target, .roadmap-node--connection-rejected)
+    > [data-slot='roadmap-card'][data-connection-enabled='true'][data-connection-hovered='true']
     > .react-flow__handle.roadmap-node-port {
     visibility: visible;
     pointer-events: auto !important;
