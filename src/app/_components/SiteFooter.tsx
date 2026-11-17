@@ -15,7 +15,8 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-360 flex-col gap-4 px-4 py-6 sm:px-6 md:flex-row md:items-center md:justify-between md:gap-8 [body:has([data-page-width=full])_&]:max-w-none">
         <div className="flex flex-col gap-1">
           <p>
-            <span className="font-semibold text-ink">U-Roadmaps</span> · Cada curso, una ruta clara.
+            <span className="font-semibold text-ink">U-Roadmaps</span> · Los contenidos de tus
+            cursos merecen un mapa.
           </p>
           <p>
             <span className="inline-block">Creado por Daniel Ramírez López ·</span>{' '}

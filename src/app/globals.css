@@ -9,6 +9,18 @@
   }
 }
 
+@custom-variant stage {
+  @media (min-width: 64rem) and (min-height: 38rem) {
+    @slot;
+  }
+}
+
+@custom-variant short {
+  @media (max-height: 51rem) {
+    @slot;
+  }
+}
+
 body {
   font-family: var(--font-sans), Arial, sans-serif;
   overflow-x: hidden;

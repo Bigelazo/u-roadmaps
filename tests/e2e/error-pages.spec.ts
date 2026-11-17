@@ -18,7 +18,9 @@ test('an unknown address answers 404 with a Spanish page, the footer and ways fo
   expect(response?.status()).toBe(404);
   await expect(page).toHaveTitle('Página no encontrada | U-Roadmaps');
   await expect(page.getByRole('heading', { name: 'No encontramos esta página' })).toBeVisible();
-  await expect(page.getByRole('contentinfo')).toContainText('Cada curso, una ruta clara.');
+  await expect(page.getByRole('contentinfo')).toContainText(
+    'Los contenidos de tus cursos merecen un mapa.',
+  );
   await expectFooterAtViewportBottom(page);
 
   await expect(page.getByRole('link', { name: 'Ver mis cursos' })).toHaveAttribute(
@@ -41,6 +43,8 @@ test('a server failure answers 500 with a Spanish page, the footer and no code o
   await expect(page.getByRole('main')).not.toContainText('500');
   await expect(page.getByRole('main').getByRole('link')).toHaveCount(0);
   await expect(page.getByRole('main').getByRole('button')).toHaveCount(0);
-  await expect(page.getByRole('contentinfo')).toContainText('Cada curso, una ruta clara.');
+  await expect(page.getByRole('contentinfo')).toContainText(
+    'Los contenidos de tus cursos merecen un mapa.',
+  );
   await expectFooterAtViewportBottom(page);
 });

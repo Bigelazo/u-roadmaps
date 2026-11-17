@@ -47,7 +47,7 @@ U-Roadmaps aims to replace course pages as the main place where a course's conte
 ## Brand Commitments
 
 - Canonical name **U-Roadmaps** (capital U, hyphen). Never "U-roadmaps", "U Roadmaps" or "Roadmaps universitarios".
-- Promise: **"Cada curso, una ruta clara."** Supporting line: **"Explora contenidos, requisitos y recursos en una ruta que muestra tu avance."**
+- Promise: **"Los contenidos de tus cursos merecen un mapa."** Product statement, used on the landing page: **"U-Roadmaps es una herramienta didáctica que busca mejorar, actualizar y revolucionar la forma en la que estudiantes y docentes interactúan con los contenidos de un curso."**
 - U-Roadmaps has its own identity. Universidad de Chile appears only as provenance in the global footer; its name, the DCC name and institutional marks are not part of the U-Roadmaps logo.
 - Voice: clear, direct Spanish, from the participant's side of the screen, with active verbs ("Explora", "Continúa", "Guarda cambios") and second person when it helps orientation. Encouraging and precise, never childish; a capable guide, not another administrative portal.
 - The incumbent visual system is recorded in `DESIGN.md`. Note: its brand foundation says "student-first", while this product record makes teaching staff the primary user. Reconcile that wording the next time DESIGN.md is revised.

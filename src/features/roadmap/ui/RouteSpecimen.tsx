@@ -50,7 +50,8 @@ const nodes: SpecimenNode[] = [
     x: 128,
     y: 20,
     files: 1,
-    description: 'Contenido completado, con 1 archivo.',
+    links: 1,
+    description: 'Contenido completado, con 1 archivo y 1 enlace.',
   },
   {
     id: 'conditionals',
@@ -60,7 +61,8 @@ const nodes: SpecimenNode[] = [
     x: 16,
     y: 140,
     files: 1,
-    description: 'Contenido completado, con 1 archivo. Requiere Variables.',
+    links: 1,
+    description: 'Contenido completado, con 1 archivo y 1 enlace. Requiere Variables.',
   },
   {
     id: 'exercises',
@@ -81,9 +83,9 @@ const nodes: SpecimenNode[] = [
     x: 36,
     y: 260,
     files: 1,
-    links: 1,
+    links: 2,
     description:
-      'Contenido disponible y siguiente paso de la ruta, con 1 archivo y 1 enlace. Requiere Condicionales.',
+      'Contenido disponible y siguiente paso de la ruta, con 1 archivo y 2 enlaces. Requiere Condicionales.',
   },
   {
     id: 'recursion',
@@ -93,9 +95,10 @@ const nodes: SpecimenNode[] = [
     x: 248,
     y: 260,
     files: 1,
+    links: 1,
     note: { Icon: CalendarClock, text: 'Desde el 20 oct.' },
     description:
-      'Contenido bloqueado por el equipo docente, con 1 archivo; se desbloquea el 20 de octubre. Requiere Condicionales.',
+      'Contenido bloqueado por el equipo docente, con 1 archivo y 1 enlace; se desbloquea el 20 de octubre. Requiere Condicionales.',
   },
   {
     id: 'quiz',
@@ -140,7 +143,7 @@ function stepPath(source: SpecimenNode, target: SpecimenNode) {
   const sx = source.x + nodeWidth(source) / 2;
   const sy = source.y + nodeHeight;
   const tx = target.x + nodeWidth(target) / 2;
-  const ty = target.y - (target.current ? 6 : 0);
+  const ty = target.y;
   if (sx === tx) return `M ${sx} ${sy} L ${tx} ${ty}`;
   const my = (sy + ty) / 2;
   const dir = tx > sx ? 1 : -1;
@@ -219,44 +222,22 @@ type RouteSpecimenInteraction = {
   onNodeHover?: (nodeId: RouteSpecimenNodeId | null) => void;
 };
 
-function NodeOutline({
-  width,
-  current,
-  highlighted,
-}: {
-  width: number;
-  current: boolean;
-  highlighted: boolean;
-}) {
+function NodeOutline({ width, highlighted }: { width: number; highlighted: boolean }) {
   return (
-    <>
-      {current ? (
-        <rect
-          x={-6}
-          y={-6}
-          width={width + 12}
-          height={nodeHeight + 12}
-          rx={12}
-          fill="var(--progress-soft)"
-          stroke="var(--progress)"
-          strokeWidth={2}
-        />
-      ) : null}
-      <m.rect
-        x={current ? -11 : -6}
-        y={current ? -11 : -6}
-        width={width + (current ? 22 : 12)}
-        height={nodeHeight + (current ? 22 : 12)}
-        rx={current ? 15 : 12}
-        fill="none"
-        stroke="var(--primary-bright)"
-        strokeWidth={2}
-        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-        initial={false}
-        animate={{ opacity: highlighted ? 1 : 0, scale: highlighted ? 1 : 0.96 }}
-        transition={{ delay: highlighted ? 0.45 : 0, duration: 0.3, ease: easeOutExpo }}
-      />
-    </>
+    <m.rect
+      x={-6}
+      y={-6}
+      width={width + 12}
+      height={nodeHeight + 12}
+      rx={12}
+      fill="none"
+      stroke="var(--primary-bright)"
+      strokeWidth={2}
+      style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+      initial={false}
+      animate={{ opacity: highlighted ? 1 : 0, scale: highlighted ? 1 : 0.96 }}
+      transition={{ delay: highlighted ? 0.45 : 0, duration: 0.3, ease: easeOutExpo }}
+    />
   );
 }
 
@@ -281,7 +262,7 @@ function RouteNode({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: easeOutExpo, delay: nodeDepth(node.id) * stagger * 2 }}
       >
-        <NodeOutline width={width} current={Boolean(node.current)} highlighted={highlighted} />
+        <NodeOutline width={width} highlighted={highlighted} />
         <g opacity={locked ? 0.88 : 1} filter={locked ? undefined : 'url(#route-node-shadow)'}>
           <rect
             data-route-node={node.id}

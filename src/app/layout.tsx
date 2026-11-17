@@ -26,7 +26,7 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: 'U-Roadmaps',
   description:
-    'Cada curso, una ruta clara. Explora contenidos, requisitos y recursos en una ruta que muestra tu avance.',
+    'Los contenidos de tus cursos merecen un mapa. Ordena clases, evaluaciones y material en una ruta con requisitos y fechas, donde cada estudiante ve su avance.',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
