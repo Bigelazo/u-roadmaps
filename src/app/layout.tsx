@@ -14,7 +14,6 @@ import { getInboxIdentity, readOwnInbox } from '@/features/notifications/server'
 import { NotificationsProvider } from '@/features/notifications';
 import { AcademicCacheIdentity } from '@/features/academic-overview';
 import { Toaster } from '@/shared/ui/toast';
-import { NavigationHistory } from '@/shared/client/navigation/navigation-history';
 import { parseThemePreference, themeCookieName } from '@/shared/theme-preference';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
@@ -56,7 +55,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <NotificationsProvider identity={inboxIdentity} inbox={inbox}>
           <AcademicCacheIdentity userId={user?.id ?? null} />
-          <NavigationHistory />
           {framed ? null : (
             <GlobalNavigation
               isAuthenticated={Boolean(user)}

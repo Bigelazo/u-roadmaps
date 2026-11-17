@@ -6,7 +6,8 @@ type Version = RoadmapVersionHistory['versions'][number];
 export function VersionTeachingStaff({
   creator,
   teachingStaff,
-}: Readonly<Pick<Version, 'creator' | 'teachingStaff'>>) {
+  layout = 'compact',
+}: Readonly<Pick<Version, 'creator' | 'teachingStaff'> & { layout?: 'compact' | 'inline' }>) {
   const creatorIsStaff = teachingStaff.some(({ id }) => id === creator?.id);
   return (
     <div className="grid gap-3 text-sm">
@@ -14,7 +15,7 @@ export function VersionTeachingStaff({
         <p className="text-muted-foreground">Sin registro del equipo docente</p>
       ) : (
         <StaffByPosition
-          layout="compact"
+          layout={layout}
           staff={teachingStaff}
           memberKey={(member) => member.id}
           memberDetail={(member) => (member.id === creator?.id ? 'Creó la versión' : null)}

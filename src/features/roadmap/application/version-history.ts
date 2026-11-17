@@ -55,7 +55,13 @@ async function requireCourseWithHorizon(actor: RoadmapActor, courseCode: string)
             where: { userId: actor.id },
             select: { role: true, isActive: true },
           },
-          roadmap: { select: { id: true, ...recordedVersionSelect } },
+          roadmap: {
+            select: {
+              id: true,
+              ...recordedVersionSelect,
+              _count: { select: { roadmapNodes: true } },
+            },
+          },
         },
       },
     },
@@ -105,8 +111,14 @@ function rosterPerson({ id, name, rut }: RecordedPerson, names: RosterNames) {
   return { id, name: (rut ? names.get(rut) : null) ?? name };
 }
 
-function recordedAuthorship(roadmap: RecordedAuthorship, names: RosterNames) {
+function recordedOrigin(roadmap: { sourceYear: number | null; sourceSemester: number | null }) {
   const source = recordedSource(roadmap);
+  return source
+    ? { kind: 'COPY' as const, ...source, edition: termLabel(source) }
+    : { kind: 'EMPTY' as const };
+}
+
+function recordedAuthorship(roadmap: RecordedAuthorship, names: RosterNames) {
   return {
     creator: roadmap.creator ? rosterPerson(roadmap.creator, names) : null,
     teachingStaff: roadmap.closureTeachingStaff
@@ -115,9 +127,7 @@ function recordedAuthorship(roadmap: RecordedAuthorship, names: RosterNames) {
         institutionalPosition,
       }))
       .sort(compareRecordedStaff),
-    origin: source
-      ? { kind: 'COPY' as const, ...source, edition: termLabel(source) }
-      : { kind: 'EMPTY' as const },
+    origin: recordedOrigin(roadmap),
   };
 }
 
@@ -139,17 +149,44 @@ export async function readRoadmapVersionHistory(actor: RoadmapActor, courseCode:
       participants.some(({ role, isActive }) => role === 'TEACHER' && isActive),
     )
     .sort((a, b) => b.year - a.year || b.semester - a.semester);
+  const openRoadmap =
+    latestOffering?.roadmap && !latestOffering.roadmap.closedAt ? latestOffering.roadmap : null;
+  const openTerm =
+    latestOffering && openRoadmap
+      ? await prisma.academicTerm.findUnique({
+          where: {
+            year_semester: { year: latestOffering.year, semester: latestOffering.semester },
+          },
+          select: { roadmapFreezeDate: true },
+        })
+      : null;
   return {
     course: { code: course.code, name: course.name },
     horizon,
     latestOffering: latestOffering
-      ? { year: latestOffering.year, semester: latestOffering.semester }
+      ? {
+          year: latestOffering.year,
+          semester: latestOffering.semester,
+          hasRoadmap: latestOffering.roadmap !== null,
+        }
       : null,
+    current:
+      latestOffering && openRoadmap
+        ? {
+            year: latestOffering.year,
+            semester: latestOffering.semester,
+            edition: termLabel(latestOffering),
+            origin: recordedOrigin(openRoadmap),
+            nodeCount: openRoadmap._count.roadmapNodes,
+            closesOn: openTerm?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
+          }
+        : null,
     versions: versions.map(({ year, semester, closedAt, roadmap }) => ({
       year,
       semester,
       edition: termLabel({ year, semester }),
       closedAt: closedAt.toISOString(),
+      nodeCount: roadmap._count.roadmapNodes,
       ...recordedAuthorship(roadmap, names),
     })),
   };

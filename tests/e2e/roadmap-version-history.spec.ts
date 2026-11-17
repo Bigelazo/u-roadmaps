@@ -86,6 +86,7 @@ test('a closed version records its creator and the teaching staff active at clos
       semester: closedTerm.semester,
       edition: `${closedTerm.semester === 1 ? 'Otoño' : 'Primavera'} ${closedTerm.year}`,
       closedAt: expect.any(String),
+      nodeCount: 0,
       creator: { id: creator.id, name: creator.name },
       teachingStaff: [
         { id: assistant.id, name: assistant.name, institutionalPosition: 'TEACHING_ASSISTANT' },
@@ -199,6 +200,9 @@ test('teaching staff reach the history from the Roadmap and from every offering'
     .getByRole('link', { name: 'Versiones' })
     .click();
   await expect(page).toHaveURL(new RegExp(`/courses/${past.courseCode}/versions$`));
+  await expect(
+    page.getByRole('heading', { level: 3, name: /En curso$/ }).getByRole('link'),
+  ).toHaveAttribute('href', latest.pagePath());
   const version = page.getByRole('listitem', { name: `Otoño ${pastTerm.year}` });
   await expect(version).toContainText('Creada desde cero');
   const member = version
@@ -251,6 +255,9 @@ test('teaching staff who cannot create the Roadmap are told so and still reach t
     .click();
   await expect(page).toHaveURL(new RegExp(`/courses/${offering.courseCode}/versions$`));
   await expect(page.getByRole('heading', { name: 'Historial de versiones' })).toBeVisible();
+  const sections = page.getByRole('navigation', { name: 'Secciones del curso' });
+  await expect(sections.getByRole('link', { name: 'Integrantes', exact: true })).toBeVisible();
+  await expect(sections.getByRole('link', { name: 'Roadmap', exact: true })).toHaveCount(0);
 
   await authenticateAs(page.context(), professor.id);
   await page.goto('/academic-overview');

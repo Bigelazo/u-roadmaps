@@ -45,6 +45,13 @@ const layouts = {
     members: 'grid gap-1 pl-3.5',
     member: '',
   },
+  inline: {
+    list: 'grid gap-1.5',
+    group: 'grid grid-cols-[11rem_minmax(0,1fr)] items-baseline gap-x-4',
+    heading: '',
+    members: 'flex flex-wrap gap-x-4 gap-y-1',
+    member: '',
+  },
 } as const;
 
 export function StaffByPosition<Member extends StaffMember>({

@@ -1,14 +1,13 @@
 import Link from 'next/link';
 import { History, Route, UserGroup, type LucideIcon } from 'lucide-react';
 import { cn } from 'cn';
-import { BackLink } from '@/shared/client/navigation/BackLink';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { PageTitle } from '@/shared/ui/page-layout';
 import { courseParticipantsUrl } from '@/shared/course-offering';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 
 type CourseSection = 'versions' | 'participants';
-type Offering = Readonly<{ year: number; semester: number }>;
+type Offering = Readonly<{ year: number; semester: number; hasRoadmap: boolean }>;
 
 function CourseSectionLink({
   href,
@@ -38,7 +37,7 @@ function CourseSections({
 }: Readonly<{ courseCode: string; offering: Offering | null; current: CourseSection }>) {
   return (
     <nav aria-label="Secciones del curso" className="-ml-3 flex flex-wrap gap-1">
-      {offering ? (
+      {offering?.hasRoadmap ? (
         <CourseSectionLink
           href={`/courses/${encodeURIComponent(courseCode)}/${offering.year}/${offering.semester}`}
           icon={Route}
@@ -47,13 +46,6 @@ function CourseSections({
           Roadmap
         </CourseSectionLink>
       ) : null}
-      <CourseSectionLink
-        href={versionHistoryUrl(courseCode)}
-        icon={History}
-        isCurrent={current === 'versions'}
-      >
-        Versiones
-      </CourseSectionLink>
       {offering ? (
         <CourseSectionLink
           href={courseParticipantsUrl({ courseCode, ...offering })}
@@ -63,6 +55,13 @@ function CourseSections({
           Integrantes
         </CourseSectionLink>
       ) : null}
+      <CourseSectionLink
+        href={versionHistoryUrl(courseCode)}
+        icon={History}
+        isCurrent={current === 'versions'}
+      >
+        Versiones
+      </CourseSectionLink>
     </nav>
   );
 }
@@ -74,7 +73,6 @@ export function CoursePageHeader({
   offering,
   current,
   section,
-  fallbackHref,
 }: Readonly<{
   courseName: string;
   courseCode: string;
@@ -82,11 +80,9 @@ export function CoursePageHeader({
   offering: Offering | null;
   current: CourseSection;
   section: string;
-  fallbackHref: string;
 }>) {
   return (
     <header className="grid gap-6">
-      <BackLink fallbackHref={fallbackHref} />
       <div className="grid gap-4">
         <div>
           <PageTitle className="text-balance md:text-5xl">{courseName}</PageTitle>

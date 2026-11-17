@@ -68,13 +68,13 @@ function RoadmapCourseLinks({ courseCode, year, semester }: CourseOfferingIdenti
       aria-label="Secciones del curso"
       className="-mx-3 mt-2 -mb-2 flex flex-wrap gap-1 border-t border-border/70 p-1 [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:-mb-1.5"
     >
-      <Link className={linkClassName} href={versionHistoryUrl(courseCode)}>
-        <History data-icon="inline-start" />
-        Versiones
-      </Link>
       <Link className={linkClassName} href={courseParticipantsUrl({ courseCode, year, semester })}>
         <UserGroup data-icon="inline-start" />
         Integrantes
+      </Link>
+      <Link className={linkClassName} href={versionHistoryUrl(courseCode)}>
+        <History data-icon="inline-start" />
+        Versiones
       </Link>
     </nav>
   );

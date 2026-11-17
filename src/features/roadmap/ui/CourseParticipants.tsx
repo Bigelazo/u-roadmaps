@@ -84,14 +84,9 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
         courseName={course.name}
         courseCode={course.courseCode}
         courseDetail={`${course.courseCode} · ${termLabel(course)}`}
-        offering={course}
+        offering={{ ...course, hasRoadmap: participants.hasRoadmap }}
         current="participants"
         section="Integrantes del curso"
-        fallbackHref={
-          participants.hasRoadmap
-            ? `/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`
-            : '/academic-overview'
-        }
       />
 
       <section aria-labelledby="teaching-staff" className="grid gap-4">

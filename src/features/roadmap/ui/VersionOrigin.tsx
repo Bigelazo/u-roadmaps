@@ -21,7 +21,7 @@ export function VersionOrigin({
   if (origin.kind === 'COPY' && canOpenSource)
     return (
       <Link
-        className="w-fit text-sm text-primary underline-offset-4 hover:underline focus-visible:underline"
+        className="w-fit text-sm text-primary underline decoration-primary/40 underline-offset-4 transition-colors hover:decoration-current focus-visible:decoration-current"
         href={versionUrl({ courseCode, year: origin.year, semester: origin.semester })}
       >
         {label}

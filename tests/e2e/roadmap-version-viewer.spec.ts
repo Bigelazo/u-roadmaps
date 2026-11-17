@@ -173,7 +173,8 @@ closedVersion(
     await page.goto(`/courses/${closed.courseCode}/versions`);
     await page
       .getByRole('link', {
-        name: `Abrir roadmap de ${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
+        name: `${closed.semester === 1 ? 'Otoño' : 'Primavera'} ${closedYear}`,
+        exact: true,
       })
       .click();
     await expect(page).toHaveURL(new RegExp(`${viewerPagePath(closed)}$`));
