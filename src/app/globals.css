@@ -21,6 +21,12 @@ body:has([data-viewport-page]) {
   overflow: hidden;
 }
 
+body:has([data-status-page]) {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
 body:has([data-viewport-page]) [data-global-navigation] {
   flex-shrink: 0;
 }
