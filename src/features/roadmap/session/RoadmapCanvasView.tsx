@@ -737,6 +737,7 @@ function RoadmapCanvasGraph({
               isCanvasPreview={isCanvasPreview}
               isEditing={mode.isEditing}
               showsCourseLinks={canPreviewCanvas && !isCanvasPreview && !input.practice}
+              themeToggle={input.themeToggle}
             />
             {recoveryNotice}
           </>
