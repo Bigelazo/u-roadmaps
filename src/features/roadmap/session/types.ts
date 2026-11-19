@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type {
   ChangeImpactCommand,
   CanvasCommand,
@@ -68,6 +69,7 @@ export type RoadmapCanvasSessionInput = {
     readonly title: string;
     readonly academicWeek?: string | null;
   };
+  readonly themeToggle?: ReactNode;
   readonly experience: RoadmapCanvasExperience;
   readonly practice?: {
     readonly exitHref?: string;
