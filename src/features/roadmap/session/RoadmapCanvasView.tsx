@@ -383,6 +383,22 @@ export function RoadmapCanvasView({ input }: Props) {
         data-page-width="full"
         className="relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:grid-cols-[minmax(0,1fr)_auto]"
       >
+        {input.practice?.exitHref ? (
+          <Link
+            {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
+            className={buttonVariants({
+              variant: 'outline',
+              className: cn(
+                'absolute top-4 right-4 z-10 col-start-1 row-start-1 sm:top-6 sm:right-6',
+                isCanvasPreview && 'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
+              ),
+            })}
+            href={input.practice.exitHref}
+          >
+            <LogOut data-icon="inline-start" />
+            Salir
+          </Link>
+        ) : null}
         <div
           ref={canvasFocusRef}
           tabIndex={-1}
@@ -390,22 +406,6 @@ export function RoadmapCanvasView({ input }: Props) {
           aria-label="Lienzo del roadmap"
           className="relative min-h-0 bg-background"
         >
-          {input.practice?.exitHref ? (
-            <Link
-              {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
-              className={buttonVariants({
-                variant: 'outline',
-                className: cn(
-                  'absolute top-4 right-4 z-10 sm:top-6 sm:right-6',
-                  isCanvasPreview && 'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
-                ),
-              })}
-              href={input.practice.exitHref}
-            >
-              <LogOut data-icon="inline-start" />
-              Salir
-            </Link>
-          ) : null}
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
             openedNodeId={panel.kind === 'closed' ? null : selectedNodeId}
