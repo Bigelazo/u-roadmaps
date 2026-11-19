@@ -2,16 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Download, Link2 } from 'lucide-react';
-import {
-  AnimatePresence,
-  domAnimation,
-  LazyMotion,
-  useMotionValueEvent,
-  useScroll,
-} from 'motion/react';
+import { AnimatePresence, domAnimation, LazyMotion, useInView } from 'motion/react';
 import * as m from 'motion/react-m';
 import { RouteSpecimen, type RouteSpecimenNodeId } from '@/features/roadmap';
 import { cn } from 'cn';
+import { type Point, roundedPath } from '@/app/_components/landing/roundedPath';
 
 type CourseMaterial = {
   kind: 'file' | 'link';
@@ -20,7 +15,6 @@ type CourseMaterial = {
   downloads?: number;
   published: boolean;
   nodeId: RouteSpecimenNodeId;
-  compactHidden?: boolean;
 };
 
 type CourseSection = { title: string; materials: CourseMaterial[] };
@@ -51,21 +45,19 @@ const coursePages: { title: string; titleColumn: string; sections: CourseSection
           },
           {
             kind: 'file',
-            title: 'Clase 02 - Condicionales.pdf',
-            detail: '96 kb',
+            title: 'Clase 02 - Condicionales.xlsx',
+            detail: '48 kb',
             downloads: 164,
             published: true,
             nodeId: 'conditionals',
-            compactHidden: true,
           },
           {
             kind: 'file',
-            title: 'Clase 01 - Variables.pdf',
-            detail: '120 kb',
+            title: 'Clase 01 - Variables.zip',
+            detail: '1,2 mb',
             downloads: 201,
             published: true,
             nodeId: 'variables',
-            compactHidden: true,
           },
         ],
       },
@@ -79,7 +71,14 @@ const coursePages: { title: string; titleColumn: string; sections: CourseSection
             downloads: 0,
             published: false,
             nodeId: 'quiz',
-            compactHidden: true,
+          },
+          {
+            kind: 'file',
+            title: 'Control 1 - Instrucciones.md',
+            detail: '4 kb',
+            downloads: 0,
+            published: false,
+            nodeId: 'quiz',
           },
         ],
       },
@@ -105,7 +104,6 @@ const coursePages: { title: string; titleColumn: string; sections: CourseSection
             detail: 'https://…/auxiliar-2',
             published: true,
             nodeId: 'conditionals',
-            compactHidden: true,
           },
           {
             kind: 'link',
@@ -113,7 +111,6 @@ const coursePages: { title: string; titleColumn: string; sections: CourseSection
             detail: 'https://…/auxiliar-1',
             published: true,
             nodeId: 'variables',
-            compactHidden: true,
           },
         ],
       },
@@ -140,7 +137,6 @@ const coursePages: { title: string; titleColumn: string; sections: CourseSection
             detail: 'https://…/visualizador',
             published: true,
             nodeId: 'functions',
-            compactHidden: true,
           },
         ],
       },
@@ -156,16 +152,35 @@ const routeOrder: RouteSpecimenNodeId[] = [
   'recursion',
   'quiz',
 ];
-const leadInSteps = 1;
-const scrollSteps = routeOrder.length + leadInSteps + 1;
+const nodeTitles: Record<RouteSpecimenNodeId, string> = {
+  variables: 'Variables',
+  conditionals: 'Condicionales',
+  exercises: 'Ejercicios',
+  functions: 'Funciones',
+  recursion: 'Recursión',
+  quiz: 'Control 1',
+};
+const stepDuration = 2000;
+
+const fileBadges = {
+  pdf: { label: 'PDF', className: 'bg-[#c62828]' },
+  xlsx: { label: 'XLS', className: 'bg-[#1d6f42]' },
+  zip: { label: 'ZIP', className: 'bg-[#6d4c41]' },
+  md: { label: 'MD', className: 'bg-[#37474f]' },
+} as const;
+
+function fileBadge(title: string) {
+  const extension = title.slice(title.lastIndexOf('.') + 1) as keyof typeof fileBadges;
+  return fileBadges[extension];
+}
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 
-type Trace = { key: string; d: string; start: [number, number]; end: [number, number] };
+type Trace = { key: string; d: string; start: Point; end: Point };
 
 const rowColumns = 'grid grid-cols-[1.75rem_minmax(0,1fr)_1.25rem] items-center gap-x-2 px-4';
 const columnTitle =
   'font-heading text-xl leading-[1.15] font-semibold tracking-[-0.02em] text-brand-surface-foreground';
-const columnLead = 'mt-1 mb-4 text-sm leading-normal text-brand-surface-muted short:hidden';
+const columnLead = 'mt-1 mb-6 text-sm leading-normal text-brand-surface-muted';
 
 function CourseMaterialRow({
   material,
@@ -181,24 +196,35 @@ function CourseMaterialRow({
   onMaterialHover: (nodeId: RouteSpecimenNodeId | null) => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
+      aria-label={`${material.title}: en U-Roadmaps está en el nodo ${nodeTitles[material.nodeId]}`}
       data-course-material={material.nodeId}
       data-active={active || undefined}
       data-placed={placed || undefined}
       onPointerEnter={() => onMaterialHover(material.nodeId)}
       onPointerLeave={() => onMaterialHover(null)}
+      onFocus={() => onMaterialHover(material.nodeId)}
+      onBlur={() => onMaterialHover(null)}
+      onClick={() => onMaterialHover(material.nodeId)}
       className={cn(
         rowColumns,
-        'border-b border-[#e5e5e5] py-1.5 transition-[background-color,opacity] duration-300 data-placed:opacity-45 dark:border-[#333] data-active:bg-[#c9e0fc] dark:data-active:bg-[#1a3448]',
-        material.compactHidden && 'max-sm:hidden lg:max-xl:hidden short:hidden',
+        'w-full cursor-default border-b border-[#e5e5e5] py-1.5 text-left transition-[background-color,opacity] duration-300 outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-[#296ef9] focus-visible:ring-inset data-placed:opacity-45 dark:border-[#333] data-active:bg-[#c9e0fc] dark:data-active:bg-[#1a3448]',
       )}
     >
-      <span className="tabular-nums">{index + 1}</span>
-      <span className="min-w-0">
+      <span aria-hidden="true" className="tabular-nums">
+        {index + 1}
+      </span>
+      <span aria-hidden="true" className="min-w-0">
         <span className="flex min-w-0 items-center gap-1.5">
           {material.kind === 'file' ? (
-            <span className="rounded-[2px] bg-[#c62828] px-[3px] text-[9px] leading-[13px] font-bold text-white">
-              PDF
+            <span
+              className={cn(
+                'rounded-[2px] px-[3px] text-[9px] leading-[13px] font-bold text-white',
+                fileBadge(material.title).className,
+              )}
+            >
+              {fileBadge(material.title).label}
             </span>
           ) : (
             <Link2 className="size-3.5 shrink-0 text-[#555] dark:text-[#bbb]" />
@@ -216,13 +242,19 @@ function CourseMaterialRow({
         </span>
       </span>
       {material.published ? (
-        <span className="grid size-4 place-items-center rounded-[3px] bg-[#2a7f7f] text-white dark:bg-[#3d7ab5]">
+        <span
+          aria-hidden="true"
+          className="grid size-4 place-items-center rounded-[3px] bg-[#2a7f7f] text-white dark:bg-[#3d7ab5]"
+        >
           <Check className="size-3" strokeWidth={3} />
         </span>
       ) : (
-        <span className="size-4 rounded-[3px] border border-[#999] bg-white dark:border-[#666] dark:bg-[#3a3a3a]" />
+        <span
+          aria-hidden="true"
+          className="size-4 rounded-[3px] border border-[#999] bg-white dark:border-[#666] dark:bg-[#3a3a3a]"
+        />
       )}
-    </div>
+    </button>
   );
 }
 
@@ -236,32 +268,34 @@ function CoursePageExcerpt({
   onMaterialHover: (nodeId: RouteSpecimenNodeId | null) => void;
 }) {
   return (
-    <div className="grid items-start gap-3 sm:max-lg:grid-cols-2 xl:grid-cols-2">
-      {coursePages.map((page) => (
+    <div className="grid items-start gap-3 max-lg:max-w-xl xl:grid-cols-2 xl:gap-6">
+      {coursePages.map((page, pageIndex) => (
         <div
           key={page.title}
-          className="overflow-hidden rounded-md bg-white font-[Arial,Helvetica,sans-serif] text-[13px] text-[#333] shadow-[0_18px_50px_rgb(0_0_0/18%)] dark:bg-[#1f1f1f] dark:text-[#e6e6e6]"
+          data-course-sheet
+          className={cn(
+            'overflow-hidden rounded-md bg-white font-[Arial,Helvetica,sans-serif] text-[13px] text-[#333] shadow-[0_18px_50px_rgb(0_0_0/18%)] dark:bg-[#1f1f1f] dark:text-[#e6e6e6]',
+            pageIndex > 0 && 'max-lg:hidden',
+          )}
         >
-          <p className="px-4 pt-3 pb-2 text-xl leading-none font-light text-[#444] dark:text-[#ddd]">
+          <p
+            aria-hidden="true"
+            className="px-4 pt-3 pb-2 text-xl leading-none font-light text-[#444] dark:text-[#ddd]"
+          >
             {page.title}
           </p>
           <div
+            aria-hidden="true"
             className={cn(rowColumns, 'border-b border-[#ddd] py-1.5 font-bold dark:border-[#333]')}
           >
             <span>Nº</span>
             <span>{page.titleColumn}</span>
-            <span className="sr-only">Publicado</span>
           </div>
-          {page.sections.map((section, sectionIndex) => (
-            <div
-              key={section.title}
-              className={cn(
-                sectionIndex > 0 &&
-                  page.title !== 'Enlaces' &&
-                  'max-sm:hidden lg:max-xl:hidden short:hidden',
-              )}
-            >
-              <p className="bg-[#eeeae2] px-4 py-1 dark:bg-[#151515]">{section.title}</p>
+          {page.sections.map((section) => (
+            <div key={section.title}>
+              <p aria-hidden="true" className="bg-[#eeeae2] px-4 py-1 dark:bg-[#151515]">
+                {section.title}
+              </p>
               {section.materials.map((material, index) => (
                 <CourseMaterialRow
                   key={material.title}
@@ -283,65 +317,84 @@ function CoursePageExcerpt({
 }
 
 export function CourseRouteComparison() {
-  const sectionRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(containerRef, { once: true, amount: 0.4 });
   const [step, setStep] = useState(-1);
   const [hoveredNodeId, setHoveredNodeId] = useState<RouteSpecimenNodeId | null>(null);
   const [traces, setTraces] = useState<Trace[]>([]);
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end end'] });
+  const [linked, setLinked] = useState(true);
 
-  useMotionValueEvent(scrollYProgress, 'change', (progress) => {
-    setHoveredNodeId(null);
-    setStep(Math.min(scrollSteps - 1, Math.floor(progress * scrollSteps)) - leadInSteps);
-  });
+  useEffect(() => {
+    if (inView) setStep((current) => Math.max(current, 0));
+  }, [inView]);
+
+  useEffect(() => {
+    if (step < 0 || step >= routeOrder.length) return;
+    const timer = setTimeout(() => setStep((current) => current + 1), stepDuration);
+    return () => clearTimeout(timer);
+  }, [step]);
 
   const activeNodeId = hoveredNodeId ?? routeOrder[step] ?? null;
   const placedNodeIds = routeOrder.slice(0, Math.max(0, step));
 
   const measure = useCallback(() => {
     const container = containerRef.current;
-    if (!container || !activeNodeId) return setTraces([]);
+    const canvas = container?.querySelector('[data-route-canvas]')?.getBoundingClientRect();
+    if (!container || !canvas) return setTraces([]);
     const origin = container.getBoundingClientRect();
+    const sheets = [...container.querySelectorAll('[data-course-sheet]')]
+      .map((sheet) => sheet.getBoundingClientRect())
+      .filter((sheet) => sheet.width > 0);
+    const sheetsRight = Math.max(...sheets.map((sheet) => sheet.right)) - origin.left;
+    const sheetsTop = Math.min(...sheets.map((sheet) => sheet.top)) - origin.top;
+    const entryX = canvas.left - origin.left;
+    const fits = entryX - sheetsRight >= 32;
+    setLinked(fits);
     const node = container
       .querySelector(`[data-route-node="${activeNodeId}"]`)
       ?.getBoundingClientRect();
-    const canvas = container.querySelector('[data-route-canvas]')?.getBoundingClientRect();
-    if (!node || !canvas) return setTraces([]);
+    if (!fits || !node) return setTraces([]);
     const besideAnotherNode = [...container.querySelectorAll('[data-route-node]')].some((other) => {
       const rect = other.getBoundingClientRect();
       return rect.right < node.left && rect.top < node.bottom && rect.bottom > node.top;
     });
-    const entryX = canvas.left - origin.left;
+    const busX = (sheetsRight + entryX) / 2;
+    const ending: Point[] = besideAnotherNode
+      ? [
+          [busX, node.top - origin.top - 16],
+          [node.left + 18 - origin.left, node.top - origin.top - 16],
+          [node.left + 18 - origin.left, node.top - origin.top],
+        ]
+      : [
+          [busX, node.top + node.height / 2 - origin.top],
+          [node.left - origin.left, node.top + node.height / 2 - origin.top],
+        ];
     const materials = container.querySelectorAll(`[data-course-material="${activeNodeId}"]`);
     const next: Trace[] = [];
     materials.forEach((material, index) => {
       const row = material.getBoundingClientRect();
-      const x1 = row.right - origin.left;
-      const y1 = row.top + row.height / 2 - origin.top;
-      if (entryX - x1 < 32 || row.height === 0) return;
-      const key = `${activeNodeId}-${index}`;
-      const start: [number, number] = [x1, y1];
-      if (besideAnotherNode) {
-        const x2 = node.left + 18 - origin.left;
-        const y2 = node.top - origin.top;
-        const channelY = y2 - 16;
-        const bend = (entryX - x1) / 2;
-        next.push({
-          key,
-          d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${entryX - bend} ${channelY}, ${entryX} ${channelY} L ${x2 - 10} ${channelY} Q ${x2} ${channelY} ${x2} ${y2}`,
-          start,
-          end: [x2, y2],
-        });
-        return;
-      }
-      const x2 = node.left - origin.left;
-      const y2 = node.top + node.height / 2 - origin.top;
-      const bend = (x2 - x1) / 2;
+      const sheet = material.closest('[data-course-sheet]')?.getBoundingClientRect();
+      if (!sheet || row.height === 0) return;
+      const start: Point = [row.right - origin.left, row.top + row.height / 2 - origin.top];
+      const blocker = sheets.find(
+        (other) =>
+          other.left >= sheet.right && other.top < sheet.bottom && other.bottom > sheet.top,
+      );
+      const gapX = blocker ? (sheet.right + blocker.left) / 2 - origin.left : null;
+      const departure: Point[] =
+        gapX === null
+          ? [[busX, start[1]]]
+          : [
+              [gapX, start[1]],
+              [gapX, sheetsTop - 12],
+              [busX, sheetsTop - 12],
+            ];
+      const points = [start, ...departure, ...ending];
       next.push({
-        key,
-        d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`,
+        key: `${activeNodeId}-${index}`,
+        d: roundedPath(points),
         start,
-        end: [x2, y2],
+        end: points[points.length - 1],
       });
     });
     setTraces(next);
@@ -357,16 +410,17 @@ export function CourseRouteComparison() {
   }, [measure]);
 
   return (
-    <section ref={sectionRef} aria-labelledby="comparison-title" className="stage:h-[300vh]">
-      <div className="mx-auto flex max-w-360 flex-col justify-center px-4 pt-14 pb-16 sm:px-6 lg:px-12 stage:sticky stage:top-16 stage:h-[calc(100dvh-4rem)] stage:pb-6">
+    <section aria-labelledby="comparison-title">
+      <div className="mx-auto max-w-360 px-4 pt-14 pb-16 sm:px-6 lg:px-12">
+        <span data-route-anchor="in" aria-hidden="true" className="mb-4 ml-4 block size-0" />
         <h2
           id="comparison-title"
-          className="font-heading text-[1.75rem] leading-[1.08] font-semibold tracking-[-0.03em] text-brand-surface-foreground md:text-[2.5rem] md:leading-none short:text-[1.75rem]"
+          className="font-heading text-[1.75rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-brand-surface-foreground md:text-[2.5rem] md:leading-none"
         >
           Del listado al mapa
         </h2>
         <p className="sr-only">
-          En U-Cursos, los once materiales de este ejemplo se reparten en dos secciones distintas,
+          En U-Cursos, los doce materiales de este ejemplo se reparten en dos secciones distintas,
           Material docente para los archivos y Enlaces para los enlaces, ordenados por fecha; lo que
           aún no corresponde ver queda sin publicar hasta que alguien lo publique a mano. En
           U-Roadmaps quedan dentro de los nodos de la ruta, con sus requisitos, sus fechas de
@@ -374,23 +428,23 @@ export function CourseRouteComparison() {
         </p>
         <div
           ref={containerRef}
-          className="relative mt-8 grid gap-12 lg:grid-cols-[minmax(0,26rem)_minmax(4rem,1fr)_auto] lg:items-start lg:gap-0 xl:grid-cols-[minmax(0,38rem)_minmax(4rem,1fr)_auto] short:mt-5"
+          className="relative mt-8 grid gap-12 lg:grid-cols-[minmax(0,1fr)_6rem_27rem] lg:items-start lg:gap-0"
         >
-          <div aria-hidden="true" className="relative z-20">
-            <h3 className={columnTitle}>Hoy, en U-Cursos</h3>
-            <p className={columnLead}>
+          <div className="relative z-20">
+            <h3 aria-hidden="true" className={columnTitle}>
+              Hoy, en U-Cursos
+            </h3>
+            <p aria-hidden="true" className={columnLead}>
               Archivos en una sección, enlaces en otra, todo ordenado por fecha.
             </p>
-            <div className="short:mt-3">
-              <CoursePageExcerpt
-                activeNodeId={activeNodeId}
-                placedNodeIds={placedNodeIds}
-                onMaterialHover={setHoveredNodeId}
-              />
-            </div>
+            <CoursePageExcerpt
+              activeNodeId={activeNodeId}
+              placedNodeIds={placedNodeIds}
+              onMaterialHover={setHoveredNodeId}
+            />
           </div>
           <div aria-hidden="true" className="hidden lg:block" />
-          <div className="lg:w-[min(27rem,calc((100dvh-20rem)*0.85))]">
+          <div>
             <h3 aria-hidden="true" className={columnTitle}>
               Con U-Roadmaps
             </h3>
@@ -398,10 +452,16 @@ export function CourseRouteComparison() {
               Cada material dentro de su nodo, en el orden en que se estudia.
             </p>
             <RouteSpecimen
-              className="max-w-[27rem] short:mt-3"
+              className="max-w-[27rem]"
               canvasClassName="max-sm:-mx-4 max-sm:rounded-none"
               highlightedNodeId={activeNodeId}
+              highlightDelay={linked ? 0.45 : 0}
               onNodeHover={setHoveredNodeId}
+            />
+            <span
+              data-route-anchor="out"
+              aria-hidden="true"
+              className="mx-auto mt-8 block size-0"
             />
           </div>
           <svg
@@ -423,7 +483,7 @@ export function CourseRouteComparison() {
                       strokeWidth={1.5}
                       initial={{ pathLength: 0 }}
                       animate={{ pathLength: 1 }}
-                      transition={{ duration: 0.55, ease: easeOutExpo }}
+                      transition={{ duration: 1.1, ease: easeOutExpo }}
                     />
                     <circle
                       cx={trace.start[0]}
@@ -438,7 +498,7 @@ export function CourseRouteComparison() {
                       fill="var(--primary-bright)"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      transition={{ delay: 0.45, duration: 0.3, ease: easeOutExpo }}
+                      transition={{ delay: 0.95, duration: 0.3, ease: easeOutExpo }}
                     />
                   </m.g>
                 ))}

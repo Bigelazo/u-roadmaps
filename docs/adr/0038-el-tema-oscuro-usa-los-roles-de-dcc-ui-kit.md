@@ -18,3 +18,4 @@ Los colores de Tipo de nodo siguen guardándose como el hex elegido por el equip
 - La vista embebida no tiene navegación global, así que el encabezado del curso en el lienzo del Roadmap lleva el mismo botón de tema; se oculta cuando la navegación está presente. Dentro del iframe, la cookie `theme` se escribe con `SameSite=None; Secure` y depende del mismo acceso a almacenamiento que la sesión.
 - La extensión de U-Cursos no cambia. Que el Roadmap embebido siga el tema de U-Cursos en vez de la elección en U-Roadmaps requeriría que la extensión pase el tema al iframe.
 - Agregar un color a la paleta de Tipos de nodo exige definir también su variante oscura.
+- Las bandas de marca de la landing (`brand-surface`) son la excepción a la distribución: usan `--dcc-bg` (`#11161e`), más oscuro que la página y distinto de la navegación, para que sigan leyéndose como bandas.
