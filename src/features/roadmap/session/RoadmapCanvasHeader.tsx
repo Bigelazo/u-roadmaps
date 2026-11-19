@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { ArrowLeft, CircleAlert, History, UserGroup } from 'lucide-react';
 import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
@@ -20,45 +21,56 @@ export function RoadmapCanvasHeader({
   isCanvasPreview,
   isEditing,
   showsCourseLinks,
+  themeToggle,
 }: CourseOfferingIdentifier & {
   title: string;
   academicWeek?: string | null;
   isCanvasPreview: boolean;
   isEditing: boolean;
   showsCourseLinks: boolean;
+  themeToggle?: ReactNode;
 }) {
   const isCompact = useCompactCanvasLayout();
   const hidesBadgeRow = isCanvasPreview && isCompact;
   return (
     <header>
-      <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
-        {isCanvasPreview ? (
-          <Badge className="bg-[color-mix(in_srgb,var(--background)_78%,#f97316)] text-secondary-foreground dark:bg-warning-soft">
-            Modo previsualización
-          </Badge>
-        ) : isEditing ? (
-          <Badge variant="secondary">Modo edición</Badge>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
+            {isCanvasPreview ? (
+              <Badge className="bg-[color-mix(in_srgb,var(--background)_78%,#f97316)] text-secondary-foreground dark:bg-warning-soft">
+                Modo previsualización
+              </Badge>
+            ) : isEditing ? (
+              <Badge variant="secondary">Modo edición</Badge>
+            ) : null}
+          </div>
+          <h1
+            className={cn(
+              'font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]',
+              !hidesBadgeRow && 'mt-2',
+            )}
+          >
+            {title}
+          </h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+            <span>{courseCode}</span>
+            <span aria-hidden="true">·</span>
+            <span>{termLabel({ year, semester })}</span>
+            {academicWeek ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{academicWeek}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+        {themeToggle ? (
+          <div className="pointer-events-auto -my-1 -mr-2 shrink-0 [body:has([data-global-navigation])_&]:hidden">
+            {themeToggle}
+          </div>
         ) : null}
       </div>
-      <h1
-        className={cn(
-          'font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]',
-          !hidesBadgeRow && 'mt-2',
-        )}
-      >
-        {title}
-      </h1>
-      <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-        <span>{courseCode}</span>
-        <span aria-hidden="true">·</span>
-        <span>{termLabel({ year, semester })}</span>
-        {academicWeek ? (
-          <>
-            <span aria-hidden="true">·</span>
-            <span>{academicWeek}</span>
-          </>
-        ) : null}
-      </p>
       {showsCourseLinks ? (
         <RoadmapCourseLinks courseCode={courseCode} year={year} semester={semester} />
       ) : null}
