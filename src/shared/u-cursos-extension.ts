@@ -19,35 +19,69 @@ export function extensionBrowserOf(userAgent: string): ExtensionBrowser | null {
 }
 
 export const extensionPromptStorageKey = 'u-roadmaps:extension-prompt';
-export const extensionPromptIntervalMs = 7 * 24 * 60 * 60 * 1000;
+export const extensionPromptMinimumEntries = 3;
+export const extensionPromptMaximumEntries = 5;
 
-export type ExtensionPromptRecord = { since: number; shown: number; optedOut: boolean };
+export type ExtensionPromptRecord = {
+  entries: number;
+  threshold: number;
+  shown: number;
+  optedOut: boolean;
+};
 
-export function parseExtensionPromptRecord(raw: string | null): ExtensionPromptRecord | null {
-  if (!raw) return null;
+type Random = () => number;
+
+export function drawExtensionPromptThreshold(random: Random): number {
+  const span = extensionPromptMaximumEntries - extensionPromptMinimumEntries + 1;
+  return extensionPromptMinimumEntries + Math.min(span - 1, Math.floor(random() * span));
+}
+
+function freshRecord(random: Random, shown = 0, optedOut = false): ExtensionPromptRecord {
+  return { entries: 0, threshold: drawExtensionPromptThreshold(random), shown, optedOut };
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+export function parseExtensionPromptRecord(
+  raw: string | null,
+  random: Random,
+): ExtensionPromptRecord {
+  if (!raw) return freshRecord(random);
   try {
     const value: unknown = JSON.parse(raw);
-    if (typeof value !== 'object' || value === null) return null;
-    const { since, shown, optedOut } = value as Record<string, unknown>;
-    if (typeof since !== 'number' || typeof shown !== 'number' || typeof optedOut !== 'boolean') {
-      return null;
+    if (typeof value !== 'object' || value === null) return freshRecord(random);
+    const { entries, threshold, shown, optedOut } = value as Record<string, unknown>;
+    const knownShown = isCount(shown) ? shown : 0;
+    const knownOptedOut = optedOut === true;
+    if (
+      !isCount(entries) ||
+      !isCount(threshold) ||
+      threshold < extensionPromptMinimumEntries ||
+      threshold > extensionPromptMaximumEntries
+    ) {
+      return freshRecord(random, knownShown, knownOptedOut);
     }
-    return { since, shown, optedOut };
+    return { entries, threshold, shown: knownShown, optedOut: knownOptedOut };
   } catch {
-    return null;
+    return freshRecord(random);
   }
 }
 
-export function visitExtensionPrompt(
-  record: ExtensionPromptRecord | null,
-  now: number,
-): { record: ExtensionPromptRecord; prompt: { offerOptOut: boolean } | null } {
-  if (!record) return { record: { since: now, shown: 0, optedOut: false }, prompt: null };
-  if (record.optedOut || now - record.since < extensionPromptIntervalMs) {
-    return { record, prompt: null };
-  }
-  return {
-    record: { since: now, shown: record.shown + 1, optedOut: false },
-    prompt: { offerOptOut: record.shown >= 1 },
-  };
+export function enterPlatform(record: ExtensionPromptRecord): ExtensionPromptRecord {
+  if (record.optedOut) return record;
+  return { ...record, entries: record.entries + 1 };
+}
+
+export function dueExtensionPrompt(record: ExtensionPromptRecord): { offerOptOut: boolean } | null {
+  if (record.optedOut || record.entries < record.threshold) return null;
+  return { offerOptOut: record.shown >= 1 };
+}
+
+export function showExtensionPrompt(
+  record: ExtensionPromptRecord,
+  random: Random,
+): ExtensionPromptRecord {
+  return freshRecord(random, record.shown + 1, false);
 }

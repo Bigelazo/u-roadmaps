@@ -168,7 +168,7 @@ test('each Resource row shows its access count, a File its size, and what the st
   expect(within(recording).queryByText('Ya lo revisaste')).toBeNull();
 });
 
-test('a PDF File opens the native viewer in fullscreen with a real download and reports an access', async () => {
+test('a PDF File opens only the native viewer over the backdrop and reports an access', async () => {
   const user = userEvent.setup();
   const onResourceAccess = vi.fn();
   renderDetail({ node: nodeWithResources, onResourceAccess });
@@ -179,10 +179,41 @@ test('a PDF File opens the native viewer in fullscreen with a real download and 
   expect(within(dialog).getByTitle('Vista previa de Guia de estudio').getAttribute('src')).toBe(
     'https://example.com/guide.pdf?disposition=inline',
   );
+  expect(within(dialog).queryByRole('link', { name: 'Descargar' })).toBeNull();
+  expect(onResourceAccess).toHaveBeenCalledWith(nodeWithResources.resources[0]);
+
+  const close = within(dialog).getByRole('button', { name: 'Cerrar vista previa' });
+  await vi.waitFor(() => expect(close.matches(':focus')).toBe(true));
+  await user.keyboard('{Escape}');
+  await vi.waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Guia de estudio' })).toBeNull(),
+  );
+});
+
+test('clicking the PDF backdrop closes the viewer', async () => {
+  const user = userEvent.setup();
+  renderDetail({ node: nodeWithResources });
+
+  await user.click(screen.getByRole('button', { name: 'Ver Guia de estudio' }));
+  await user.click(screen.getByRole('dialog', { name: 'Guia de estudio' }));
+
+  await vi.waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Guia de estudio' })).toBeNull(),
+  );
+});
+
+test('a PDF File offers a download where the browser cannot show it inline', async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { pdfViewerEnabled: false }));
+  renderDetail({ node: nodeWithResources });
+
+  await user.click(screen.getByRole('button', { name: 'Ver Guia de estudio' }));
+
+  const dialog = screen.getByRole('dialog', { name: 'Guia de estudio' });
+  expect(within(dialog).queryByTitle('Vista previa de Guia de estudio')).toBeNull();
   const download = within(dialog).getByRole('link', { name: 'Descargar' });
   expect(download.getAttribute('href')).toBe('https://example.com/guide.pdf');
   expect(download.getAttribute('download')).toBe('Guia de estudio');
-  expect(onResourceAccess).toHaveBeenCalledWith(nodeWithResources.resources[0]);
 });
 
 test('a Markdown File renders its fetched content in fullscreen', async () => {

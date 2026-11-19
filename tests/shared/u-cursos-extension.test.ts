@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  drawExtensionPromptThreshold,
+  dueExtensionPrompt,
+  enterPlatform,
   extensionBrowserOf,
-  extensionPromptIntervalMs,
   parseExtensionPromptRecord,
-  visitExtensionPrompt,
+  showExtensionPrompt,
+  type ExtensionPromptRecord,
 } from '@/shared/u-cursos-extension';
 
 const userAgents = {
@@ -49,48 +52,91 @@ describe('extensionBrowserOf', () => {
   });
 });
 
-describe('visitExtensionPrompt', () => {
-  const start = 1_000_000;
-  const later = start + extensionPromptIntervalMs;
-
-  it('never prompts on the first visit and starts the interval', () => {
-    expect(visitExtensionPrompt(null, start)).toEqual({
-      record: { since: start, shown: 0, optedOut: false },
-      prompt: null,
-    });
+describe('drawExtensionPromptThreshold', () => {
+  it.each([
+    [0, 3],
+    [0.34, 4],
+    [0.67, 5],
+    [0.999, 5],
+    [1, 5],
+  ])('maps random %d to %d entries', (random, threshold) => {
+    expect(drawExtensionPromptThreshold(() => random)).toBe(threshold);
   });
+});
 
-  it('waits a full interval since the last visit that started one', () => {
-    const record = { since: start, shown: 0, optedOut: false };
-    expect(visitExtensionPrompt(record, later - 1)).toEqual({ record, prompt: null });
-  });
+describe('extension prompt cadence', () => {
+  const lowest = () => 0;
+  const highest = () => 0.99;
 
-  it('prompts without the opt-out the first time it is shown', () => {
-    expect(visitExtensionPrompt({ since: start, shown: 0, optedOut: false }, later)).toEqual({
-      record: { since: later, shown: 1, optedOut: false },
-      prompt: { offerOptOut: false },
-    });
-  });
-
-  it('offers the opt-out from the second time onward', () => {
-    expect(visitExtensionPrompt({ since: start, shown: 1, optedOut: false }, later).prompt).toEqual(
-      { offerOptOut: true },
+  function enterTimes(record: ExtensionPromptRecord, times: number) {
+    return Array.from({ length: times }).reduce<ExtensionPromptRecord>(
+      (current) => enterPlatform(current),
+      record,
     );
+  }
+
+  it('starts a fresh record with a drawn threshold and no entries', () => {
+    expect(parseExtensionPromptRecord(null, highest)).toEqual({
+      entries: 0,
+      threshold: 5,
+      shown: 0,
+      optedOut: false,
+    });
   });
 
-  it('never prompts after opting out', () => {
-    const record = { since: start, shown: 2, optedOut: true };
-    expect(visitExtensionPrompt(record, later * 10)).toEqual({ record, prompt: null });
+  it('prompts once the entries reach the drawn threshold', () => {
+    const fresh = parseExtensionPromptRecord(null, lowest);
+    expect(dueExtensionPrompt(enterTimes(fresh, 2))).toBeNull();
+    expect(dueExtensionPrompt(enterTimes(fresh, 3))).toEqual({ offerOptOut: false });
+  });
+
+  it('keeps the prompt due on later entries until it is shown', () => {
+    const fresh = parseExtensionPromptRecord(null, lowest);
+    expect(dueExtensionPrompt(enterTimes(fresh, 7))).toEqual({ offerOptOut: false });
+  });
+
+  it('restarts the count with a new threshold after showing', () => {
+    const due = enterTimes(parseExtensionPromptRecord(null, lowest), 3);
+    const shown = showExtensionPrompt(due, highest);
+    expect(shown).toEqual({ entries: 0, threshold: 5, shown: 1, optedOut: false });
+    expect(dueExtensionPrompt(enterTimes(shown, 4))).toBeNull();
+    expect(dueExtensionPrompt(enterTimes(shown, 5))).toEqual({ offerOptOut: true });
+  });
+
+  it('never prompts or counts after opting out', () => {
+    const record = { entries: 9, threshold: 3, shown: 2, optedOut: true };
+    expect(enterPlatform(record)).toBe(record);
+    expect(dueExtensionPrompt(record)).toBeNull();
   });
 });
 
 describe('parseExtensionPromptRecord', () => {
+  const lowest = () => 0;
+
   it('reads a stored record', () => {
-    const record = { since: 5, shown: 1, optedOut: false };
-    expect(parseExtensionPromptRecord(JSON.stringify(record))).toEqual(record);
+    const record = { entries: 2, threshold: 4, shown: 1, optedOut: false };
+    expect(parseExtensionPromptRecord(JSON.stringify(record), lowest)).toEqual(record);
   });
 
-  it.each([null, '', 'nope', '{"since":"5"}', 'null'])('ignores %j', (raw) => {
-    expect(parseExtensionPromptRecord(raw)).toBeNull();
+  it('migrates the interval record keeping its showings and opt-out', () => {
+    expect(
+      parseExtensionPromptRecord(JSON.stringify({ since: 5, shown: 2, optedOut: true }), lowest),
+    ).toEqual({ entries: 0, threshold: 3, shown: 2, optedOut: true });
+  });
+
+  it.each([
+    null,
+    '',
+    'nope',
+    '{"since":"5"}',
+    'null',
+    '{"entries":1,"threshold":9,"shown":0,"optedOut":false}',
+  ])('starts over from %j', (raw) => {
+    expect(parseExtensionPromptRecord(raw, lowest)).toEqual({
+      entries: 0,
+      threshold: 3,
+      shown: 0,
+      optedOut: false,
+    });
   });
 });
