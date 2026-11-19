@@ -176,10 +176,22 @@ async function deleteNodeIfPresent(page, title) {
   return true;
 }
 
+async function hideNodeIfVisible(page, title) {
+  const node = canvasNode(page, title);
+  if (await node.locator(`[aria-label="${title}: oculto para estudiantes"]`).count()) return;
+  await node
+    .getByRole('button', { name: 'Abrir menú de acciones del nodo' })
+    .dispatchEvent('click');
+  await page.getByRole('button', { name: 'Ocultar para estudiantes' }).dispatchEvent('click');
+  await page.getByRole('button', { name: 'Ocultar', exact: true }).click();
+  await page.getByText('Nodo ocultado exitosamente.').waitFor();
+}
+
 const progressNodeId = '60000000-0000-4000-8000-000000000105';
 const progressResourceId = '70000000-0000-4000-8000-000000000104';
 const newNodeTitle = 'Integrales definidas';
 const lockedForNotice = 'Reglas de derivación';
+const hiddenForNotice = 'Taller de modelamiento de cambios';
 
 const clips = {
   'teacher-design': {
@@ -278,6 +290,54 @@ const clips = {
         .getByText(/desbloquead/i)
         .first()
         .waitFor();
+    },
+  },
+  'teacher-notices': {
+    persona: () => personas.teacher,
+    path: '/courses/MA1001/2026/2',
+    async before(page) {
+      await hideNodeIfVisible(page, hiddenForNotice);
+    },
+    async prepare(page) {
+      await waitForCanvas(page);
+      await pause(page, 600);
+      await glide(page, { x: 700, y: 200 }, 4);
+      await page.mouse.down();
+      await page.mouse.move(560, 420, { steps: 10 });
+      await page.mouse.up();
+      await pause(page, 300);
+      const target = canvasNode(page, hiddenForNotice);
+      await zoomAt(page, await centerOf(target), 4);
+      await pause(page, 600);
+      const start = await centerOf(target);
+      await glide(page, { x: 880, y: 420 }, 6);
+      await page.mouse.down();
+      await page.mouse.move(880 + (600 - start.x), 420 + (290 - start.y), { steps: 20 });
+      await page.mouse.up();
+      await pause(page, 700);
+      await glide(page, { x: 860, y: 500 }, 10);
+    },
+    async perform(page) {
+      await pause(page, 500);
+      await openNodeActions(page, hiddenForNotice);
+      await press(page, page.getByRole('button', { name: 'Mostrar para estudiantes' }), {
+        steps: 14,
+        before: 450,
+        after: 300,
+      });
+      const confirm = page.getByRole('button', { name: 'Mostrar', exact: true });
+      await confirm.waitFor();
+      await glide(page, confirm, 26);
+      await pause(page, 1900);
+      await press(page, confirm, { before: 150, after: 300 });
+      await page.getByText('Nodo visible para estudiantes.').waitFor();
+      await glide(page, { x: 820, y: 420 }, 26);
+      await pause(page, 2200);
+    },
+    async after(page) {
+      await page.goto(baseURL + '/courses/MA1001/2026/2');
+      await waitForCanvas(page);
+      await hideNodeIfVisible(page, hiddenForNotice);
     },
   },
   'teacher-progress': {

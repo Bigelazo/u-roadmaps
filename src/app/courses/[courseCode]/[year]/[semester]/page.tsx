@@ -18,6 +18,9 @@ import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapEntryNotices } from '@/app/_components/RoadmapEntryNotices';
 import { RefreshOnParticipationChange } from '@/app/_components/RefreshOnParticipationChange';
+import { ThemeToggle } from '@/app/_components/ThemeToggle';
+import { cookies } from 'next/headers';
+import { parseThemePreference, themeCookieName } from '@/shared/theme-preference';
 
 function readRoadmapAsTheApiSendsIt(
   participant: Parameters<typeof readRoadmapForParticipant>[0],
@@ -75,6 +78,7 @@ export default async function CoursePage(
     year: identifier.year,
     semester: identifier.semester,
   });
+  const theme = parseThemePreference((await cookies()).get(themeCookieName)?.value);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
   const entryRoadmap =
     courseOffering.roadmap && participation
@@ -95,6 +99,7 @@ export default async function CoursePage(
           roadmapEntryKey={roadmapEntryKey}
           entryRoadmap={entryRoadmap}
           courseOffering={{ identifier, title: courseName, academicWeek }}
+          themeToggle={<ThemeToggle initialTheme={theme} />}
           experience={{
             kind: isTeaching ? 'teaching' : 'student',
             term: isHistorical ? 'historical' : 'current',

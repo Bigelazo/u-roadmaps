@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { useInView } from 'motion/react';
 import { Button } from '@/shared/ui/button';
-import { defaultTheme, parseThemePreference } from '@/shared/theme-preference';
+import { parseThemePreference } from '@/shared/theme-preference';
 import { cn } from 'cn';
 
 function subscribeToTheme(onChange: () => void) {
@@ -14,32 +14,32 @@ function subscribeToTheme(onChange: () => void) {
 }
 
 const documentTheme = () => parseThemePreference(document.documentElement.dataset.theme);
-const serverTheme = () => defaultTheme;
+const serverTheme = () => null;
 
 export function FeatureClip({
   slug,
   label,
-  active = true,
   className,
 }: {
   slug: string;
   label: string;
-  active?: boolean;
   className?: string;
 }) {
   const theme = useSyncExternalStore(subscribeToTheme, documentTheme, serverTheme);
   const frameRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const inView = useInView(frameRef, { amount: 0.4 });
+  const near = useInView(frameRef, { once: true, margin: '150% 0px' });
+  const inView = useInView(frameRef, { amount: 0.25 });
   const [paused, setPaused] = useState(false);
-  const playing = active && inView && !paused;
+  const playing = inView && !paused;
+  const src = theme && near ? `/landing/${slug}-${theme}.webm#t=0.001` : undefined;
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
-    if (playing) video.play().catch(() => undefined);
+    if (!video || !src) return;
+    if (playing) video.play().catch((error: Error) => setPaused(error.name === 'NotAllowedError'));
     else video.pause();
-  }, [playing, theme]);
+  }, [playing, src]);
 
   return (
     <div
@@ -50,14 +50,14 @@ export function FeatureClip({
       )}
     >
       <video
-        key={theme}
+        key={src}
         ref={videoRef}
-        src={`/landing/${slug}-${theme}.webm`}
+        src={src}
         aria-label={label}
         muted
         loop
         playsInline
-        preload="none"
+        preload="auto"
         className="size-full object-cover"
       />
       <Button

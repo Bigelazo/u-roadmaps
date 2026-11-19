@@ -9,7 +9,8 @@ import { cn } from 'cn';
 const tones = {
   dark: 'border-primary-bright bg-primary text-primary-foreground hover:bg-primary-deep dark:border-transparent dark:bg-brand-surface-foreground dark:text-brand-surface dark:hover:bg-brand-surface-foreground/90',
   light: 'bg-primary text-primary-foreground hover:bg-primary-deep',
-  outline: '',
+  outline:
+    '[body:has([data-landing])_&]:border-transparent [body:has([data-landing])_&]:bg-primary [body:has([data-landing])_&]:text-primary-foreground [body:has([data-landing])_&]:hover:bg-primary-deep [body:has([data-landing])_&]:hover:text-primary-foreground',
 } as const;
 
 export function InstitutionalLoginForm({
