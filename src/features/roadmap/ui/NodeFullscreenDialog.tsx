@@ -2,7 +2,7 @@
 
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { NodeDescription } from './LazyNodeDescription';
@@ -20,34 +20,43 @@ export function NodeFullscreenDialog({
   title,
   description,
   children,
+  trigger,
+  actions,
   triggerLabel = 'Ver nodo en pantalla completa',
 }: {
   title: string;
   description?: string | null;
   children?: ReactNode;
+  trigger?: ReactElement;
+  actions?: ReactNode;
   triggerLabel?: string;
 }) {
   return (
     <Dialog>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <DialogTrigger
-              render={<Button type="button" variant="ghost" size="icon" />}
-              aria-label={triggerLabel}
-            >
-              <Maximize2 />
-            </DialogTrigger>
-          }
-        />
-        <TooltipContent>{triggerLabel}</TooltipContent>
-      </Tooltip>
+      {trigger ? (
+        <DialogTrigger render={trigger} />
+      ) : (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DialogTrigger
+                render={<Button type="button" variant="ghost" size="icon" />}
+                aria-label={triggerLabel}
+              >
+                <Maximize2 />
+              </DialogTrigger>
+            }
+          />
+          <TooltipContent>{triggerLabel}</TooltipContent>
+        </Tooltip>
+      )}
       <DialogContent
         className="flex h-[calc(100dvh-2rem)] flex-col gap-6 p-6 sm:max-w-5xl sm:p-8"
         showCloseButton={false}
       >
-        <DialogHeader className="shrink-0 pr-10">
-          <DialogTitle className="wrap-break-word">{title}</DialogTitle>
+        <DialogHeader className="shrink-0 flex-row items-center justify-between gap-3 pr-10">
+          <DialogTitle className="min-w-0 wrap-break-word">{title}</DialogTitle>
+          {actions}
         </DialogHeader>
         <div className="-m-1 min-h-0 flex-1 overflow-y-auto p-1">
           {children ?? (

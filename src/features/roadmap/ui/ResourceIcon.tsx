@@ -1,6 +1,7 @@
 import {
   Download,
   ExternalLink,
+  Eye,
   File,
   FileArchive,
   FileCode,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import {
   resourceCategory,
+  resourcePreviewKind,
   type ResourceCategory,
 } from '@/features/roadmap/domain/resource-file-category';
 import type { Resource } from '@/features/roadmap/types';
@@ -48,14 +50,15 @@ export function ResourceIcon({
 }
 
 export function ResourceActionIcon({
-  type,
+  resource,
   size,
   className,
 }: {
-  type: Resource['type'];
+  resource: Pick<Resource, 'type' | 'title' | 'fileContentType'>;
   size?: number;
   className?: string;
 }) {
-  const Icon = type === 'FILE' ? Download : ExternalLink;
+  const Icon =
+    resource.type === 'LINK' ? ExternalLink : resourcePreviewKind(resource) ? Eye : Download;
   return <Icon size={size} className={className} aria-hidden="true" />;
 }

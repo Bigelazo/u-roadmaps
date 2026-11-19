@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest';
-import { resourceCategory } from '@/features/roadmap/domain/resource-file-category';
+import {
+  resourceCategory,
+  resourcePreviewKind,
+} from '@/features/roadmap/domain/resource-file-category';
 import { replaceFileTitleExtension } from '@/features/roadmap/domain/resource';
 
 const file = (title: string, fileContentType: string | null = null) =>
@@ -60,4 +63,24 @@ test('a replacement keeps the edited stem and adopts the new extension', () => {
   expect(replaceFileTitleExtension('README', 'README', 'notas.md')).toBe('README.md');
   expect(replaceFileTitleExtension('Guía.pdf', 'solucion.pdf', 'Guía.docx')).toBe('Guía.docx');
   expect(replaceFileTitleExtension('Datos.csv', 'Datos.csv', 'datos')).toBe('Datos');
+});
+
+test.each([
+  ['Apunte.pdf', null, null],
+  ['Apunte.pdf', 'application/octet-stream', null],
+  ['Apunte.pdf', 'application/pdf', 'pdf'],
+  ['descarga', 'application/pdf', 'pdf'],
+  ['Notas.MD', 'text/plain', 'markdown'],
+  ['notas', 'text/markdown; charset=utf-8', 'markdown'],
+  ['script.py', 'text/x-python', null],
+  ['Notas.md', 'image/png', null],
+  ['Guía.txt', 'text/plain', null],
+] as const)('%s with content type %s previews as %s', (title, fileContentType, kind) => {
+  expect(resourcePreviewKind({ type: 'FILE', title, fileContentType })).toBe(kind);
+});
+
+test('a Link never previews as a file', () => {
+  expect(resourcePreviewKind({ type: 'LINK', title: 'Apunte.pdf', fileContentType: null })).toBe(
+    null,
+  );
 });

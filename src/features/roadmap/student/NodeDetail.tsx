@@ -1,8 +1,8 @@
 'use client';
 
-import { resourceActionLabel } from '@/features/roadmap/ui/resource-action-label';
+import { ResourceAction } from '@/features/roadmap/ui/ResourceAction';
 
-import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Eye, Pencil, X } from 'lucide-react';
 import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
@@ -153,16 +153,10 @@ function StudentResourceList({
       <ul className="-mx-2 flex flex-col">
         {resources.map((resource) => (
           <li key={resource.id}>
-            <a
-              href={resource.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={resourceActionLabel(resource)}
-              onClick={() => onAccess(resource)}
-              onAuxClick={(event: MouseEvent) => {
-                if (event.button === 1) onAccess(resource);
-              }}
-              className="group/resource flex min-h-11 items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            <ResourceAction
+              resource={resource}
+              onAccess={onAccess}
+              className="group/resource flex min-h-11 w-full items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
             >
               <span className="shrink-0 text-primary">
                 <ResourceIcon resource={resource} size={18} />
@@ -172,11 +166,11 @@ function StudentResourceList({
                 <ResourceMetadata resource={resource} isReviewed={isReviewed(resource)} />
               </span>
               <ResourceActionIcon
-                type={resource.type}
+                resource={resource}
                 size={16}
                 className="shrink-0 text-muted-foreground group-hover/resource:text-primary"
               />
-            </a>
+            </ResourceAction>
           </li>
         ))}
       </ul>

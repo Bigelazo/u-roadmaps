@@ -29,13 +29,21 @@ type FileDownload = {
   readonly title: string;
 };
 
-export function fileDownloadResponse(download: FileDownload): NextResponse {
+function dispositionType(request: Request, contentType: string) {
+  const inline =
+    new URL(request.url).searchParams.get('disposition') === 'inline' &&
+    contentType.split(';')[0].trim().toLowerCase() === 'application/pdf';
+  return inline ? 'inline' : 'attachment';
+}
+
+export function fileDownloadResponse(download: FileDownload, request: Request): NextResponse {
   return new NextResponse(download.stream, {
     headers: {
       'Content-Type': download.contentType,
       'Content-Length': String(download.size),
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(download.title)}`,
+      'Content-Disposition': `${dispositionType(request, download.contentType)}; filename*=UTF-8''${encodeURIComponent(download.title)}`,
       'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }

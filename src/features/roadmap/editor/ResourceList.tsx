@@ -1,4 +1,4 @@
-import { resourceActionLabel } from '@/features/roadmap/ui/resource-action-label';
+import { ResourceAction } from '@/features/roadmap/ui/ResourceAction';
 import { Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { cn } from 'cn';
@@ -34,15 +34,12 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
             <span className="block truncate font-medium">{item.title}</span>
             <ResourceMetadata resource={item} className="mt-0.5" />
           </span>
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={resourceActionLabel(item)}
+          <ResourceAction
+            resource={item}
             className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
-            <ResourceActionIcon type={item.type} className="size-3.5" />
-          </a>
+            <ResourceActionIcon resource={item} className="size-3.5" />
+          </ResourceAction>
           <Button
             type="button"
             size="icon-xs"
