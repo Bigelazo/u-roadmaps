@@ -303,6 +303,45 @@ test('the scheduled unlock badge follows the clock across Chile midnight and the
   }
 });
 
+test.each([
+  [true, ['Sábado, a las 17:45', 'Sábado, a las 17:45']],
+  [false, ['Sábado, a las 17:45']],
+])(
+  'a scheduled unlock that includes dependents (%s) badges every dependent it will release',
+  (includesDependents, labels) => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-19T12:00:00-03:00') });
+    try {
+      const [scheduledNode, dependentNode] = teacherRoadmap.nodes;
+      render(
+        <RoadmapGraph
+          projection={{
+            kind: 'teaching',
+            roadmap: {
+              ...teacherRoadmap,
+              nodes: [
+                {
+                  ...scheduledNode,
+                  isVisible: true,
+                  isTeacherBlocked: true,
+                  teacherUnlockAt: '2026-11-21T17:45:00-03:00',
+                  teacherUnlockIncludesDependents: includesDependents,
+                },
+                { ...dependentNode, isVisible: true, isTeacherBlocked: true },
+              ],
+            },
+          }}
+          {...commonProps}
+        />,
+      );
+      expect(
+        screen.queryAllByTestId('roadmap-node-scheduled-unlock').map((badge) => badge.textContent),
+      ).toEqual(labels);
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
 test('reopening a radial menu during its exit makes its actions available immediately', () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   try {

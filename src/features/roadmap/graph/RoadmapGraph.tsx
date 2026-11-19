@@ -3,6 +3,7 @@
 import {
   formatScheduledUnlockMoment,
   nextScheduledUnlockLabelChange,
+  projectedScheduledUnlockMoments,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { nodeTypePaint } from '@/shared/node-type';
 import {
@@ -291,6 +292,23 @@ function useScheduledUnlockClock(projection: RoadmapGraphProjection) {
   return clock.now;
 }
 
+function scheduledUnlockMoments(projection: RoadmapGraphProjection, now: Date) {
+  if (projection.kind !== 'teaching') return new Map<string, string>();
+  const { nodes, dependencies } = projection.roadmap;
+  return projectedScheduledUnlockMoments({
+    nodes: nodes.map((node) => ({
+      id: node.id,
+      isVisible: node.isVisible,
+      isTeacherBlocked: node.isTeacherBlocked,
+      teacherUnlockAt: ('teacherUnlockAt' in node && node.teacherUnlockAt) || null,
+      teacherUnlockIncludesDependents:
+        'teacherUnlockIncludesDependents' in node && node.teacherUnlockIncludesDependents === true,
+    })),
+    dependencies,
+    now,
+  });
+}
+
 function mapProjectionToFlow(
   projection: RoadmapGraphProjection,
   onDeleteDependency: (dependencyId: string) => void,
@@ -303,11 +321,13 @@ function mapProjectionToFlow(
   const isTeacherView = projection.kind === 'teaching';
   const canEdit = isTeacherView && Boolean(projection.editing);
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
+  const unlockMoments = scheduledUnlockMoments(projection, now);
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
     const resources = 'resources' in node ? node.resources : [];
     const nodeType = nodeTypesById.get(node.nodeTypeId);
+    const scheduledUnlockAt = unlockMoments.get(node.id);
     const isActionMenuOpen =
       actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id;
     return {
@@ -325,14 +345,9 @@ function mapProjectionToFlow(
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
         fileCount: resources.filter((resource) => resource.type === 'FILE').length,
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
-        scheduledUnlockLabel:
-          isTeacherView &&
-          'teacherUnlockAt' in node &&
-          node.isTeacherBlocked &&
-          node.teacherUnlockAt &&
-          Date.parse(node.teacherUnlockAt) > now.getTime()
-            ? formatScheduledUnlockMoment(node.teacherUnlockAt, now)
-            : undefined,
+        scheduledUnlockLabel: scheduledUnlockAt
+          ? formatScheduledUnlockMoment(scheduledUnlockAt, now)
+          : undefined,
         blockReason,
         canManageActions: canEdit,
         useActionSheet: actionMenu.useActionSheet,
@@ -737,10 +752,14 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
         <Panel
           position="top-left"
           data-canvas-overlay="top"
-          className="pointer-events-none z-4! m-4! flex w-[calc(100%-2rem)] flex-wrap items-start gap-3 sm:m-6! sm:w-[calc(100%-3rem)]"
+          className="@container/top-row pointer-events-none z-4! mx-6! mt-3! w-[calc(100%-3rem)]"
         >
-          <div className={cn(titlePlateClassName, 'max-w-md')}>{slots?.topLeft}</div>
-          <div className="flex min-w-fit flex-1 justify-center">{slots?.topCenter}</div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 @max-[56rem]/top-row:grid-cols-1">
+            <div className="@container/title-plate mt-3 w-full max-w-md min-w-0">
+              <div className={cn(titlePlateClassName, 'w-fit max-w-full')}>{slots?.topLeft}</div>
+            </div>
+            <div className="justify-self-center">{slots?.topCenter}</div>
+          </div>
         </Panel>
         {topRight}
       </>

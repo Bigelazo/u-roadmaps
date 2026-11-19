@@ -4,13 +4,11 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import { cn } from 'cn';
 import type { Resource } from '@/features/roadmap/types';
-import {
-  resourcePreviewKind,
-  type ResourcePreviewKind,
-} from '@/features/roadmap/domain/resource-file-category';
+import { resourcePreviewKind } from '@/features/roadmap/domain/resource-file-category';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { resourceActionLabel } from './resource-action-label';
 import { NodeFullscreenDialog } from './NodeFullscreenDialog';
+import { PdfPreviewDialog } from './PdfPreviewDialog';
 import { NodeDescription } from './LazyNodeDescription';
 
 type Props = {
@@ -41,19 +39,22 @@ export function ResourceAction({ resource, className, onAccess, children }: Prop
     );
   }
 
+  const trigger = (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={() => onAccess?.(resource)}
+      className={cn(className, 'text-left')}
+    >
+      {children}
+    </button>
+  );
+  if (previewKind === 'pdf') return <PdfPreviewDialog resource={resource} trigger={trigger} />;
+
   return (
     <NodeFullscreenDialog
       title={resource.title}
-      trigger={
-        <button
-          type="button"
-          aria-label={label}
-          onClick={() => onAccess?.(resource)}
-          className={cn(className, 'text-left')}
-        >
-          {children}
-        </button>
-      }
+      trigger={trigger}
       actions={
         <a
           href={resource.url}
@@ -65,22 +66,9 @@ export function ResourceAction({ resource, className, onAccess, children }: Prop
         </a>
       }
     >
-      <ResourcePreview kind={previewKind} resource={resource} />
+      <MarkdownPreview url={resource.url} />
     </NodeFullscreenDialog>
   );
-}
-
-function ResourcePreview({ kind, resource }: { kind: ResourcePreviewKind; resource: Resource }) {
-  if (kind === 'pdf') {
-    return (
-      <iframe
-        title={`Vista previa de ${resource.title}`}
-        src={`${resource.url}?disposition=inline`}
-        className="size-full rounded-md border border-border"
-      />
-    );
-  }
-  return <MarkdownPreview url={resource.url} />;
 }
 
 type MarkdownState =

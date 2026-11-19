@@ -590,27 +590,30 @@ function NodeResourceSummary({
 function NodeScheduledUnlockBadge({ label }: { label?: string }) {
   if (!label) return null;
   return (
-    <Tooltip>
-      <TooltipTrigger
-        delay={0}
-        render={
-          <span
-            data-testid="roadmap-node-scheduled-unlock"
-            tabIndex={0}
-            className={cn(
-              'absolute bottom-[-10px] left-[-10px] z-10 flex h-6 max-w-[calc(100%-16px)] items-center gap-1 rounded-md border-2 border-card bg-card px-1.5 text-[10px] leading-none font-bold whitespace-nowrap text-graphite tabular-nums shadow-sm outline-none',
-              badgeFocusClassName,
-            )}
-          />
-        }
-      >
-        <CalendarClock className="size-3 shrink-0" aria-hidden="true" />
-        <span className="truncate">{label}</span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        Este nodo será desbloqueado en la fecha descrita
-      </TooltipContent>
-    </Tooltip>
+    <div
+      data-testid="roadmap-node-scheduled-unlock-anchor"
+      className="pointer-events-none absolute right-[30px] bottom-[-10px] left-[-10px] z-10 flex justify-end"
+    >
+      <Tooltip>
+        <TooltipTrigger
+          delay={0}
+          render={
+            <span
+              data-testid="roadmap-node-scheduled-unlock"
+              tabIndex={0}
+              className={cn(
+                'pointer-events-auto mr-auto flex h-6 shrink-0 items-center gap-1 rounded-md border-2 border-card bg-card px-1.5 text-[10px] leading-none font-bold whitespace-nowrap text-graphite tabular-nums shadow-sm outline-none',
+                badgeFocusClassName,
+              )}
+            />
+          }
+        >
+          <CalendarClock className="size-3 shrink-0" aria-hidden="true" />
+          {label}
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Será desbloqueado en esta fecha</TooltipContent>
+      </Tooltip>
+    </div>
   );
 }
 

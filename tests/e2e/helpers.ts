@@ -7,6 +7,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { extensionPromptStorageKey } from '@/shared/u-cursos-extension';
+
 const sessionCookieName = 'next-auth.session-token';
 const sessionSecret = process.env.NEXTAUTH_SECRET ?? 'e2e-nextauth-secret';
 
@@ -25,7 +27,21 @@ export async function sessionCookie(userId: string) {
   return `${sessionCookieName}=${await sessionToken(userId)}`;
 }
 
+export async function silenceExtensionPrompt(context: BrowserContext) {
+  await context.addInitScript((key) => {
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ entries: 0, threshold: 3, shown: 0, optedOut: true }),
+      );
+    } catch {
+      return;
+    }
+  }, extensionPromptStorageKey);
+}
+
 export async function authenticateAs(context: BrowserContext, userId: string) {
+  await silenceExtensionPrompt(context);
   const value = await sessionToken(userId);
   await context.addCookies([{ name: sessionCookieName, value, domain: 'localhost', path: '/' }]);
 }

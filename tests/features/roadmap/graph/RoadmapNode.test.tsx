@@ -703,7 +703,7 @@ test.each([
   },
 );
 
-test('shows a Scheduled unlock moment in the bottom-left corner, explained on hover', async () => {
+test('shows a whole Scheduled unlock moment from the bottom-left corner, growing outward clear of the status corner, explained on hover', async () => {
   renderNode(
     nodeProps({
       id: 'scheduled-node',
@@ -713,10 +713,16 @@ test('shows a Scheduled unlock moment in the bottom-left corner, explained on ho
 
   const badge = screen.getByTestId('roadmap-node-scheduled-unlock');
   expect(badge.textContent).toBe('Mañana, a las 23:59');
-  expect(badge.className).toContain('bottom-[-10px]');
-  expect(badge.className).toContain('left-[-10px]');
+  expect(badge.className).toContain('whitespace-nowrap');
+  expect(badge.className).toContain('shrink-0');
+  expect(badge.className).not.toContain('max-w-');
+  const anchor = screen.getByTestId('roadmap-node-scheduled-unlock-anchor');
+  expect(anchor.className).toContain('bottom-[-10px]');
+  expect(anchor.className).toContain('left-[-10px]');
+  expect(anchor.className).toContain('right-[30px]');
+  expect(anchor.className).toContain('justify-end');
   await userEvent.hover(badge);
-  expect(await screen.findByText('Este nodo será desbloqueado en la fecha descrita')).toBeTruthy();
+  expect(await screen.findByText('Será desbloqueado en esta fecha')).toBeTruthy();
 });
 
 test('omits the Scheduled unlock corner without a scheduled moment', () => {

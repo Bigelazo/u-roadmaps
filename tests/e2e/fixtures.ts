@@ -18,7 +18,7 @@ import {
 } from '@/development/fixtures/catalog';
 import { insert, literal, queryJson, sql } from './database';
 import type { NoticeClass } from '@/features/notifications/application/notice-effect';
-import { fixtureRoadmapPath, sessionCookie } from './helpers';
+import { fixtureRoadmapPath, sessionCookie, silenceExtensionPrompt } from './helpers';
 import {
   courseCodePrefix,
   syntheticTermYearStart,
@@ -251,6 +251,11 @@ export const test = base.extend<{
   teacherApi: APIRequestContext;
   studentApi: APIRequestContext;
 }>({
+  context: async ({ context }, provide) => {
+    await silenceExtensionPrompt(context);
+    await provide(context);
+  },
+
   ownedTestData: async ({}, provide) => {
     const owned: OwnedTestData = {
       courseCodes: [],

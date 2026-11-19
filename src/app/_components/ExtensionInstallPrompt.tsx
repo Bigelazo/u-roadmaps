@@ -14,24 +14,21 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import {
+  dueExtensionPrompt,
   extensionBrowserOf,
-  extensionPromptStorageKey,
   extensionStores,
-  parseExtensionPromptRecord,
-  visitExtensionPrompt,
+  showExtensionPrompt,
   type ExtensionBrowser,
   type ExtensionPromptRecord,
 } from '@/shared/u-cursos-extension';
+import {
+  countPlatformEntry,
+  extensionPromptAvailable,
+  readExtensionPromptRecord,
+  storeExtensionPromptRecord,
+} from './platform-entry';
 
 type Prompt = { browser: ExtensionBrowser; offerOptOut: boolean; record: ExtensionPromptRecord };
-
-function storeRecord(record: ExtensionPromptRecord) {
-  try {
-    localStorage.setItem(extensionPromptStorageKey, JSON.stringify(record));
-  } catch {
-    return;
-  }
-}
 
 function anotherDialogIsOpen() {
   return document.querySelector('[role="dialog"], [role="alertdialog"]') !== null;
@@ -44,20 +41,16 @@ export function ExtensionInstallPrompt({ suppressed }: Readonly<{ suppressed: bo
   const installRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
-    if (suppressed || window.self !== window.top) return;
+    if (suppressed || !extensionPromptAvailable()) return;
+    countPlatformEntry();
     const browser = extensionBrowserOf(navigator.userAgent);
-    if (!browser) return;
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(extensionPromptStorageKey);
-    } catch {
-      return;
-    }
-    const visit = visitExtensionPrompt(parseExtensionPromptRecord(stored), Date.now());
-    if (visit.prompt && anotherDialogIsOpen()) return;
-    storeRecord(visit.record);
-    if (!visit.prompt) return;
-    setPrompt({ browser, offerOptOut: visit.prompt.offerOptOut, record: visit.record });
+    const record = readExtensionPromptRecord();
+    if (!browser || !record) return;
+    const due = dueExtensionPrompt(record);
+    if (!due || anotherDialogIsOpen()) return;
+    const shown = showExtensionPrompt(record, Math.random);
+    storeExtensionPromptRecord(shown);
+    setPrompt({ browser, offerOptOut: due.offerOptOut, record: shown });
     setOpen(true);
   }, [suppressed]);
 
@@ -66,7 +59,7 @@ export function ExtensionInstallPrompt({ suppressed }: Readonly<{ suppressed: bo
 
   const changeOpen = (next: boolean) => {
     setOpen(next);
-    if (!next && optOut) storeRecord({ ...prompt.record, optedOut: true });
+    if (!next && optOut) storeExtensionPromptRecord({ ...prompt.record, optedOut: true });
   };
 
   return (

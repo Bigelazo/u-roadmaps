@@ -4,6 +4,7 @@ import { cookies, headers } from 'next/headers';
 import AuthenticationAlert from '@/app/_components/AuthenticationAlert';
 import { DevelopmentBar, developmentPersonas } from '@/development';
 import GlobalNavigation from '@/app/_components/GlobalNavigation';
+import { PlatformEntryCounter } from '@/app/_components/PlatformEntryCounter';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { isFramedRequest } from '@/app/_adapters/embedding';
@@ -68,6 +69,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               }
             />
           )}
+          {user && !framed ? <PlatformEntryCounter /> : null}
           <AuthenticationAlert />
           {children}
           <Toaster limit={3} />
