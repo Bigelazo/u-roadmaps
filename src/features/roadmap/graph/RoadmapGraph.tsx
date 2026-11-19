@@ -1,5 +1,6 @@
 'use client';
 
+import { formatScheduledUnlockMoment } from '@/features/roadmap/domain/scheduled-unlock';
 import { nodeTypePaint } from '@/shared/node-type';
 import {
   ConnectionTargetContext,
@@ -257,6 +258,7 @@ function mapProjectionToFlow(
   const isTeacherView = projection.kind === 'teaching';
   const canEdit = isTeacherView && Boolean(projection.editing);
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
+  const now = new Date();
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
@@ -279,6 +281,14 @@ function mapProjectionToFlow(
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
         fileCount: resources.filter((resource) => resource.type === 'FILE').length,
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
+        scheduledUnlockLabel:
+          isTeacherView &&
+          'teacherUnlockAt' in node &&
+          node.isTeacherBlocked &&
+          node.teacherUnlockAt &&
+          Date.parse(node.teacherUnlockAt) > now.getTime()
+            ? formatScheduledUnlockMoment(node.teacherUnlockAt, now)
+            : undefined,
         blockReason,
         canManageActions: canEdit,
         useActionSheet: actionMenu.useActionSheet,

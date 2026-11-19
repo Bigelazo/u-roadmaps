@@ -702,3 +702,25 @@ test.each([
     expect(onAction).not.toHaveBeenCalled();
   },
 );
+
+test('shows a Scheduled unlock moment in the bottom-left corner, explained on hover', async () => {
+  renderNode(
+    nodeProps({
+      id: 'scheduled-node',
+      data: { isTeacherBlocked: true, scheduledUnlockLabel: 'Mañana, a las 23:59' },
+    }),
+  );
+
+  const badge = screen.getByTestId('roadmap-node-scheduled-unlock');
+  expect(badge.textContent).toBe('Mañana, a las 23:59');
+  expect(badge.className).toContain('bottom-[-10px]');
+  expect(badge.className).toContain('left-[-10px]');
+  await userEvent.hover(badge);
+  expect(await screen.findByText('Este nodo será desbloqueado en la fecha descrita')).toBeTruthy();
+});
+
+test('omits the Scheduled unlock corner without a scheduled moment', () => {
+  renderNode(nodeProps({ id: 'unscheduled-node', data: { isTeacherBlocked: true } }));
+
+  expect(screen.queryByTestId('roadmap-node-scheduled-unlock')).toBeNull();
+});

@@ -5,6 +5,7 @@ import {
   chileWallClock,
   blockedPrerequisiteNodeIds,
   decideScheduledUnlock,
+  formatScheduledUnlockMoment,
   settleDueScheduledUnlocks,
 } from '@/features/roadmap/domain/scheduled-unlock';
 
@@ -232,4 +233,28 @@ test('finds every Teacher-blocked transitive prerequisite a Scheduled unlock als
 
   expect(blockedPrerequisiteNodeIds({ nodes, dependencies, nodeId: 'd' })).toEqual(['a', 'c']);
   expect(blockedPrerequisiteNodeIds({ nodes, dependencies, nodeId: 'a' })).toEqual([]);
+});
+
+test('describes a Scheduled unlock moment relative to today in Chile time', () => {
+  const now = new Date('2026-11-19T12:00:00-03:00');
+
+  expect(formatScheduledUnlockMoment('2026-11-19T17:45:00-03:00', now)).toBe('Hoy, a las 17:45');
+  expect(formatScheduledUnlockMoment('2026-11-20T02:30:00.000Z', now)).toBe('Hoy, a las 23:30');
+  expect(formatScheduledUnlockMoment('2026-11-20T23:59:00-03:00', now)).toBe('Mañana, a las 23:59');
+  expect(formatScheduledUnlockMoment('2026-11-26T09:23:00-03:00', now)).toBe(
+    'Jueves 26, a las 09:23',
+  );
+  expect(formatScheduledUnlockMoment('2026-12-03T02:02:00-03:00', now)).toBe(
+    'Jueves 03/12, a las 02:02',
+  );
+  expect(
+    formatScheduledUnlockMoment('2026-12-01T09:00:00-03:00', new Date('2026-11-30T12:00:00-03:00')),
+  ).toBe('Mañana, a las 09:00');
+  const newYearsEve = new Date('2026-12-31T20:00:00-03:00');
+  expect(formatScheduledUnlockMoment('2027-01-01T00:15:00-03:00', newYearsEve)).toBe(
+    'Mañana, a las 00:15',
+  );
+  expect(formatScheduledUnlockMoment('2027-01-06T08:00:00-03:00', newYearsEve)).toBe(
+    'Miércoles 06/01, a las 08:00',
+  );
 });
