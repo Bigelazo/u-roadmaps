@@ -13,6 +13,7 @@ import {
   LockKeyhole,
   type LucideIcon,
 } from 'lucide-react';
+import { useId } from 'react';
 import { domAnimation, LazyMotion } from 'motion/react';
 import * as m from 'motion/react-m';
 import { cn } from 'cn';
@@ -158,12 +159,16 @@ function stepPath(source: SpecimenNode, target: SpecimenNode) {
   ].join(' ');
 }
 
-function StatusBadge({ node, width }: { node: SpecimenNode; width: number }) {
-  const { Icon, color } = {
-    completed: { Icon: CircleCheckBig, color: 'var(--progress-deep)' },
-    available: { Icon: CircleEllipsis, color: 'var(--ink)' },
-    locked: { Icon: LockKeyhole, color: 'var(--graphite)' },
-  }[node.status];
+const statusMarks = {
+  completed: { Icon: CircleCheckBig, color: 'var(--progress-deep)' },
+  available: { Icon: CircleEllipsis, color: 'var(--ink)' },
+  locked: { Icon: LockKeyhole, color: 'var(--graphite)' },
+} as const;
+
+type RouteSpecimenVariant = 'canvas' | 'hero';
+
+function StatusBadge({ status, width }: { status: keyof typeof statusMarks; width: number }) {
+  const { Icon, color } = statusMarks[status];
   const cx = width - 6;
   const cy = nodeHeight - 6;
   return (
@@ -220,9 +225,20 @@ function ResourceBadge({ node, width }: { node: SpecimenNode; width: number }) {
 type RouteSpecimenInteraction = {
   highlightedNodeId?: RouteSpecimenNodeId | null;
   onNodeHover?: (nodeId: RouteSpecimenNodeId | null) => void;
+  highlightDelay?: number;
 };
 
-function NodeOutline({ width, highlighted }: { width: number; highlighted: boolean }) {
+type SpecimenIds = { arrow: string; grid: string; shadow: string };
+
+function NodeOutline({
+  width,
+  highlighted,
+  highlightDelay,
+}: {
+  width: number;
+  highlighted: boolean;
+  highlightDelay: number;
+}) {
   return (
     <m.rect
       x={-6}
@@ -236,7 +252,7 @@ function NodeOutline({ width, highlighted }: { width: number; highlighted: boole
       style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
       initial={false}
       animate={{ opacity: highlighted ? 1 : 0, scale: highlighted ? 1 : 0.96 }}
-      transition={{ delay: highlighted ? 0.45 : 0, duration: 0.3, ease: easeOutExpo }}
+      transition={{ delay: highlighted ? highlightDelay : 0, duration: 0.3, ease: easeOutExpo }}
     />
   );
 }
@@ -244,11 +260,22 @@ function NodeOutline({ width, highlighted }: { width: number; highlighted: boole
 function RouteNode({
   node,
   highlighted,
+  highlightDelay,
   onNodeHover,
-}: { node: SpecimenNode; highlighted: boolean } & Pick<RouteSpecimenInteraction, 'onNodeHover'>) {
+  variant,
+  ids,
+}: {
+  node: SpecimenNode;
+  highlighted: boolean;
+  highlightDelay: number;
+  variant: RouteSpecimenVariant;
+  ids: SpecimenIds;
+} & Pick<RouteSpecimenInteraction, 'onNodeHover'>) {
   const width = nodeWidth(node);
   const type = nodeTypes[node.type];
-  const locked = node.status === 'locked';
+  const { status } = node;
+  const locked = status === 'locked';
+  const noteColor = variant === 'hero' ? 'var(--brand-surface-muted)' : 'var(--graphite)';
   const typeColor = nodeTypePaint(type.color);
   const nodeColor = locked ? 'var(--blocked)' : typeColor;
   return (
@@ -262,8 +289,8 @@ function RouteNode({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: easeOutExpo, delay: nodeDepth(node.id) * stagger * 2 }}
       >
-        <NodeOutline width={width} highlighted={highlighted} />
-        <g opacity={locked ? 0.88 : 1} filter={locked ? undefined : 'url(#route-node-shadow)'}>
+        <NodeOutline width={width} highlighted={highlighted} highlightDelay={highlightDelay} />
+        <g opacity={locked ? 0.88 : 1} filter={locked ? undefined : `url(#${ids.shadow})`}>
           <rect
             data-route-node={node.id}
             x={1}
@@ -293,16 +320,16 @@ function RouteNode({
           {node.title}
         </text>
         <ResourceBadge node={node} width={width} />
-        <StatusBadge node={node} width={width} />
+        <StatusBadge status={status} width={width} />
         {node.note ? (
           <g transform={`translate(0 ${nodeHeight + 20})`}>
-            <node.note.Icon x={0} y={-1} size={14} color="var(--graphite)" aria-hidden="true" />
+            <node.note.Icon x={0} y={-1} size={14} color={noteColor} aria-hidden="true" />
             <text
               x={20}
               y={11}
               fontSize={13}
               fontWeight={600}
-              fill="var(--graphite)"
+              fill={noteColor}
               className="max-sm:text-[15px]"
             >
               {node.note.text}
@@ -317,28 +344,45 @@ function RouteNode({
 export function RouteSpecimen({
   highlightedNodeId = null,
   onNodeHover,
+  highlightDelay = 0.45,
   className,
   canvasClassName,
-}: RouteSpecimenInteraction & { className?: string; canvasClassName?: string }) {
+  variant = 'canvas',
+}: RouteSpecimenInteraction & {
+  className?: string;
+  canvasClassName?: string;
+  variant?: RouteSpecimenVariant;
+}) {
+  const id = useId();
+  const ids = { arrow: `${id}-arrow`, grid: `${id}-grid`, shadow: `${id}-shadow` };
+  const hero = variant === 'hero';
+  const edgeColor = hero ? 'var(--brand-surface-foreground)' : 'var(--ink)';
   return (
     <LazyMotion features={domAnimation} strict>
       <figure aria-label="Ruta de aprendizaje de ejemplo" className={cn('w-full', className)}>
         <div
           data-route-canvas
-          className={cn('overflow-hidden rounded-xl bg-card ring-1 ring-white/10', canvasClassName)}
+          className={cn(
+            !hero && 'overflow-hidden rounded-xl bg-card ring-1 ring-white/10',
+            canvasClassName,
+          )}
         >
           <svg
             viewBox={`-8 -8 ${viewBox.width + 16} ${viewBox.height + 16}`}
-            className="block h-auto w-full font-sans"
+            preserveAspectRatio={hero ? 'xMinYMid meet' : undefined}
+            className={cn(
+              'block font-sans',
+              hero ? 'h-auto w-full lg:h-full lg:w-auto lg:max-w-full' : 'h-auto w-full',
+            )}
             aria-hidden="true"
             focusable="false"
           >
             <defs>
-              <pattern id="route-grid" width={20} height={20} patternUnits="userSpaceOnUse">
+              <pattern id={ids.grid} width={20} height={20} patternUnits="userSpaceOnUse">
                 <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--fog)" strokeWidth={1} />
               </pattern>
               <marker
-                id="route-arrow"
+                id={ids.arrow}
                 viewBox="-10 -10 20 20"
                 markerWidth={18}
                 markerHeight={18}
@@ -347,14 +391,14 @@ export function RouteSpecimen({
               >
                 <polyline
                   points="-5,-4 0,0 -5,4 -5,-4"
-                  fill="var(--ink)"
-                  stroke="var(--ink)"
+                  fill={edgeColor}
+                  stroke={edgeColor}
                   strokeWidth={1}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </marker>
-              <filter id="route-node-shadow" x="-20%" y="-20%" width="140%" height="160%">
+              <filter id={ids.shadow} x="-20%" y="-20%" width="140%" height="160%">
                 <feDropShadow
                   dx={0}
                   dy={4}
@@ -364,7 +408,9 @@ export function RouteSpecimen({
                 />
               </filter>
             </defs>
-            <rect x={-8} y={-8} width="100%" height="100%" fill="url(#route-grid)" />
+            {hero ? null : (
+              <rect x={-8} y={-8} width="100%" height="100%" fill={`url(#${ids.grid})`} />
+            )}
             {dependencies.map(([sourceId, targetId]) => {
               const source = nodeById.get(sourceId)!;
               const target = nodeById.get(targetId)!;
@@ -381,9 +427,9 @@ export function RouteSpecimen({
                   animate={{ pathLength: 1, opacity: 1 }}
                   transition={transition}
                   fill="none"
-                  stroke="var(--ink)"
+                  stroke={edgeColor}
                   strokeWidth={1.5}
-                  markerEnd="url(#route-arrow)"
+                  markerEnd={`url(#${ids.arrow})`}
                 />
               );
             })}
@@ -392,34 +438,40 @@ export function RouteSpecimen({
                 key={node.id}
                 node={node}
                 highlighted={node.id === highlightedNodeId}
+                highlightDelay={highlightDelay}
                 onNodeHover={onNodeHover}
+                variant={variant}
+                ids={ids}
               />
             ))}
           </svg>
         </div>
-        <figcaption className="mt-4 flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-            <span className="font-semibold text-brand-surface-foreground">
-              Curso de ejemplo · Programación · {completedCount} de {nodes.length} nodos completados
-            </span>
-            {nextNode ? (
-              <span className="text-brand-surface-muted">Siguiente paso: {nextNode.title}</span>
-            ) : null}
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
-            <div
-              className="h-full rounded-full bg-progress"
-              style={{ width: `${(completedCount / nodes.length) * 100}%` }}
-            />
-          </div>
-          <ol aria-label="Nodos de la ruta de ejemplo" className="sr-only">
-            {nodes.map((node) => (
-              <li key={node.id}>
-                {node.title}: {node.description}
-              </li>
-            ))}
-          </ol>
-        </figcaption>
+        {hero ? null : (
+          <figcaption className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+              <span className="font-semibold text-brand-surface-foreground">
+                Curso de ejemplo · Programación · {completedCount} de {nodes.length} nodos
+                completados
+              </span>
+              {nextNode ? (
+                <span className="text-brand-surface-muted">Siguiente paso: {nextNode.title}</span>
+              ) : null}
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-progress"
+                style={{ width: `${(completedCount / nodes.length) * 100}%` }}
+              />
+            </div>
+            <ol aria-label="Nodos de la ruta de ejemplo" className="sr-only">
+              {nodes.map((node) => (
+                <li key={node.id}>
+                  {node.title}: {node.description}
+                </li>
+              ))}
+            </ol>
+          </figcaption>
+        )}
       </figure>
     </LazyMotion>
   );

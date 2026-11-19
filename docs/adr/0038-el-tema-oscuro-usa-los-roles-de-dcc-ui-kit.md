@@ -17,3 +17,4 @@ Los colores de Tipo de nodo siguen guardándose como el hex elegido por el equip
 - La variante `dark:` de Tailwind depende de `data-theme`, no de `prefers-color-scheme`.
 - La extensión de U-Cursos no cambia. Que el Roadmap embebido siga el tema de U-Cursos en vez de la elección en U-Roadmaps requeriría que la extensión pase el tema al iframe.
 - Agregar un color a la paleta de Tipos de nodo exige definir también su variante oscura.
+- Las bandas de marca de la landing (`brand-surface`) son la excepción a la distribución: usan `--dcc-bg` (`#11161e`), más oscuro que la página y distinto de la navegación, para que sigan leyéndose como bandas.

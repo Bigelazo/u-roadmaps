@@ -9,18 +9,6 @@
   }
 }
 
-@custom-variant stage {
-  @media (min-width: 64rem) and (min-height: 38rem) {
-    @slot;
-  }
-}
-
-@custom-variant short {
-  @media (max-height: 51rem) {
-    @slot;
-  }
-}
-
 body {
   font-family: var(--font-sans), Arial, sans-serif;
   overflow-x: hidden;
@@ -488,7 +476,7 @@ body:has([data-viewport-page]) [data-global-navigation] {
   --warning-deep: #f0cf8f;
   --scrim: rgb(0 0 0 / 60%);
   --tab-active: #d23118;
-  --brand-surface: #40506a;
+  --brand-surface: #11161e;
   --brand-surface-foreground: #fcfdfe;
   --brand-surface-muted: #bdd2ea;
   --brand-surface-line: #5d7c8e;

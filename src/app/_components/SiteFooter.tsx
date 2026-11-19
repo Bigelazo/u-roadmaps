@@ -12,7 +12,7 @@ async function StarredRepositoryLink() {
 export function SiteFooter() {
   return (
     <footer className="shrink-0 border-t bg-background text-sm text-graphite">
-      <div className="mx-auto flex max-w-360 flex-col gap-4 px-4 py-6 sm:px-6 md:flex-row md:items-center md:justify-between md:gap-8 [body:has([data-page-width=full])_&]:max-w-none">
+      <div className="mx-auto flex max-w-360 flex-col gap-4 px-4 py-6 sm:px-6 md:flex-row md:items-center md:justify-between md:gap-8 lg:[body:has([data-landing])_&]:px-12 [body:has([data-page-width=full])_&]:max-w-none">
         <div className="flex flex-col gap-1">
           <p>
             <span className="font-semibold text-ink">U-Roadmaps</span> · Los contenidos de tus
