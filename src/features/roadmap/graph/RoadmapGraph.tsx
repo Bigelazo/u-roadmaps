@@ -175,6 +175,19 @@ function fitAllOptions(compact: boolean, container: HTMLElement | null): FitView
     : { ...roadmapFitViewOptions, minZoom: roadmapMinZoom };
 }
 
+const fitAllDurationMs = 450;
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function horizontalWheelDelta(event: WheelEvent) {
+  if (event.ctrlKey) return 0;
+  const lineHeight = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 20 : 1;
+  if (event.shiftKey) return (event.deltaX || event.deltaY) * lineHeight;
+  return Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX * lineHeight : 0;
+}
+
 function notifyConnectionRejection(rejection: ConnectionRejection) {
   notify.error(<DependencyRejectionMessage {...rejection} />);
 }
@@ -512,9 +525,10 @@ function RoadmapGraphToolbar({
                 variant="outline"
                 size="icon"
                 onClick={() =>
-                  void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
-                    onFitView?.(),
-                  )
+                  void fitView({
+                    ...fitAllOptions(compact, containerRef.current),
+                    duration: prefersReducedMotion() ? 0 : fitAllDurationMs,
+                  }).then(() => onFitView?.())
                 }
               >
                 <Maximize aria-hidden="true" />
@@ -1354,6 +1368,11 @@ function RoadmapGraphContents({
         containerRef={containerRef}
       />
       <TutorialRevealTarget containerRef={containerRef} />
+      <HorizontalWheelPan
+        containerRef={containerRef}
+        enabled={!openActionMenuNodeId && !model.closingActionMenuNodeId}
+        onViewportChange={props.onViewportChange}
+      />
       <NodeMeasurementRecovery nodes={flow.nodes} />
       <CompactEditorViewportAdjustment
         nodeId={canEdit ? props.selectedNodeId : null}
@@ -1418,6 +1437,37 @@ function CompactInitialViewport({
     });
     return () => cancelAnimationFrame(frame);
   }, [compact, containerRef, initialized, isStudent, nodes, setViewport, skip]);
+  return null;
+}
+
+function HorizontalWheelPan({
+  containerRef,
+  enabled,
+  onViewportChange,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>;
+  enabled: boolean;
+  onViewportChange: RoadmapGraphProps['onViewportChange'];
+}) {
+  const { getViewport, setViewport } = useReactFlow();
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !enabled) return;
+    const pan = (event: WheelEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.react-flow__renderer') || target.closest('.nowheel')) return;
+      const deltaX = horizontalWheelDelta(event);
+      if (!deltaX) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const viewport = getViewport();
+      const next = { ...viewport, x: viewport.x - deltaX };
+      void setViewport(next);
+      onViewportChange?.(next);
+    };
+    container.addEventListener('wheel', pan, { capture: true, passive: false });
+    return () => container.removeEventListener('wheel', pan, { capture: true });
+  }, [containerRef, enabled, getViewport, onViewportChange, setViewport]);
   return null;
 }
 
