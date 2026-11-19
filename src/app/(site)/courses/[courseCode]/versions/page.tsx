@@ -19,5 +19,5 @@ export default async function RoadmapVersionHistoryPage(
     throw error;
   });
   if (!history) notFound();
-  return <RoadmapVersionHistory history={history} />;
+  return <RoadmapVersionHistory history={history} now={new Date()} />;
 }

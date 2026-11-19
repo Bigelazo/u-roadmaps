@@ -6,6 +6,7 @@ import { CHILE_TIME_ZONE } from '@/features/roadmap/domain/scheduled-unlock';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { dividedListClassName, PageShell } from '@/shared/ui/page-layout';
 import { CoursePageHeader } from '@/features/roadmap/ui/CoursePageHeader';
+import { RoadmapClosureNotice } from '@/features/roadmap/ui/RoadmapClosureNotice';
 import { VersionOrigin } from '@/features/roadmap/ui/VersionOrigin';
 import { VersionTeachingStaff } from '@/features/roadmap/ui/VersionTeachingStaff';
 import { lineageLanes, type LineageRow } from '@/features/roadmap/ui/version-lineage';
@@ -99,7 +100,10 @@ function LineageMarker({
   );
 }
 
-export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHistory }>) {
+export function RoadmapVersionHistory({
+  history,
+  now,
+}: Readonly<{ history: VersionHistory; now: Date }>) {
   const courseCode = history.course.code;
   const { current, versions } = history;
   const lineage = lineageLanes(current ? [current, ...versions] : versions);
@@ -117,6 +121,7 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
         current="versions"
         section="Historial de versiones"
       />
+      <RoadmapClosureNotice history={history} now={now} />
       {versions.length === 0 ? (
         <Empty className="border bg-card py-10">
           <EmptyHeader>
@@ -126,7 +131,7 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
             <EmptyTitle>Todavía no hay versiones cerradas</EmptyTitle>
             <EmptyDescription>
               {current
-                ? `El Roadmap de ${current.edition} quedará aquí como versión de solo lectura cuando se cierre${closesOn ? `, el ${closesOn}` : ''}.`
+                ? `El Roadmap de ${current.edition} quedará aquí como versión de solo lectura cuando se cierre${closesOn ? `, al terminar el ${closesOn}` : ''}.`
                 : 'Cuando se cierre el Roadmap de un semestre, quedará aquí como versión de solo lectura.'}
             </EmptyDescription>
           </EmptyHeader>
@@ -164,7 +169,7 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
               <EditionFacts
                 facts={[
                   nodeCountLabel(current.nodeCount),
-                  ...(closesOn ? [`se cierra el ${closesOn}`] : []),
+                  ...(closesOn ? [`editable hasta el ${closesOn}`] : []),
                 ]}
               />
             </li>
