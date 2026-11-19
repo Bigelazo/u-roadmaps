@@ -1,6 +1,9 @@
 'use client';
 
-import { formatScheduledUnlockMoment } from '@/features/roadmap/domain/scheduled-unlock';
+import {
+  formatScheduledUnlockMoment,
+  nextScheduledUnlockLabelChange,
+} from '@/features/roadmap/domain/scheduled-unlock';
 import { nodeTypePaint } from '@/shared/node-type';
 import {
   ConnectionTargetContext,
@@ -260,18 +263,46 @@ type RoadmapGraphActionMenu = NodeActionCallbacks & {
   onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
 };
 
+function scheduledUnlockInstants(projection: RoadmapGraphProjection) {
+  if (projection.kind !== 'teaching') return '';
+  return projection.roadmap.nodes
+    .flatMap((node) =>
+      node.isTeacherBlocked && node.teacherUnlockAt ? [node.teacherUnlockAt] : [],
+    )
+    .join(' ');
+}
+
+function useScheduledUnlockClock(projection: RoadmapGraphProjection) {
+  const unlockAts = scheduledUnlockInstants(projection);
+  const [clock, setClock] = useState(() => ({ unlockAts, now: new Date() }));
+  if (clock.unlockAts !== unlockAts) setClock({ unlockAts, now: new Date() });
+  useEffect(() => {
+    const change = nextScheduledUnlockLabelChange(
+      clock.unlockAts ? clock.unlockAts.split(' ') : [],
+      clock.now,
+    );
+    if (!change) return;
+    const timeout = setTimeout(
+      () => setClock((current) => ({ ...current, now: new Date() })),
+      change.getTime() - Date.now(),
+    );
+    return () => clearTimeout(timeout);
+  }, [clock]);
+  return clock.now;
+}
+
 function mapProjectionToFlow(
   projection: RoadmapGraphProjection,
   onDeleteDependency: (dependencyId: string) => void,
   actionMenu: RoadmapGraphActionMenu,
   notificationsEnabled = false,
   sizeForTitle: RoadmapNodeSizer = roadmapNodeSizeForTitle,
+  now = new Date(),
 ) {
   const { roadmap } = projection;
   const isTeacherView = projection.kind === 'teaching';
   const canEdit = isTeacherView && Boolean(projection.editing);
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
-  const now = new Date();
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
@@ -894,6 +925,7 @@ function useRoadmapGraphController({
     selectedNodeId,
     emitEditingIntent,
   });
+  const scheduledUnlockNow = useScheduledUnlockClock(stableProjection);
   const projectedFlow = useMemo(
     () =>
       mapProjectionToFlow(
@@ -902,8 +934,16 @@ function useRoadmapGraphController({
         actionMenu,
         notificationsEnabled,
         sizeForTitle,
+        scheduledUnlockNow,
       ),
-    [actionMenu, deleteDependency, notificationsEnabled, sizeForTitle, stableProjection],
+    [
+      actionMenu,
+      deleteDependency,
+      notificationsEnabled,
+      scheduledUnlockNow,
+      sizeForTitle,
+      stableProjection,
+    ],
   );
   const [flow, setFlow] = useState(() => selectFlowNode(projectedFlow, selectedNodeId));
   const [appliedInput, setAppliedInput] = useState({ projectedFlow, selectedNodeId });

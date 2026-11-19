@@ -6,6 +6,7 @@ import {
   blockedPrerequisiteNodeIds,
   decideScheduledUnlock,
   formatScheduledUnlockMoment,
+  nextScheduledUnlockLabelChange,
   settleDueScheduledUnlocks,
 } from '@/features/roadmap/domain/scheduled-unlock';
 
@@ -256,5 +257,27 @@ test('describes a Scheduled unlock moment relative to today in Chile time', () =
   );
   expect(formatScheduledUnlockMoment('2027-01-06T08:00:00-03:00', newYearsEve)).toBe(
     'Miércoles 06/01, a las 08:00',
+  );
+});
+
+test('the Scheduled unlock label next changes at the earlier of Chile midnight and a pending unlock', () => {
+  const now = new Date('2026-11-19T22:00:00-03:00');
+  expect(nextScheduledUnlockLabelChange([], now)).toBeNull();
+  expect(nextScheduledUnlockLabelChange(['2026-11-19T21:00:00-03:00'], now)).toBeNull();
+  expect(nextScheduledUnlockLabelChange(['2026-11-25T08:00:00-03:00'], now)).toEqual(
+    new Date('2026-11-20T00:00:00-03:00'),
+  );
+  expect(
+    nextScheduledUnlockLabelChange(
+      ['2026-11-19T21:00:00-03:00', '2026-11-19T23:30:00-03:00', '2026-11-25T08:00:00-03:00'],
+      now,
+    ),
+  ).toEqual(new Date('2026-11-19T23:30:00-03:00'));
+});
+
+test('the Scheduled unlock label next changes in the future on a night whose midnight Chile skips', () => {
+  const lateSaturday = new Date('2026-09-05T23:30:00-04:00');
+  expect(nextScheduledUnlockLabelChange(['2026-09-10T08:00:00-03:00'], lateSaturday)).toEqual(
+    new Date('2026-09-06T01:00:00-03:00'),
   );
 });

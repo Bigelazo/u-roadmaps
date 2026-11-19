@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 import { RoadmapSidePanel } from '@/features/roadmap/ui/RoadmapSidePanel';
 import { SidebarContent } from '@/shared/ui/sidebar';
 
+export const NODE_EDITOR_PANEL_ID = 'roadmap-editor-panel';
+
 type Props = {
   isOpen: boolean;
   panelWidth: number;
@@ -16,7 +18,8 @@ export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, childr
     <RoadmapSidePanel
       hidden={!isOpen}
       role="region"
-      id="roadmap-editor-panel"
+      id={NODE_EDITOR_PANEL_ID}
+      tabIndex={-1}
       aria-label="Panel de edición del roadmap"
       railLabel="Redimensionar panel de edición"
       panelWidth={panelWidth}

@@ -33,7 +33,7 @@ import {
   createNodeWithResources,
   nodeCreationSummary,
 } from '@/features/roadmap/session/node-creation';
-import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
+import { NODE_EDITOR_PANEL_ID, NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
   type NewNodePlacement,
@@ -156,6 +156,15 @@ function useCanvasFocusReturn(focusReturn: NodeSelectionFocusReturn | null) {
     }
   }, [focusReturn]);
   return canvasFocusRef;
+}
+
+function useCompactEditorCoversCanvas(isEditorOpen: boolean) {
+  const coversCanvas = useCompactCanvasLayout() && isEditorOpen;
+  useEffect(() => {
+    const panel = document.getElementById(NODE_EDITOR_PANEL_ID);
+    if (coversCanvas && !panel?.contains(document.activeElement)) panel?.focus();
+  }, [coversCanvas]);
+  return coversCanvas;
 }
 
 function useRoadmapAcknowledgement(
@@ -303,6 +312,7 @@ export function RoadmapCanvasView({ input }: Props) {
 
   const selectedNode = displayedRoadmap?.nodes.find((node) => node.id === selectedNodeId);
   const panelLayout = useCanvasPanelLayout(panel);
+  const editorCoversCanvas = useCompactEditorCoversCanvas(panel.kind === 'editor');
   const pendingCreationRef = useRef<Extract<CanvasCommand, { kind: 'add-node' }> | null>(null);
 
   if (accessLost) {
@@ -376,6 +386,7 @@ export function RoadmapCanvasView({ input }: Props) {
         <div
           ref={canvasFocusRef}
           tabIndex={-1}
+          inert={editorCoversCanvas}
           aria-label="Lienzo del roadmap"
           className="relative min-h-0 bg-background"
         >
