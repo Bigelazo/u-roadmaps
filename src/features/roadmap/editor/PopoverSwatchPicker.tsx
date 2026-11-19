@@ -15,6 +15,8 @@ type Swatch<T> = { value: T; label: string; style?: CSSProperties; content?: Rea
 
 type Props<T> = {
   id: string;
+  invalid?: boolean;
+  describedBy?: string;
   ariaLabel: string;
   title: string;
   selection: ReactNode;
@@ -28,6 +30,8 @@ type Props<T> = {
 
 export function PopoverSwatchPicker<T extends string>({
   id,
+  invalid,
+  describedBy,
   ariaLabel,
   title,
   selection,
@@ -79,6 +83,8 @@ export function PopoverSwatchPicker<T extends string>({
             variant="outline"
             className="w-full justify-between font-normal"
             aria-label={ariaLabel}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy}
           />
         }
       >

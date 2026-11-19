@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import type { NodeProps } from '@xyflow/react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { NodeChangeCountsProvider } from '@/features/notifications/components/inbox-driver';
 import { roadmapRoutingScene } from '@/features/roadmap/graph/routing/libavoid';
@@ -260,6 +260,46 @@ test('read-only teaching graphs hide connection handles and render neutral depen
   for (const handle of screen.getAllByTestId('flow-handle')) {
     expect(handle.style.visibility).toBe('hidden');
     expect(handle.style.pointerEvents).toBe('none');
+  }
+});
+
+test('the scheduled unlock badge follows the clock across Chile midnight and the unlock moment', () => {
+  vi.useFakeTimers({
+    toFake: ['setTimeout', 'clearTimeout', 'Date'],
+    now: new Date('2026-11-19T22:00:00-03:00'),
+  });
+  try {
+    const [scheduledNode, ...otherNodes] = teacherRoadmap.nodes;
+    render(
+      <RoadmapGraph
+        projection={{
+          kind: 'teaching',
+          roadmap: {
+            ...teacherRoadmap,
+            nodes: [
+              {
+                ...scheduledNode,
+                isVisible: true,
+                isTeacherBlocked: true,
+                teacherUnlockAt: '2026-11-20T17:45:00-03:00',
+              },
+              ...otherNodes,
+            ],
+          },
+        }}
+        {...commonProps}
+      />,
+    );
+    const badge = () => screen.queryByTestId('roadmap-node-scheduled-unlock')?.textContent;
+    expect(badge()).toContain('Mañana, a las 17:45');
+
+    act(() => vi.advanceTimersByTime(2 * 60 * 60 * 1000));
+    expect(badge()).toContain('Hoy, a las 17:45');
+
+    act(() => vi.advanceTimersByTime((17 * 60 + 45) * 60 * 1000));
+    expect(badge()).toBeUndefined();
+  } finally {
+    vi.useRealTimers();
   }
 });
 

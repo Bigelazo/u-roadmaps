@@ -62,7 +62,7 @@ export function RoadmapPanelColumn({ isOpen, width, scene, children }: Props) {
       style={{ '--sidebar-width': `${content.width}px` } as CSSProperties}
       className={cn(
         'contents has-data-[resizing=true]:transition-none lg:block lg:h-full lg:min-h-0 lg:min-w-0 lg:overflow-clip motion-safe:lg:transition-[width] motion-safe:lg:duration-200 motion-safe:lg:ease-out',
-        isOpen ? 'lg:w-(--sidebar-width)' : 'lg:w-0',
+        isOpen ? 'lg:w-(--sidebar-width) lg:max-w-[65vw]' : 'lg:w-0',
         isSceneChanging && 'transition-none!',
       )}
     >

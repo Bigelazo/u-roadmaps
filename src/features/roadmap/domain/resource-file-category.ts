@@ -156,3 +156,18 @@ export function resourceCategory(resource: {
     (isPlainText(resource.fileContentType) ? 'document' : 'file')
   );
 }
+
+export type ResourcePreviewKind = 'pdf' | 'markdown';
+
+export function resourcePreviewKind(resource: {
+  type: 'FILE' | 'LINK';
+  title: string;
+  fileContentType: string | null;
+}): ResourcePreviewKind | null {
+  const category = resourceCategory(resource);
+  if (contentTypeEssence(resource.fileContentType) === 'application/pdf') return 'pdf';
+  const isMarkdown =
+    contentTypeEssence(resource.fileContentType) === 'text/markdown' ||
+    fileTitleExtension(resource.title).toLowerCase() === '.md';
+  return category === 'code' && isMarkdown ? 'markdown' : null;
+}

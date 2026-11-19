@@ -70,13 +70,12 @@ for (const width of [1440, 1024, 390, 320]) {
         });
     }
 
-    await expectPlacement(false);
-    await page.screenshot({ path: testInfo.outputPath(`toast-sidebar-${width}.png`) });
     if (width < 1024) {
       await page.keyboard.press('Escape');
       await expect(sidebar).toBeHidden();
-      await expectPlacement(false);
     }
+    await expectPlacement(false);
+    await page.screenshot({ path: testInfo.outputPath(`toast-sidebar-${width}.png`) });
     await trigger.click();
     await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toBeVisible();
     await expect(page.getByRole('menuitem').last()).toHaveCSS('opacity', '1');

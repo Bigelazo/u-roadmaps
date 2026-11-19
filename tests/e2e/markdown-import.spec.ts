@@ -245,7 +245,7 @@ test('teaching staff create a Node without a description', async ({ page, course
   expect(created?.description ?? '').toBe('');
 });
 
-test('the fullscreen editor gives the description at least half the viewport', async ({
+test('the fullscreen editor sizes the description to keep saving within the viewport', async ({
   page,
   course,
   teacherApi: api,
@@ -272,7 +272,15 @@ test('the fullscreen editor gives the description at least half the viewport', a
     height: element.offsetHeight,
     viewportHeight: window.innerHeight,
   }));
-  expect(height).toBeGreaterThanOrEqual(viewportHeight / 2);
+  expect(height).toBeGreaterThanOrEqual(Math.max(192, viewportHeight - 512));
+
+  await description.click();
+  await page.keyboard.type(' editada');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Sin guardar:')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Guardar cambios' })).toBeInViewport({
+    ratio: 1,
+  });
 
   await page.getByRole('button', { name: 'Cerrar pantalla completa' }).click();
   await expect(page.locator('#edit-node-description')).toHaveJSProperty('offsetHeight', 128);

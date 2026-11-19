@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  formatScheduledUnlockMoment,
+  nextScheduledUnlockLabelChange,
+} from '@/features/roadmap/domain/scheduled-unlock';
 import { nodeTypePaint } from '@/shared/node-type';
 import {
   ConnectionTargetContext,
@@ -174,6 +178,19 @@ function fitAllOptions(compact: boolean, container: HTMLElement | null): FitView
     : { ...roadmapFitViewOptions, minZoom: roadmapMinZoom };
 }
 
+const fitAllDurationMs = 450;
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function horizontalWheelDelta(event: WheelEvent) {
+  if (event.ctrlKey) return 0;
+  const lineHeight = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 20 : 1;
+  if (event.shiftKey) return (event.deltaX || event.deltaY) * lineHeight;
+  return Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX * lineHeight : 0;
+}
+
 function notifyConnectionRejection(rejection: ConnectionRejection) {
   notify.error(<DependencyRejectionMessage {...rejection} />);
 }
@@ -246,12 +263,41 @@ type RoadmapGraphActionMenu = NodeActionCallbacks & {
   onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
 };
 
+function scheduledUnlockInstants(projection: RoadmapGraphProjection) {
+  if (projection.kind !== 'teaching') return '';
+  return projection.roadmap.nodes
+    .flatMap((node) =>
+      node.isTeacherBlocked && node.teacherUnlockAt ? [node.teacherUnlockAt] : [],
+    )
+    .join(' ');
+}
+
+function useScheduledUnlockClock(projection: RoadmapGraphProjection) {
+  const unlockAts = scheduledUnlockInstants(projection);
+  const [clock, setClock] = useState(() => ({ unlockAts, now: new Date() }));
+  if (clock.unlockAts !== unlockAts) setClock({ unlockAts, now: new Date() });
+  useEffect(() => {
+    const change = nextScheduledUnlockLabelChange(
+      clock.unlockAts ? clock.unlockAts.split(' ') : [],
+      clock.now,
+    );
+    if (!change) return;
+    const timeout = setTimeout(
+      () => setClock((current) => ({ ...current, now: new Date() })),
+      change.getTime() - Date.now(),
+    );
+    return () => clearTimeout(timeout);
+  }, [clock]);
+  return clock.now;
+}
+
 function mapProjectionToFlow(
   projection: RoadmapGraphProjection,
   onDeleteDependency: (dependencyId: string) => void,
   actionMenu: RoadmapGraphActionMenu,
   notificationsEnabled = false,
   sizeForTitle: RoadmapNodeSizer = roadmapNodeSizeForTitle,
+  now = new Date(),
 ) {
   const { roadmap } = projection;
   const isTeacherView = projection.kind === 'teaching';
@@ -279,6 +325,14 @@ function mapProjectionToFlow(
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
         fileCount: resources.filter((resource) => resource.type === 'FILE').length,
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
+        scheduledUnlockLabel:
+          isTeacherView &&
+          'teacherUnlockAt' in node &&
+          node.isTeacherBlocked &&
+          node.teacherUnlockAt &&
+          Date.parse(node.teacherUnlockAt) > now.getTime()
+            ? formatScheduledUnlockMoment(node.teacherUnlockAt, now)
+            : undefined,
         blockReason,
         canManageActions: canEdit,
         useActionSheet: actionMenu.useActionSheet,
@@ -502,9 +556,10 @@ function RoadmapGraphToolbar({
                 variant="outline"
                 size="icon"
                 onClick={() =>
-                  void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
-                    onFitView?.(),
-                  )
+                  void fitView({
+                    ...fitAllOptions(compact, containerRef.current),
+                    duration: prefersReducedMotion() ? 0 : fitAllDurationMs,
+                  }).then(() => onFitView?.())
                 }
               >
                 <Maximize aria-hidden="true" />
@@ -632,78 +687,6 @@ function ActionMenuViewportAdjustment({
   return null;
 }
 
-function CompactEditorViewportAdjustment({
-  nodeId,
-  containerRef,
-}: {
-  nodeId: string | null | undefined;
-  containerRef: RefObject<HTMLDivElement | null>;
-}) {
-  const compact = useCompactCanvasLayout();
-  const { getViewport, setViewport } = useReactFlow();
-
-  useEffect(() => {
-    const container = containerRef.current;
-    const panel = container
-      ?.closest('section')
-      ?.querySelector<HTMLElement>('#roadmap-editor-panel');
-    const node = container?.querySelector<HTMLElement>(`.react-flow__node[data-id="${nodeId}"]`);
-    if (!compact || !nodeId || !container || !panel || !node) return;
-    const visualViewport = window.visualViewport;
-    let frame = 0;
-    const reveal = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const panelBounds = panel.getBoundingClientRect();
-        if (!panelBounds.height) return;
-        const canvas = container.getBoundingClientRect();
-        const bounds = node.getBoundingClientRect();
-        const insets = canvasOverlayInsets(container);
-        const visibleBottom = Math.min(
-          canvas.bottom,
-          visualViewport ? visualViewport.offsetTop + visualViewport.height : window.innerHeight,
-        );
-        const panelMaxHeight = Math.max(
-          0,
-          visibleBottom - canvas.top - insets.top - bounds.height - overlayGap * 2,
-        );
-        panel.style.setProperty('--roadmap-panel-max-height', `${panelMaxHeight}px`);
-        const bottom = Math.min(canvas.bottom - insets.bottom, panelBounds.top - overlayGap);
-        const top = Math.min(canvas.top + insets.top, bottom - bounds.height);
-        const x = Math.max(
-          canvas.left + insets.left - bounds.left,
-          Math.min(0, canvas.right - insets.right - bounds.right),
-        );
-        const y = Math.max(top - bounds.top, Math.min(0, bottom - bounds.bottom));
-        if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
-        const viewport = getViewport();
-        void setViewport({ x: viewport.x + x, y: viewport.y + y, zoom: viewport.zoom });
-      });
-    };
-    const observer = new ResizeObserver(reveal);
-    [
-      container,
-      panel,
-      node,
-      ...container.querySelectorAll<HTMLElement>('[data-canvas-overlay]'),
-    ].forEach((element) => observer.observe(element));
-    panel.addEventListener('animationend', reveal);
-    visualViewport?.addEventListener('resize', reveal);
-    visualViewport?.addEventListener('scroll', reveal);
-    reveal();
-    return () => {
-      observer.disconnect();
-      panel.removeEventListener('animationend', reveal);
-      visualViewport?.removeEventListener('resize', reveal);
-      visualViewport?.removeEventListener('scroll', reveal);
-      panel.style.removeProperty('--roadmap-panel-max-height');
-      cancelAnimationFrame(frame);
-    };
-  }, [compact, containerRef, getViewport, nodeId, setViewport]);
-
-  return null;
-}
-
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
   const defaultStroke = edge.data?.defaultStroke ?? dependencyStroke;
   const stroke = edge.selected || isHovered ? selectedEdgeColor : defaultStroke;
@@ -741,7 +724,28 @@ const titlePlateClassName = cn(
 
 function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   const compact = useCompactCanvasLayout();
-  const stackTitleUnderToolbar = compact && Boolean(slots?.topCenter && slots.topLeft);
+  const sharesTopRow = Boolean(slots?.topCenter && slots.topLeft);
+  const stackTitleUnderToolbar = compact && sharesTopRow;
+  const topRight = slots?.topRight ? (
+    <Panel position="top-right" className="m-4! sm:m-6!">
+      {slots.topRight}
+    </Panel>
+  ) : null;
+  if (sharesTopRow && !compact) {
+    return (
+      <>
+        <Panel
+          position="top-left"
+          data-canvas-overlay="top"
+          className="pointer-events-none z-4! m-4! flex w-[calc(100%-2rem)] flex-wrap items-start gap-3 sm:m-6! sm:w-[calc(100%-3rem)]"
+        >
+          <div className={cn(titlePlateClassName, 'max-w-md')}>{slots?.topLeft}</div>
+          <div className="flex min-w-fit flex-1 justify-center">{slots?.topCenter}</div>
+        </Panel>
+        {topRight}
+      </>
+    );
+  }
   return (
     <>
       {slots?.topLeft && !stackTitleUnderToolbar ? (
@@ -780,11 +784,7 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
           ) : null}
         </Panel>
       ) : null}
-      {slots?.topRight ? (
-        <Panel position="top-right" className="m-4! sm:m-6!">
-          {slots.topRight}
-        </Panel>
-      ) : null}
+      {topRight}
     </>
   );
 }
@@ -925,6 +925,7 @@ function useRoadmapGraphController({
     selectedNodeId,
     emitEditingIntent,
   });
+  const scheduledUnlockNow = useScheduledUnlockClock(stableProjection);
   const projectedFlow = useMemo(
     () =>
       mapProjectionToFlow(
@@ -933,8 +934,16 @@ function useRoadmapGraphController({
         actionMenu,
         notificationsEnabled,
         sizeForTitle,
+        scheduledUnlockNow,
       ),
-    [actionMenu, deleteDependency, notificationsEnabled, sizeForTitle, stableProjection],
+    [
+      actionMenu,
+      deleteDependency,
+      notificationsEnabled,
+      scheduledUnlockNow,
+      sizeForTitle,
+      stableProjection,
+    ],
   );
   const [flow, setFlow] = useState(() => selectFlowNode(projectedFlow, selectedNodeId));
   const [appliedInput, setAppliedInput] = useState({ projectedFlow, selectedNodeId });
@@ -1344,11 +1353,12 @@ function RoadmapGraphContents({
         containerRef={containerRef}
       />
       <TutorialRevealTarget containerRef={containerRef} />
-      <NodeMeasurementRecovery nodes={flow.nodes} />
-      <CompactEditorViewportAdjustment
-        nodeId={canEdit ? props.selectedNodeId : null}
+      <HorizontalWheelPan
         containerRef={containerRef}
+        enabled={!openActionMenuNodeId && !model.closingActionMenuNodeId}
+        onViewportChange={props.onViewportChange}
       />
+      <NodeMeasurementRecovery nodes={flow.nodes} />
       <ActionMenuViewportAdjustment
         nodeId={canEdit && !model.useActionSheet ? openActionMenuNodeId : null}
         containerRef={containerRef}
@@ -1408,6 +1418,37 @@ function CompactInitialViewport({
     });
     return () => cancelAnimationFrame(frame);
   }, [compact, containerRef, initialized, isStudent, nodes, setViewport, skip]);
+  return null;
+}
+
+function HorizontalWheelPan({
+  containerRef,
+  enabled,
+  onViewportChange,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>;
+  enabled: boolean;
+  onViewportChange: RoadmapGraphProps['onViewportChange'];
+}) {
+  const { getViewport, setViewport } = useReactFlow();
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !enabled) return;
+    const pan = (event: WheelEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.react-flow__renderer') || target.closest('.nowheel')) return;
+      const deltaX = horizontalWheelDelta(event);
+      if (!deltaX) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const viewport = getViewport();
+      const next = { ...viewport, x: viewport.x - deltaX };
+      void setViewport(next);
+      onViewportChange?.(next);
+    };
+    container.addEventListener('wheel', pan, { capture: true, passive: false });
+    return () => container.removeEventListener('wheel', pan, { capture: true });
+  }, [containerRef, enabled, getViewport, onViewportChange, setViewport]);
   return null;
 }
 

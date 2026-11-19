@@ -33,7 +33,7 @@ import {
   createNodeWithResources,
   nodeCreationSummary,
 } from '@/features/roadmap/session/node-creation';
-import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
+import { NODE_EDITOR_PANEL_ID, NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
   type NewNodePlacement,
@@ -156,6 +156,15 @@ function useCanvasFocusReturn(focusReturn: NodeSelectionFocusReturn | null) {
     }
   }, [focusReturn]);
   return canvasFocusRef;
+}
+
+function useCompactEditorCoversCanvas(isEditorOpen: boolean) {
+  const coversCanvas = useCompactCanvasLayout() && isEditorOpen;
+  useEffect(() => {
+    const panel = document.getElementById(NODE_EDITOR_PANEL_ID);
+    if (coversCanvas && !panel?.contains(document.activeElement)) panel?.focus();
+  }, [coversCanvas]);
+  return coversCanvas;
 }
 
 function useRoadmapAcknowledgement(
@@ -303,6 +312,7 @@ export function RoadmapCanvasView({ input }: Props) {
 
   const selectedNode = displayedRoadmap?.nodes.find((node) => node.id === selectedNodeId);
   const panelLayout = useCanvasPanelLayout(panel);
+  const editorCoversCanvas = useCompactEditorCoversCanvas(panel.kind === 'editor');
   const pendingCreationRef = useRef<Extract<CanvasCommand, { kind: 'add-node' }> | null>(null);
 
   if (accessLost) {
@@ -373,28 +383,29 @@ export function RoadmapCanvasView({ input }: Props) {
         data-page-width="full"
         className="relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:grid-cols-[minmax(0,1fr)_auto]"
       >
+        {input.practice?.exitHref ? (
+          <Link
+            {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
+            className={buttonVariants({
+              variant: 'outline',
+              className: cn(
+                'absolute top-4 right-4 z-10 col-start-1 row-start-1 sm:top-6 sm:right-6',
+                isCanvasPreview && 'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
+              ),
+            })}
+            href={input.practice.exitHref}
+          >
+            <LogOut data-icon="inline-start" />
+            Salir
+          </Link>
+        ) : null}
         <div
           ref={canvasFocusRef}
           tabIndex={-1}
+          inert={editorCoversCanvas}
           aria-label="Lienzo del roadmap"
           className="relative min-h-0 bg-background"
         >
-          {input.practice?.exitHref ? (
-            <Link
-              {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
-              className={buttonVariants({
-                variant: 'outline',
-                className: cn(
-                  'absolute top-4 right-4 z-10 sm:top-6 sm:right-6',
-                  isCanvasPreview && 'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
-                ),
-              })}
-              href={input.practice.exitHref}
-            >
-              <LogOut data-icon="inline-start" />
-              Salir
-            </Link>
-          ) : null}
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
             openedNodeId={panel.kind === 'closed' ? null : selectedNodeId}

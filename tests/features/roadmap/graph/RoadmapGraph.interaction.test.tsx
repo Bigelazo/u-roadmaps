@@ -101,6 +101,7 @@ vi.mock('@xyflow/react', () => ({
     reactFlowHandlers.onSelectionDragStop = onSelectionDragStop;
     return (
       <>
+        <div className="react-flow__renderer" data-testid="flow-renderer" />
         {nodes.map((node) => (
           <button
             key={`rendered-${node.id}`}
@@ -649,7 +650,47 @@ test('centers the roadmap from the canvas control', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Centrar mapa' }));
 
-  expect(fitViewMock).toHaveBeenCalledWith({ padding: 0.28, minZoom: 0.2 });
+  expect(fitViewMock).toHaveBeenCalledWith({ padding: 0.28, minZoom: 0.2, duration: 450 });
+});
+
+test('centers the roadmap without animation when motion is reduced', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(prefers-reduced-motion: reduce)',
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+  const user = userEvent.setup();
+  render(<GraphHarness />);
+
+  await user.click(screen.getByRole('button', { name: 'Centrar mapa' }));
+
+  expect(fitViewMock).toHaveBeenCalledWith(expect.objectContaining({ duration: 0 }));
+});
+
+test.each([
+  { name: 'horizontal wheel', init: { deltaX: 40, deltaY: 5 }, x: -40 },
+  { name: 'shift wheel', init: { deltaY: 30, shiftKey: true }, x: -30 },
+])('pans the canvas horizontally on $name', ({ init, x }) => {
+  const onViewportChange = vi.fn();
+  renderGraph({ onViewportChange });
+
+  const wheel = new WheelEvent('wheel', { ...init, bubbles: true, cancelable: true });
+  screen.getByTestId('flow-renderer').dispatchEvent(wheel);
+
+  expect(wheel.defaultPrevented).toBe(true);
+  expect(setViewportMock).toHaveBeenCalledWith({ x, y: 0, zoom: 1 });
+  expect(onViewportChange).toHaveBeenCalledWith({ x, y: 0, zoom: 1 });
+});
+
+test('leaves vertical wheel to the canvas zoom', () => {
+  renderGraph();
+
+  const wheel = new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true });
+  screen.getByTestId('flow-renderer').dispatchEvent(wheel);
+
+  expect(wheel.defaultPrevented).toBe(false);
+  expect(setViewportMock).not.toHaveBeenCalled();
 });
 
 test('offers toolbar content a snapped open placement without exposing viewport geometry', async () => {
@@ -1035,7 +1076,7 @@ test('emits an immutable collection when deleting Dependencies', async () => {
   expect(intent.kind === 'delete-dependencies' && Object.isFrozen(intent.dependencyIds)).toBe(true);
 });
 
-test('places each roadmap overlay slot in its constrained viewport panel', () => {
+test('keeps the title and toolbar overlays in one wrapping row so they never overlap', () => {
   renderGraph({
     overlaySlots: {
       topLeft: <span data-testid="top-left-overlay">Metadata</span>,
@@ -1043,12 +1084,12 @@ test('places each roadmap overlay slot in its constrained viewport panel', () =>
     },
   });
 
-  expect(
-    within(screen.getByTestId('roadmap-panel-top-left')).getByTestId('top-left-overlay'),
-  ).toBeTruthy();
-  expect(
-    within(screen.getByTestId('roadmap-panel-top-center')).getByTestId('top-center-overlay'),
-  ).toBeTruthy();
+  const row = screen.getByTestId('roadmap-panel-top-left');
+  const title = within(row).getByTestId('top-left-overlay');
+  const toolbar = within(row).getByTestId('top-center-overlay');
+  expect(row.classList.contains('flex-wrap')).toBe(true);
+  expect(title.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByTestId('roadmap-panel-top-center')).toBeNull();
 });
 
 test('disables automatic ordering until the Roadmap has enough Nodes', async () => {
@@ -1212,5 +1253,6 @@ test('keeps compact canvas controls in one row and centers the map clear of the 
     padding: { top: '16px', right: '16px', bottom: '16px', left: '16px' },
     minZoom: 0.8,
     maxZoom: 1,
+    duration: 450,
   });
 });

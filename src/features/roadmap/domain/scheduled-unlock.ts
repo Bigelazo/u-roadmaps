@@ -48,6 +48,33 @@ export function chileWallClock(instant: Date): ZonedWallClock {
   return zonedWallClock(instant, CHILE_TIME_ZONE);
 }
 
+const weekdayFormatter = new Intl.DateTimeFormat('es-CL', { timeZone: 'UTC', weekday: 'long' });
+
+export function formatScheduledUnlockMoment(unlockAt: UnlockInstant, now: Date) {
+  const { day, time } = chileWallClock(new Date(unlockAt));
+  const today = chileCalendarDay(now);
+  if (day === today) return `Hoy, a las ${time}`;
+  if (day === addCalendarDays(today, 1)) return `Mañana, a las ${time}`;
+  const [, month, dayOfMonth] = day.split('-');
+  const weekday = weekdayFormatter.format(new Date(`${day}T12:00:00.000Z`));
+  const date =
+    day.slice(0, 7) === today.slice(0, 7) ? `${Number(dayOfMonth)}` : `${dayOfMonth}/${month}`;
+  return `${weekday.charAt(0).toLocaleUpperCase('es-CL')}${weekday.slice(1)} ${date}, a las ${time}`;
+}
+
+export function nextScheduledUnlockLabelChange(
+  unlockAts: readonly UnlockInstant[],
+  now: Date,
+): Date | null {
+  const pending = unlockAts.map(Date.parse).filter((instant) => instant > now.getTime());
+  if (pending.length === 0) return null;
+  const nextDay = addCalendarDays(chileCalendarDay(now), 1);
+  const midnight = chileInstant({ day: nextDay, time: '00:00' }).getTime();
+  const nextDayStart =
+    chileCalendarDay(new Date(midnight)) === nextDay ? midnight : midnight + 60 * 60 * 1000;
+  return new Date(Math.min(nextDayStart, ...pending));
+}
+
 export function chileInstant(wallClock: ZonedWallClock): Date {
   return zonedInstant(wallClock, CHILE_TIME_ZONE);
 }

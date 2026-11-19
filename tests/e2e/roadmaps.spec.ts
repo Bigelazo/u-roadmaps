@@ -59,7 +59,8 @@ test('teacher creates, edits, and deletes a custom node type with visual pickers
   await page.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }).click();
   const dialog = page.getByRole('dialog', { name: 'Tipos de nodo' });
   const create = dialog.getByRole('button', { name: 'Crear tipo' });
-  await expect(create).toBeDisabled();
+  await create.click();
+  await expect(dialog.getByText('Escribe un nombre para el tipo.')).toBeVisible();
   await dialog.getByLabel('Nombre').fill(typeName);
 
   await dialog.getByRole('button', { name: 'Icono: sin selección' }).click();
@@ -80,7 +81,8 @@ test('teacher creates, edits, and deletes a custom node type with visual pickers
   await expect(dialog.getByRole('alert')).toHaveText(
     'Ya existe un tipo disponible con ese nombre.',
   );
-  await expect(create).toBeDisabled();
+  await create.click();
+  await expect(dialog.getByLabel('Nombre')).toBeFocused();
   await dialog.getByLabel('Nombre').fill('');
 
   await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();

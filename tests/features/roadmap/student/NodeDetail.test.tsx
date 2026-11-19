@@ -137,7 +137,7 @@ test('student can close a named mobile node-detail dialog with Escape or its clo
   expect(onClose).toHaveBeenCalledTimes(2);
 });
 
-test('student can complete an available node and open every resource in a new tab', async () => {
+test('student can complete an available node, preview a PDF and open a link in a new tab', async () => {
   const user = userEvent.setup();
   const onComplete = vi.fn();
 
@@ -146,11 +146,9 @@ test('student can complete an available node and open every resource in a new ta
   await user.click(screen.getByRole('button', { name: 'Completar' }));
   expect(onComplete).toHaveBeenCalledWith(nodeWithResources);
 
-  const guide = screen.getByRole('link', { name: 'Descargar Guia de estudio' });
-  expect(guide.getAttribute('href')).toBe(nodeWithResources.resources[0].url);
-  expect(guide.getAttribute('target')).toBe('_blank');
-  expect(guide.getAttribute('rel')).toBe('noreferrer');
+  const guide = screen.getByRole('button', { name: 'Ver Guia de estudio' });
   expect(guide.innerHTML).toContain('lucide-file-text"');
+  expect(guide.innerHTML).toContain('lucide lucide-eye ');
   const recording = screen.getByRole('link', { name: 'Abrir enlace Clase grabada' });
   expect(recording.getAttribute('href')).toBe(nodeWithResources.resources[1].url);
   expect(recording.innerHTML).toContain('lucide-link-2"');
@@ -160,7 +158,7 @@ test('student can complete an available node and open every resource in a new ta
 test('each Resource row shows its access count, a File its size, and what the student reviewed', () => {
   renderDetail({ node: nodeWithUnreviewedLink });
 
-  const guide = screen.getByRole('link', { name: 'Descargar Guia de estudio' });
+  const guide = screen.getByRole('button', { name: 'Ver Guia de estudio' });
   expect(within(guide).getByText('3 accesos')).toBeTruthy();
   expect(within(guide).getByText('1,2 MB')).toBeTruthy();
   expect(within(guide).getByText('Ya lo revisaste')).toBeTruthy();
@@ -168,6 +166,63 @@ test('each Resource row shows its access count, a File its size, and what the st
   expect(within(recording).getByText('1 acceso')).toBeTruthy();
   expect(within(recording).queryByText(/MB|KB/)).toBeNull();
   expect(within(recording).queryByText('Ya lo revisaste')).toBeNull();
+});
+
+test('a PDF File opens the native viewer in fullscreen with a real download and reports an access', async () => {
+  const user = userEvent.setup();
+  const onResourceAccess = vi.fn();
+  renderDetail({ node: nodeWithResources, onResourceAccess });
+
+  await user.click(screen.getByRole('button', { name: 'Ver Guia de estudio' }));
+
+  const dialog = screen.getByRole('dialog', { name: 'Guia de estudio' });
+  expect(within(dialog).getByTitle('Vista previa de Guia de estudio').getAttribute('src')).toBe(
+    'https://example.com/guide.pdf?disposition=inline',
+  );
+  const download = within(dialog).getByRole('link', { name: 'Descargar' });
+  expect(download.getAttribute('href')).toBe('https://example.com/guide.pdf');
+  expect(download.getAttribute('download')).toBe('Guia de estudio');
+  expect(onResourceAccess).toHaveBeenCalledWith(nodeWithResources.resources[0]);
+});
+
+test('a Markdown File renders its fetched content in fullscreen', async () => {
+  const user = userEvent.setup();
+  const fetchFile = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(new Response('# Apuntes\n\nContenido **clave**'));
+  const notes = {
+    ...nodeWithResources.resources[0],
+    id: 'resource-md',
+    title: 'Apuntes.md',
+    fileContentType: 'text/markdown',
+    url: '/api/files/notes',
+  };
+  renderDetail({ node: { ...node, resources: [notes] } });
+
+  await user.click(screen.getByRole('button', { name: 'Ver Apuntes.md' }));
+
+  const dialog = screen.getByRole('dialog', { name: 'Apuntes.md' });
+  expect(await within(dialog).findByRole('heading', { name: 'Apuntes' })).toBeTruthy();
+  expect(within(dialog).getByText('clave').tagName).toBe('STRONG');
+  expect(fetchFile).toHaveBeenCalledWith('/api/files/notes', expect.anything());
+  expect(within(dialog).getByRole('link', { name: 'Descargar' }).getAttribute('href')).toBe(
+    '/api/files/notes',
+  );
+  fetchFile.mockRestore();
+});
+
+test('a File without preview still downloads directly', () => {
+  const sheet = {
+    ...nodeWithResources.resources[0],
+    title: 'Notas.xlsx',
+    fileContentType: 'application/vnd.ms-excel',
+    url: '/api/files/sheet',
+  };
+  renderDetail({ node: { ...node, resources: [sheet] } });
+
+  const download = screen.getByRole('link', { name: 'Descargar Notas.xlsx' });
+  expect(download.getAttribute('href')).toBe('/api/files/sheet');
+  expect(download.getAttribute('target')).toBe('_blank');
 });
 
 test('left click, middle click and keyboard activation of a Resource report an access', async () => {
@@ -230,7 +285,8 @@ test('the editor student preview reviews a Resource locally before Completar wor
 
   await user.click(complete);
   expect(onComplete).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('link', { name: 'Descargar Guia de estudio' }));
+  await user.click(screen.getByRole('button', { name: 'Ver Guia de estudio' }));
+  await user.keyboard('{Escape}');
   await user.click(screen.getByRole('link', { name: 'Abrir enlace Clase grabada' }));
   expect(complete.getAttribute('aria-disabled')).toBeNull();
   await user.click(complete);

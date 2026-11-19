@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { NextResponse } from 'next/server';
 import { afterEach, expect, test, vi } from 'vitest';
-import { handleApplicationResult, courseRoute } from '@/app/_adapters/http';
+import { handleApplicationResult, courseRoute, fileDownloadResponse } from '@/app/_adapters/http';
 import { ApplicationError } from '@/shared/errors/types';
 import { Prisma } from '@/shared/server/db';
 
@@ -220,3 +220,18 @@ test.each([
     ).toEqual(synchronized.map((identifier) => [userId, identifier]));
   },
 );
+
+test.each([
+  ['application/pdf', '?disposition=inline', 'inline'],
+  ['application/pdf', '', 'attachment'],
+  ['text/html', '?disposition=inline', 'attachment'],
+])('a %s file requested with "%s" is served as %s', (contentType, query, disposition) => {
+  const response = fileDownloadResponse(
+    { stream: new Blob(['x']).stream(), size: 1, contentType, title: 'Guía.pdf' },
+    new Request(`https://u-roadmaps.test/file${query}`),
+  );
+  expect(response.headers.get('Content-Disposition')).toBe(
+    `${disposition}; filename*=UTF-8''Gu%C3%ADa.pdf`,
+  );
+  expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+});
