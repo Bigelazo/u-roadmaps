@@ -50,16 +50,30 @@ export function chileWallClock(instant: Date): ZonedWallClock {
 
 const weekdayFormatter = new Intl.DateTimeFormat('es-CL', { timeZone: 'UTC', weekday: 'long' });
 
+function calendarDayDate(day: CalendarDay) {
+  return new Date(`${day}T12:00:00.000Z`);
+}
+
+function weekStart(day: CalendarDay): CalendarDay {
+  return addCalendarDays(day, -((calendarDayDate(day).getUTCDay() + 6) % 7));
+}
+
+function calendarDayLabel(day: CalendarDay, today: CalendarDay) {
+  if (day === today) return 'Hoy';
+  if (day === addCalendarDays(today, 1)) return 'Mañana';
+  if (weekStart(day) === weekStart(today)) {
+    const weekday = weekdayFormatter.format(calendarDayDate(day));
+    return `${weekday.charAt(0).toLocaleUpperCase('es-CL')}${weekday.slice(1)}`;
+  }
+  const [year, month, dayOfMonth] = day.split('-');
+  return year === today.slice(0, 4)
+    ? `${dayOfMonth}/${month}`
+    : `${dayOfMonth}/${month}/${year!.slice(2)}`;
+}
+
 export function formatScheduledUnlockMoment(unlockAt: UnlockInstant, now: Date) {
   const { day, time } = chileWallClock(new Date(unlockAt));
-  const today = chileCalendarDay(now);
-  if (day === today) return `Hoy, a las ${time}`;
-  if (day === addCalendarDays(today, 1)) return `Mañana, a las ${time}`;
-  const [, month, dayOfMonth] = day.split('-');
-  const weekday = weekdayFormatter.format(new Date(`${day}T12:00:00.000Z`));
-  const date =
-    day.slice(0, 7) === today.slice(0, 7) ? `${Number(dayOfMonth)}` : `${dayOfMonth}/${month}`;
-  return `${weekday.charAt(0).toLocaleUpperCase('es-CL')}${weekday.slice(1)} ${date}, a las ${time}`;
+  return `${calendarDayLabel(day, chileCalendarDay(now))}, a las ${time}`;
 }
 
 export function nextScheduledUnlockLabelChange(
@@ -237,4 +251,44 @@ export function blockedPrerequisiteNodeIds({
   return nodes
     .filter(({ id, isTeacherBlocked }) => isTeacherBlocked && prerequisiteNodeIds.has(id))
     .map(({ id }) => id);
+}
+
+export function projectedScheduledUnlockMoments({
+  nodes,
+  dependencies,
+  now,
+}: {
+  nodes: readonly ScheduledUnlockNode[];
+  dependencies: readonly RoadmapGraphDependency[];
+  now: Date;
+}) {
+  let projectedNodes = nodes;
+  const instants = [
+    ...new Set(
+      nodes.flatMap(({ isTeacherBlocked, teacherUnlockAt }) =>
+        isTeacherBlocked && teacherUnlockAt
+          ? [Math.max(Date.parse(teacherUnlockAt), now.getTime())]
+          : [],
+      ),
+    ),
+  ].sort((first, second) => first - second);
+  const moments = new Map<string, UnlockInstant>();
+  for (const instant of instants) {
+    const unlockAt = new Date(instant);
+    const { releasedNodeIds, discardedNodeIds } = settleDueScheduledUnlocks({
+      nodes: projectedNodes,
+      dependencies,
+      now: unlockAt,
+    });
+    if (instant > now.getTime())
+      for (const nodeId of releasedNodeIds) moments.set(nodeId, unlockAt.toISOString());
+    projectedNodes = projectedNodes.map((node) =>
+      releasedNodeIds.has(node.id)
+        ? { ...node, isTeacherBlocked: false, teacherUnlockAt: null }
+        : discardedNodeIds.has(node.id)
+          ? { ...node, teacherUnlockAt: null }
+          : node,
+    );
+  }
+  return moments;
 }

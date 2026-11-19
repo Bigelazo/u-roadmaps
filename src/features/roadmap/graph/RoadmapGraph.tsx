@@ -3,6 +3,7 @@
 import {
   formatScheduledUnlockMoment,
   nextScheduledUnlockLabelChange,
+  projectedScheduledUnlockMoments,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { nodeTypePaint } from '@/shared/node-type';
 import {
@@ -291,6 +292,23 @@ function useScheduledUnlockClock(projection: RoadmapGraphProjection) {
   return clock.now;
 }
 
+function scheduledUnlockMoments(projection: RoadmapGraphProjection, now: Date) {
+  if (projection.kind !== 'teaching') return new Map<string, string>();
+  const { nodes, dependencies } = projection.roadmap;
+  return projectedScheduledUnlockMoments({
+    nodes: nodes.map((node) => ({
+      id: node.id,
+      isVisible: node.isVisible,
+      isTeacherBlocked: node.isTeacherBlocked,
+      teacherUnlockAt: ('teacherUnlockAt' in node && node.teacherUnlockAt) || null,
+      teacherUnlockIncludesDependents:
+        'teacherUnlockIncludesDependents' in node && node.teacherUnlockIncludesDependents === true,
+    })),
+    dependencies,
+    now,
+  });
+}
+
 function mapProjectionToFlow(
   projection: RoadmapGraphProjection,
   onDeleteDependency: (dependencyId: string) => void,
@@ -303,11 +321,13 @@ function mapProjectionToFlow(
   const isTeacherView = projection.kind === 'teaching';
   const canEdit = isTeacherView && Boolean(projection.editing);
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
+  const unlockMoments = scheduledUnlockMoments(projection, now);
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
     const resources = 'resources' in node ? node.resources : [];
     const nodeType = nodeTypesById.get(node.nodeTypeId);
+    const scheduledUnlockAt = unlockMoments.get(node.id);
     const isActionMenuOpen =
       actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id;
     return {
@@ -325,14 +345,9 @@ function mapProjectionToFlow(
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
         fileCount: resources.filter((resource) => resource.type === 'FILE').length,
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
-        scheduledUnlockLabel:
-          isTeacherView &&
-          'teacherUnlockAt' in node &&
-          node.isTeacherBlocked &&
-          node.teacherUnlockAt &&
-          Date.parse(node.teacherUnlockAt) > now.getTime()
-            ? formatScheduledUnlockMoment(node.teacherUnlockAt, now)
-            : undefined,
+        scheduledUnlockLabel: scheduledUnlockAt
+          ? formatScheduledUnlockMoment(scheduledUnlockAt, now)
+          : undefined,
         blockReason,
         canManageActions: canEdit,
         useActionSheet: actionMenu.useActionSheet,

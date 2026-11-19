@@ -7,6 +7,7 @@ import {
   decideScheduledUnlock,
   formatScheduledUnlockMoment,
   nextScheduledUnlockLabelChange,
+  projectedScheduledUnlockMoments,
   settleDueScheduledUnlocks,
 } from '@/features/roadmap/domain/scheduled-unlock';
 
@@ -237,27 +238,132 @@ test('finds every Teacher-blocked transitive prerequisite a Scheduled unlock als
 });
 
 test('describes a Scheduled unlock moment relative to today in Chile time', () => {
-  const now = new Date('2026-11-19T12:00:00-03:00');
+  const thursday = new Date('2026-11-19T12:00:00-03:00');
 
-  expect(formatScheduledUnlockMoment('2026-11-19T17:45:00-03:00', now)).toBe('Hoy, a las 17:45');
-  expect(formatScheduledUnlockMoment('2026-11-20T02:30:00.000Z', now)).toBe('Hoy, a las 23:30');
-  expect(formatScheduledUnlockMoment('2026-11-20T23:59:00-03:00', now)).toBe('Mañana, a las 23:59');
-  expect(formatScheduledUnlockMoment('2026-11-26T09:23:00-03:00', now)).toBe(
-    'Jueves 26, a las 09:23',
+  expect(formatScheduledUnlockMoment('2026-11-19T17:45:00-03:00', thursday)).toBe(
+    'Hoy, a las 17:45',
   );
-  expect(formatScheduledUnlockMoment('2026-12-03T02:02:00-03:00', now)).toBe(
-    'Jueves 03/12, a las 02:02',
+  expect(formatScheduledUnlockMoment('2026-11-20T02:30:00.000Z', thursday)).toBe(
+    'Hoy, a las 23:30',
+  );
+  expect(formatScheduledUnlockMoment('2026-11-20T23:59:00-03:00', thursday)).toBe(
+    'Mañana, a las 23:59',
+  );
+  expect(formatScheduledUnlockMoment('2026-11-21T17:45:00-03:00', thursday)).toBe(
+    'Sábado, a las 17:45',
+  );
+  expect(formatScheduledUnlockMoment('2026-11-22T23:59:00-03:00', thursday)).toBe(
+    'Domingo, a las 23:59',
+  );
+  expect(formatScheduledUnlockMoment('2026-11-23T09:23:00-03:00', thursday)).toBe(
+    '23/11, a las 09:23',
+  );
+  expect(formatScheduledUnlockMoment('2026-12-05T17:45:00-03:00', thursday)).toBe(
+    '05/12, a las 17:45',
   );
   expect(
     formatScheduledUnlockMoment('2026-12-01T09:00:00-03:00', new Date('2026-11-30T12:00:00-03:00')),
   ).toBe('Mañana, a las 09:00');
+  const sunday = new Date('2026-11-22T12:00:00-03:00');
+  expect(formatScheduledUnlockMoment('2026-11-24T08:00:00-03:00', sunday)).toBe(
+    '24/11, a las 08:00',
+  );
   const newYearsEve = new Date('2026-12-31T20:00:00-03:00');
   expect(formatScheduledUnlockMoment('2027-01-01T00:15:00-03:00', newYearsEve)).toBe(
     'Mañana, a las 00:15',
   );
-  expect(formatScheduledUnlockMoment('2027-01-06T08:00:00-03:00', newYearsEve)).toBe(
-    'Miércoles 06/01, a las 08:00',
+  expect(formatScheduledUnlockMoment('2027-01-02T10:00:00-03:00', newYearsEve)).toBe(
+    'Sábado, a las 10:00',
   );
+  expect(formatScheduledUnlockMoment('2027-01-05T08:00:00-03:00', newYearsEve)).toBe(
+    '05/01/27, a las 08:00',
+  );
+});
+
+test('a Scheduled unlock with dependents projects its moment onto every dependent it will release', () => {
+  const nodes = [
+    node('a', '2026-11-21T20:45:00.000Z', true, true),
+    node('b', null),
+    node('c', '2026-12-05T20:45:00.000Z'),
+    node('d', null),
+  ];
+
+  expect(
+    projectedScheduledUnlockMoments({
+      nodes,
+      dependencies: longChain,
+      now: new Date('2026-11-19T15:00:00.000Z'),
+    }),
+  ).toEqual(
+    new Map([
+      ['a', '2026-11-21T20:45:00.000Z'],
+      ['b', '2026-11-21T20:45:00.000Z'],
+      ['c', '2026-12-05T20:45:00.000Z'],
+    ]),
+  );
+});
+
+test('a projected Scheduled unlock moment omits nodes a still-blocked prerequisite keeps blocked', () => {
+  const nodes = [node('intro', null), node('theory', '2026-11-21T20:45:00.000Z', true, true)];
+
+  expect(
+    projectedScheduledUnlockMoments({
+      nodes,
+      now: new Date('2026-11-19T15:00:00.000Z'),
+      dependencies: chain,
+    }),
+  ).toEqual(new Map());
+});
+
+test('a projected Scheduled unlock moment ignores schedules already due', () => {
+  const nodes = [node('a', '2026-11-19T12:00:00.000Z', true, true), node('b', null)];
+
+  expect(
+    projectedScheduledUnlockMoments({
+      nodes,
+      dependencies: longChain,
+      now: new Date('2026-11-19T15:00:00.000Z'),
+    }),
+  ).toEqual(new Map());
+});
+
+test('a projected Scheduled unlock moment keeps a later schedule whose prerequisite is due but not yet released', () => {
+  const nodes = [
+    node('intro', '2026-11-19T12:00:00.000Z'),
+    node('theory', '2026-11-21T20:45:00.000Z'),
+  ];
+
+  expect(
+    projectedScheduledUnlockMoments({
+      nodes,
+      dependencies: chain,
+      now: new Date('2026-11-19T12:00:00.000Z'),
+    }),
+  ).toEqual(new Map([['theory', '2026-11-21T20:45:00.000Z']]));
+});
+
+test('a projected Scheduled unlock moment omits a schedule due before its prerequisite releases', () => {
+  const nodes = [
+    node('intro', '2026-11-28T20:45:00.000Z'),
+    node('theory', '2026-11-21T20:45:00.000Z'),
+  ];
+
+  expect(
+    projectedScheduledUnlockMoments({
+      nodes,
+      dependencies: chain,
+      now: new Date('2026-11-19T15:00:00.000Z'),
+    }),
+  ).toEqual(new Map([['intro', '2026-11-28T20:45:00.000Z']]));
+});
+
+test('the Scheduled unlock label next changes at Chile midnight that starts a new week', () => {
+  expect(
+    nextScheduledUnlockLabelChange(
+      ['2026-11-26T08:00:00-03:00'],
+      new Date('2026-11-22T20:00:00-03:00'),
+    ),
+  ).toEqual(new Date('2026-11-23T00:00:00-03:00'));
 });
 
 test('the Scheduled unlock label next changes at the earlier of Chile midnight and a pending unlock', () => {
