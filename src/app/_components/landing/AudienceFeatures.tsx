@@ -21,6 +21,7 @@ import { domAnimation, LazyMotion, useInView, useScroll, useTransform } from 'mo
 import * as m from 'motion/react-m';
 import { nodeTypePaint } from '@/shared/node-type';
 import { buttonVariants } from '@/shared/ui/button-variants';
+import { extensionStores } from '@/shared/u-cursos-extension';
 import { cn } from 'cn';
 import { FeatureClip } from './FeatureClip';
 import { RevealStatement } from './RevealStatement';
@@ -132,17 +133,9 @@ const audiences = {
 type AudienceId = keyof typeof audiences;
 const audienceIds = Object.keys(audiences) as AudienceId[];
 
-const extensionStores = [
-  {
-    name: 'Chrome',
-    href: 'https://chromewebstore.google.com/detail/hebgfpfigbojefeaedpkelohoejbllhm',
-    variant: 'default',
-  },
-  {
-    name: 'Firefox',
-    href: 'https://addons.mozilla.org/en-US/firefox/addon/u-roadmaps-en-u-cursos/',
-    variant: 'outline',
-  },
+const landingStores = [
+  { ...extensionStores.chrome, variant: 'default' },
+  { ...extensionStores.firefox, variant: 'outline' },
 ] as const;
 
 const contentColor = '#024AD8';
@@ -380,7 +373,7 @@ function AudienceRoute({ audienceId }: { audienceId: AudienceId }) {
               className="mt-5"
             />
             <div className="mt-8 flex flex-wrap gap-3">
-              {extensionStores.map((store) => (
+              {landingStores.map((store) => (
                 <a
                   key={store.name}
                   href={store.href}
