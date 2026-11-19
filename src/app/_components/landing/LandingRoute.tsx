@@ -12,7 +12,7 @@ import {
   useTransform,
 } from 'motion/react';
 import * as m from 'motion/react-m';
-import { type Point, roundedPath } from '@/app/_components/landing/CourseRouteComparison';
+import { type Point, roundedPath } from '@/app/_components/landing/roundedPath';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type Connector = { d: string; tip: Point; start: number; end: number };
