@@ -1,6 +1,6 @@
 import { nodeTypePaint } from '@/shared/node-type';
 import { Check, Plus, Save } from 'lucide-react';
-import type { Ref } from 'react';
+import { useState, type Ref } from 'react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import {
   nodeTypeColorPalette,
@@ -31,17 +31,23 @@ type Props = {
   reservedIcons?: readonly NodeTypeIconId[];
 };
 
+type PickerProps = Pick<Props, 'value' | 'onChange'> & { invalid: boolean; describedBy?: string };
+
 function IconPicker({
   value,
   onChange,
   reservedIcons = [],
-}: Pick<Props, 'value' | 'onChange' | 'reservedIcons'>) {
+  invalid,
+  describedBy,
+}: PickerProps & Pick<Props, 'reservedIcons'>) {
   const selectedIcon = value.icon ? nodeTypeIcons.find(({ id }) => id === value.icon) : undefined;
   const reservedIconIds = new Set(reservedIcons);
 
   return (
     <PopoverSwatchPicker
       id="node-type-icon"
+      invalid={invalid}
+      describedBy={describedBy}
       ariaLabel={`Icono: ${selectedIcon?.label ?? 'sin selección'}`}
       title="Elegir icono"
       selection={
@@ -71,7 +77,7 @@ function IconPicker({
   );
 }
 
-function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
+function ColorPicker({ value, onChange, invalid, describedBy }: PickerProps) {
   const selectedColor = value.color
     ? nodeTypeColorPalette.find(({ value: color }) => color === value.color)
     : undefined;
@@ -79,6 +85,8 @@ function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
   return (
     <PopoverSwatchPicker
       id="node-type-color"
+      invalid={invalid}
+      describedBy={describedBy}
       ariaLabel={`Color: ${selectedColor?.label ?? 'sin selección'}`}
       title="Elegir color"
       selection={
@@ -130,23 +138,36 @@ export function NodeTypeForm({
   inputRef,
   reservedIcons,
 }: Props) {
-  const canSubmit = Boolean(
-    value.name.trim() && value.icon && value.color && !nameError && hasChanges,
-  );
+  const [showErrors, setShowErrors] = useState(false);
+  const errors = {
+    name: nameError ?? (value.name.trim() ? undefined : 'Escribe un nombre para el tipo.'),
+    icon: value.icon ? undefined : 'Elige un icono para el tipo.',
+    color: value.color ? undefined : 'Elige un color para el tipo.',
+  };
+  const shownErrors = {
+    name: nameError ?? (showErrors ? errors.name : undefined),
+    icon: showErrors ? errors.icon : undefined,
+    color: showErrors ? errors.color : undefined,
+  };
 
   return (
     <TooltipProvider delay={600} timeout={0}>
       <form
         className="flex flex-col gap-4"
+        noValidate
         aria-busy={isPending}
         onSubmit={async (event) => {
           event.preventDefault();
-          if (canSubmit && !isPending) await onSubmit();
+          if (!hasChanges || isPending) return;
+          const firstInvalid = (['name', 'icon', 'color'] as const).find((field) => errors[field]);
+          setShowErrors(Boolean(firstInvalid));
+          if (firstInvalid) document.getElementById(`node-type-${firstInvalid}`)?.focus();
+          else await onSubmit();
         }}
       >
         <fieldset disabled={isPending} className="min-w-0">
           <FieldGroup className="gap-4">
-            <Field data-invalid={Boolean(nameError)}>
+            <Field data-invalid={shownErrors.name ? true : undefined}>
               <FieldLabel htmlFor="node-type-name">Nombre</FieldLabel>
               <Input
                 ref={inputRef}
@@ -155,20 +176,38 @@ export function NodeTypeForm({
                 placeholder="Ej. Ejercicio"
                 value={value.name}
                 onChange={(event) => onChange({ ...value, name: event.target.value })}
-                aria-invalid={Boolean(nameError)}
-                aria-describedby={nameError ? 'node-type-name-error' : undefined}
-                required
+                aria-invalid={shownErrors.name ? true : undefined}
+                aria-describedby={shownErrors.name ? 'node-type-name-error' : undefined}
               />
-              {nameError ? <FieldError id="node-type-name-error">{nameError}</FieldError> : null}
+              {shownErrors.name ? (
+                <FieldError id="node-type-name-error">{shownErrors.name}</FieldError>
+              ) : null}
             </Field>
             <FieldGroup className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
-              <Field>
+              <Field data-invalid={shownErrors.icon ? true : undefined}>
                 <FieldLabel htmlFor="node-type-icon">Icono</FieldLabel>
-                <IconPicker value={value} onChange={onChange} reservedIcons={reservedIcons} />
+                <IconPicker
+                  value={value}
+                  onChange={onChange}
+                  reservedIcons={reservedIcons}
+                  invalid={Boolean(shownErrors.icon)}
+                  describedBy={shownErrors.icon ? 'node-type-icon-error' : undefined}
+                />
+                {shownErrors.icon ? (
+                  <FieldError id="node-type-icon-error">{shownErrors.icon}</FieldError>
+                ) : null}
               </Field>
-              <Field>
+              <Field data-invalid={shownErrors.color ? true : undefined}>
                 <FieldLabel htmlFor="node-type-color">Color</FieldLabel>
-                <ColorPicker value={value} onChange={onChange} />
+                <ColorPicker
+                  value={value}
+                  onChange={onChange}
+                  invalid={Boolean(shownErrors.color)}
+                  describedBy={shownErrors.color ? 'node-type-color-error' : undefined}
+                />
+                {shownErrors.color ? (
+                  <FieldError id="node-type-color-error">{shownErrors.color}</FieldError>
+                ) : null}
               </Field>
             </FieldGroup>
           </FieldGroup>
@@ -179,7 +218,7 @@ export function NodeTypeForm({
           <Button
             type="submit"
             size="sm"
-            disabled={!canSubmit || isPending}
+            disabled={!hasChanges || isPending}
             aria-describedby="node-type-requirements"
           >
             {isPending ? (
@@ -196,7 +235,10 @@ export function NodeTypeForm({
               type="button"
               variant="outline"
               size="sm"
-              onClick={onCancel}
+              onClick={() => {
+                setShowErrors(false);
+                onCancel();
+              }}
               disabled={isPending}
             >
               Cancelar

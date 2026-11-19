@@ -85,9 +85,8 @@ test('checks duplicate names with the same normalization as the domain', async (
     'Ya existe un tipo disponible con ese nombre.',
   );
   expect(screen.getByLabelText('Nombre').getAttribute('aria-invalid')).toBe('true');
-  expect((screen.getByRole('button', { name: 'Crear tipo' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  await user.click(screen.getByRole('button', { name: 'Crear tipo' }));
+  expect(screen.getByLabelText('Nombre').matches(':focus')).toBe(true);
 });
 
 test('guards both switching type and closing with unsaved changes', async () => {

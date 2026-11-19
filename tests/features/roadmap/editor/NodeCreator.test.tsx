@@ -95,7 +95,8 @@ test('explains a missing title inline, focuses it and does not submit', async ()
 
   await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
 
-  const title = screen.getByRole('textbox', { name: 'Título' });
+  const title = screen.getByRole<HTMLInputElement>('textbox', { name: 'Título' });
+  expect(title.form?.noValidate).toBe(true);
   expect(onSubmit).not.toHaveBeenCalled();
   expect(title.matches(':focus')).toBe(true);
   expect(title.getAttribute('aria-invalid')).toBe('true');
