@@ -752,10 +752,14 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
         <Panel
           position="top-left"
           data-canvas-overlay="top"
-          className="pointer-events-none z-4! m-4! flex w-[calc(100%-2rem)] flex-wrap items-start gap-3 sm:m-6! sm:w-[calc(100%-3rem)]"
+          className="@container/top-row pointer-events-none z-4! mx-6! mt-3! w-[calc(100%-3rem)]"
         >
-          <div className={cn(titlePlateClassName, 'max-w-md')}>{slots?.topLeft}</div>
-          <div className="flex min-w-fit flex-1 justify-center">{slots?.topCenter}</div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 @max-[56rem]/top-row:grid-cols-1">
+            <div className="@container/title-plate mt-3 w-full max-w-md min-w-0">
+              <div className={cn(titlePlateClassName, 'w-fit max-w-full')}>{slots?.topLeft}</div>
+            </div>
+            <div className="justify-self-center">{slots?.topCenter}</div>
+          </div>
         </Panel>
         {topRight}
       </>

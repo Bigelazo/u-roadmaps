@@ -671,6 +671,8 @@ test('centers the roadmap without animation when motion is reduced', async () =>
 test.each([
   { name: 'horizontal wheel', init: { deltaX: 40, deltaY: 5 }, x: -40 },
   { name: 'shift wheel', init: { deltaY: 30, shiftKey: true }, x: -30 },
+  { name: 'leftward wheel', init: { deltaX: -40, deltaY: -5 }, x: 40 },
+  { name: 'line-mode wheel', init: { deltaX: 3, deltaMode: WheelEvent.DOM_DELTA_LINE }, x: -60 },
 ])('pans the canvas horizontally on $name', ({ init, x }) => {
   const onViewportChange = vi.fn();
   renderGraph({ onViewportChange });
@@ -1076,7 +1078,7 @@ test('emits an immutable collection when deleting Dependencies', async () => {
   expect(intent.kind === 'delete-dependencies' && Object.isFrozen(intent.dependencyIds)).toBe(true);
 });
 
-test('keeps the title and toolbar overlays in one wrapping row so they never overlap', () => {
+test('shares one top row between the title and the toolbar so the toolbar can stay centered', () => {
   renderGraph({
     overlaySlots: {
       topLeft: <span data-testid="top-left-overlay">Metadata</span>,
@@ -1087,7 +1089,7 @@ test('keeps the title and toolbar overlays in one wrapping row so they never ove
   const row = screen.getByTestId('roadmap-panel-top-left');
   const title = within(row).getByTestId('top-left-overlay');
   const toolbar = within(row).getByTestId('top-center-overlay');
-  expect(row.classList.contains('flex-wrap')).toBe(true);
+  expect(row.classList.contains('@container/top-row')).toBe(true);
   expect(title.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.queryByTestId('roadmap-panel-top-center')).toBeNull();
 });

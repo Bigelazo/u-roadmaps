@@ -46,14 +46,16 @@ export function RoadmapCanvasHeader({
             ) : null}
           </div>
           <h1
+            title={title}
             className={cn(
               'font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]',
+              '@max-md/title-plate:pointer-events-auto @max-md/title-plate:truncate @max-md/title-plate:pb-0.5 @max-md/title-plate:text-lg',
               !hidesBadgeRow && 'mt-2',
             )}
           >
             {title}
           </h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground @max-md/title-plate:text-xs">
             <span>{courseCode}</span>
             <span aria-hidden="true">·</span>
             <span>{termLabel({ year, semester })}</span>
