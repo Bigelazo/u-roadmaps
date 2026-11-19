@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export const panelWidthLimits = { min: 320, max: 560 } as const;
+export const panelWidthLimits = { min: 320, max: 960 } as const;
 
 type PanelWidthOptions = {
   storageKey: string;

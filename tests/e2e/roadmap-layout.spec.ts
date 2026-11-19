@@ -204,19 +204,32 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   await expect(canvas.locator('header')).toHaveCSS('pointer-events', 'none');
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
   await expect(page.getByText('Vista estudiantil')).toBeVisible();
-  const previewToolbar = canvas.locator('.react-flow__panel.top.center');
-  const [previewCanvasBox, previewBox] = await Promise.all([
-    bounds(canvas),
-    bounds(previewToolbar),
-  ]);
-  expect(previewBox.y - previewCanvasBox.y).toBeCloseTo(12, 0);
-  expect(previewBox.x + previewBox.width / 2).toBeCloseTo(
-    previewCanvasBox.x + previewCanvasBox.width / 2,
-    0,
-  );
+  const previewToolbar = page.getByText('Vista estudiantil', { exact: true }).locator('..');
+  const metadataHeader = canvas.locator('header');
+  const expectToolbarBesideMetadata = async () => {
+    const [previewCanvasBox, previewBox, headerBox] = await Promise.all([
+      bounds(canvas),
+      bounds(previewToolbar),
+      bounds(metadataHeader),
+    ]);
+    const clearance = Math.max(
+      previewBox.x - (headerBox.x + headerBox.width),
+      previewBox.y - (headerBox.y + headerBox.height),
+    );
+    expect(clearance).toBeGreaterThan(0);
+    expect(previewBox.x + previewBox.width).toBeLessThanOrEqual(
+      previewCanvasBox.x + previewCanvasBox.width,
+    );
+  };
+  await expectToolbarBesideMetadata();
   const previewNode = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
   await previewNode.click();
   await expect(page.locator('#student-node-detail-panel')).toBeVisible();
+  for (const width of [1870, 1440, 1280, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectToolbarBesideMetadata();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: 'Ir al editor' }).click();
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeFocused();
 
@@ -230,7 +243,7 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   expect(mobileMetadataBox.width).toBeLessThanOrEqual(mobileCanvasBox.width - 32);
   await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
-  const mobilePreviewBox = await bounds(previewToolbar);
+  const mobilePreviewBox = await bounds(canvas.locator('.react-flow__panel.top.center'));
   expect(mobilePreviewBox.width).toBeCloseTo(mobileCanvasBox.width - 32, 0);
   expect(mobilePreviewBox.x + mobilePreviewBox.width / 2).toBeCloseTo(
     mobileCanvasBox.x + mobileCanvasBox.width / 2,

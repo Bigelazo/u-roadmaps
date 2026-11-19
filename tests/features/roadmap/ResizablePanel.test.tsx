@@ -96,10 +96,10 @@ test('keeps resizing within its readable minimum and canvas-preserving maximum',
 });
 
 test('restores and clamps stored widths without writing to storage', () => {
-  window.localStorage.setItem('panel-width', '900');
+  window.localStorage.setItem('panel-width', '1200');
   const persist = vi.spyOn(window.localStorage, 'setItem');
   render(<ResizablePanelFixture storageKey="panel-width" />);
-  expect(screen.getByLabelText('Ancho del panel').textContent).toBe('560');
+  expect(screen.getByLabelText('Ancho del panel').textContent).toBe(String(panelWidthLimits.max));
   expect(persist).not.toHaveBeenCalled();
 });
 

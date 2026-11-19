@@ -6,7 +6,7 @@ import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 export function useCanvasPanelLayout(panel: NodeSelectionPanel) {
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
-    initialWidth: 360,
+    initialWidth: 500,
   });
   const studentPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:student-node-detail-width',

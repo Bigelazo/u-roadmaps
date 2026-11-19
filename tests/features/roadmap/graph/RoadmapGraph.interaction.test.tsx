@@ -1076,7 +1076,7 @@ test('emits an immutable collection when deleting Dependencies', async () => {
   expect(intent.kind === 'delete-dependencies' && Object.isFrozen(intent.dependencyIds)).toBe(true);
 });
 
-test('places each roadmap overlay slot in its constrained viewport panel', () => {
+test('keeps the title and toolbar overlays in one wrapping row so they never overlap', () => {
   renderGraph({
     overlaySlots: {
       topLeft: <span data-testid="top-left-overlay">Metadata</span>,
@@ -1084,12 +1084,12 @@ test('places each roadmap overlay slot in its constrained viewport panel', () =>
     },
   });
 
-  expect(
-    within(screen.getByTestId('roadmap-panel-top-left')).getByTestId('top-left-overlay'),
-  ).toBeTruthy();
-  expect(
-    within(screen.getByTestId('roadmap-panel-top-center')).getByTestId('top-center-overlay'),
-  ).toBeTruthy();
+  const row = screen.getByTestId('roadmap-panel-top-left');
+  const title = within(row).getByTestId('top-left-overlay');
+  const toolbar = within(row).getByTestId('top-center-overlay');
+  expect(row.classList.contains('flex-wrap')).toBe(true);
+  expect(title.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByTestId('roadmap-panel-top-center')).toBeNull();
 });
 
 test('disables automatic ordering until the Roadmap has enough Nodes', async () => {

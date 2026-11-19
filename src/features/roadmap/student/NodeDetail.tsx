@@ -226,7 +226,7 @@ export function StudentNodeDetail({
           side="bottom"
           showCloseButton={false}
           aria-modal="true"
-          className="max-h-[85dvh] gap-0 overflow-hidden rounded-t-xl bg-card pb-[env(safe-area-inset-bottom)]"
+          className="top-0 gap-0 overflow-hidden bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
         >
           <StudentNodeDetailContent key={node.id} {...contentProps} isModal />
         </SheetContent>

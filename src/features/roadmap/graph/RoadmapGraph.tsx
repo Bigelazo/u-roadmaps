@@ -656,78 +656,6 @@ function ActionMenuViewportAdjustment({
   return null;
 }
 
-function CompactEditorViewportAdjustment({
-  nodeId,
-  containerRef,
-}: {
-  nodeId: string | null | undefined;
-  containerRef: RefObject<HTMLDivElement | null>;
-}) {
-  const compact = useCompactCanvasLayout();
-  const { getViewport, setViewport } = useReactFlow();
-
-  useEffect(() => {
-    const container = containerRef.current;
-    const panel = container
-      ?.closest('section')
-      ?.querySelector<HTMLElement>('#roadmap-editor-panel');
-    const node = container?.querySelector<HTMLElement>(`.react-flow__node[data-id="${nodeId}"]`);
-    if (!compact || !nodeId || !container || !panel || !node) return;
-    const visualViewport = window.visualViewport;
-    let frame = 0;
-    const reveal = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const panelBounds = panel.getBoundingClientRect();
-        if (!panelBounds.height) return;
-        const canvas = container.getBoundingClientRect();
-        const bounds = node.getBoundingClientRect();
-        const insets = canvasOverlayInsets(container);
-        const visibleBottom = Math.min(
-          canvas.bottom,
-          visualViewport ? visualViewport.offsetTop + visualViewport.height : window.innerHeight,
-        );
-        const panelMaxHeight = Math.max(
-          0,
-          visibleBottom - canvas.top - insets.top - bounds.height - overlayGap * 2,
-        );
-        panel.style.setProperty('--roadmap-panel-max-height', `${panelMaxHeight}px`);
-        const bottom = Math.min(canvas.bottom - insets.bottom, panelBounds.top - overlayGap);
-        const top = Math.min(canvas.top + insets.top, bottom - bounds.height);
-        const x = Math.max(
-          canvas.left + insets.left - bounds.left,
-          Math.min(0, canvas.right - insets.right - bounds.right),
-        );
-        const y = Math.max(top - bounds.top, Math.min(0, bottom - bounds.bottom));
-        if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
-        const viewport = getViewport();
-        void setViewport({ x: viewport.x + x, y: viewport.y + y, zoom: viewport.zoom });
-      });
-    };
-    const observer = new ResizeObserver(reveal);
-    [
-      container,
-      panel,
-      node,
-      ...container.querySelectorAll<HTMLElement>('[data-canvas-overlay]'),
-    ].forEach((element) => observer.observe(element));
-    panel.addEventListener('animationend', reveal);
-    visualViewport?.addEventListener('resize', reveal);
-    visualViewport?.addEventListener('scroll', reveal);
-    reveal();
-    return () => {
-      observer.disconnect();
-      panel.removeEventListener('animationend', reveal);
-      visualViewport?.removeEventListener('resize', reveal);
-      visualViewport?.removeEventListener('scroll', reveal);
-      panel.style.removeProperty('--roadmap-panel-max-height');
-      cancelAnimationFrame(frame);
-    };
-  }, [compact, containerRef, getViewport, nodeId, setViewport]);
-
-  return null;
-}
-
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
   const defaultStroke = edge.data?.defaultStroke ?? dependencyStroke;
   const stroke = edge.selected || isHovered ? selectedEdgeColor : defaultStroke;
@@ -765,7 +693,28 @@ const titlePlateClassName = cn(
 
 function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   const compact = useCompactCanvasLayout();
-  const stackTitleUnderToolbar = compact && Boolean(slots?.topCenter && slots.topLeft);
+  const sharesTopRow = Boolean(slots?.topCenter && slots.topLeft);
+  const stackTitleUnderToolbar = compact && sharesTopRow;
+  const topRight = slots?.topRight ? (
+    <Panel position="top-right" className="m-4! sm:m-6!">
+      {slots.topRight}
+    </Panel>
+  ) : null;
+  if (sharesTopRow && !compact) {
+    return (
+      <>
+        <Panel
+          position="top-left"
+          data-canvas-overlay="top"
+          className="pointer-events-none z-4! m-4! flex w-[calc(100%-2rem)] flex-wrap items-start gap-3 sm:m-6! sm:w-[calc(100%-3rem)]"
+        >
+          <div className={cn(titlePlateClassName, 'max-w-md')}>{slots?.topLeft}</div>
+          <div className="flex min-w-fit flex-1 justify-center">{slots?.topCenter}</div>
+        </Panel>
+        {topRight}
+      </>
+    );
+  }
   return (
     <>
       {slots?.topLeft && !stackTitleUnderToolbar ? (
@@ -804,11 +753,7 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
           ) : null}
         </Panel>
       ) : null}
-      {slots?.topRight ? (
-        <Panel position="top-right" className="m-4! sm:m-6!">
-          {slots.topRight}
-        </Panel>
-      ) : null}
+      {topRight}
     </>
   );
 }
@@ -1374,10 +1319,6 @@ function RoadmapGraphContents({
         onViewportChange={props.onViewportChange}
       />
       <NodeMeasurementRecovery nodes={flow.nodes} />
-      <CompactEditorViewportAdjustment
-        nodeId={canEdit ? props.selectedNodeId : null}
-        containerRef={containerRef}
-      />
       <ActionMenuViewportAdjustment
         nodeId={canEdit && !model.useActionSheet ? openActionMenuNodeId : null}
         containerRef={containerRef}

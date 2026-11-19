@@ -158,7 +158,7 @@ function NodeForm() {
   return (
     <form
       noValidate
-      className="flex flex-col gap-4 [--markdown-editor-min-height:50dvh]"
+      className="flex flex-col gap-4 [--markdown-editor-min-height:max(12rem,calc(100dvh-32rem))]"
       onSubmit={submit}
     >
       <FieldGroup>
