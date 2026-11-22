@@ -4,8 +4,10 @@ import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
 import {
   isNodeOpener,
   isNodeViewer,
+  nodeTitle,
   nodeViewers,
   participantIds,
+  targetNode,
   type EntryValue,
   type NoticeTargetDescriptor,
   type TargetValues,
@@ -13,17 +15,11 @@ import {
 
 type NodeCreatedFact = Extract<RoadmapChangeFact, { kind: 'node-created' }>;
 
-function presented({ context }: TargetValues) {
-  return {
-    nodeTitle: String(context.nodeTitle ?? ''),
-    blocked: context.nodeAccess === 'Bloqueado',
-  };
-}
+const blocked = ({ context }: TargetValues) => context.nodeAccess === 'Bloqueado';
 
 function text(values: TargetValues) {
-  const { nodeTitle, blocked } = presented(values);
-  const subject = `Nuevo Nodo «${nodeTitle}»`;
-  const ending = blocked ? ' (bloqueado).' : '.';
+  const subject = `Nuevo Nodo «${nodeTitle(values)}»`;
+  const ending = blocked(values) ? ' (bloqueado).' : '.';
   return {
     subject,
     body: `${subject}${ending}`,
@@ -43,7 +39,7 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   },
   audience: (fact, _changes, roadmap) => nodeViewers(fact.current.isVisible, roadmap),
   async current(target, roadmap, recipientId) {
-    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
+    const node = await targetNode(target, roadmap);
     if (!node) return null;
     if (!(await isNodeViewer(node.isVisible, recipientId, roadmap)))
       return { value: ABSENT, visible: false };
@@ -78,7 +74,7 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   wording: (values) => ({
     ...text(values),
     summaryGroup: 'node',
-    summary: `Nuevo Nodo${presented(values).blocked ? ' (bloqueado)' : ''}.`,
+    summary: `Nuevo Nodo${blocked(values) ? ' (bloqueado)' : ''}.`,
   }),
   apiData: ({ context }) => ({
     nodeTitle: context.nodeTitle,

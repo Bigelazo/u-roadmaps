@@ -3,6 +3,7 @@ import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import {
   isNodeViewer,
   nodeOpeners,
+  targetNode,
   type NoticeTargetDescriptor,
   type TargetValues,
 } from './descriptor';
@@ -56,7 +57,7 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   knowers: (fact, _changes, roadmap) => nodeOpeners(true, fact.nodeId, roadmap),
   audience: (fact, _changes, roadmap) => nodeOpeners(true, fact.nodeId, roadmap),
   async current(target, roadmap, recipientId) {
-    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
+    const node = await targetNode(target, roadmap);
     if (!node) return null;
     const resourceId = target.targetKey.slice('resource:'.length);
     const resource = await roadmap.resource(resourceId);

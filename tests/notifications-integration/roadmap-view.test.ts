@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect } from 'vitest';
-import { prisma } from '@/shared/server/db';
+import { prisma, type Prisma } from '@/shared/server/db';
 import { roadmapView } from '@/features/notifications/infrastructure/notice-lifecycle';
 import { test, type IntegrationCourse } from './fixtures';
 import { addNode, addType } from './roadmap';
@@ -83,4 +83,57 @@ test('a preloaded Roadmap view answers every lookup as the database does', async
     null,
     null,
   ]);
+});
+
+function recordingQueries(transaction: Prisma.TransactionClient, queries: string[]) {
+  return new Proxy(transaction, {
+    get(client, model) {
+      const delegate: unknown = Reflect.get(client, model);
+      if (!delegate || typeof delegate !== 'object') return delegate;
+      return new Proxy(delegate, {
+        get(target, operation) {
+          const query: unknown = Reflect.get(target, operation);
+          if (typeof query !== 'function') return query;
+          return (...args: unknown[]) => {
+            queries.push(`${String(model)}.${String(operation)}`);
+            return query.apply(target, args);
+          };
+        },
+      });
+    },
+  });
+}
+
+test('a Roadmap view reads single rows until preloaded and then answers from memory', async ({
+  course,
+}) => {
+  const nodeId = course.change.nodeId;
+  const resource = await addResource(nodeId, 'guía');
+  const queries: string[] = [];
+  await prisma.$transaction(async (transaction) => {
+    const view = roadmapView(recordingQueries(transaction, queries), course.roadmapId);
+    const everyLookup = () =>
+      Promise.all(
+        [1, 2].flatMap(() => [
+          view.node(nodeId),
+          view.resource(resource.id),
+          view.nodeResources(nodeId),
+          view.nodeType(course.nodeTypeId),
+          view.dependency(nodeId, nodeId),
+        ]),
+      );
+    await everyLookup();
+    expect(queries.toSorted()).toEqual([
+      'dependency.findFirst',
+      'dependency.findFirst',
+      'nodeType.findFirst',
+      'resource.findFirst',
+      'resource.findMany',
+      'roadmapNode.findFirst',
+    ]);
+    await view.preload();
+    queries.length = 0;
+    await everyLookup();
+    expect(queries).toEqual([]);
+  });
 });

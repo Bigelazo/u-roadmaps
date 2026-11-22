@@ -138,6 +138,22 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   apiData(values: TargetValues): Readonly<Record<string, unknown>>;
 }
 
+export const nodeRef =
+  (noticeTarget: string, field: string) =>
+  (nodeId: string): NoticeTargetRef => ({
+    noticeTarget,
+    targetKey: `node:${nodeId}:${field}`,
+    nodeId,
+  });
+
+export async function targetNode({ nodeId }: NoticeTargetRef, roadmap: RoadmapView) {
+  return nodeId ? roadmap.node(nodeId) : null;
+}
+
+export function nodeTitle({ context }: TargetValues) {
+  return String(context.nodeTitle ?? '');
+}
+
 export async function nodeVisibleBefore(
   nodeId: string,
   changes: RoadmapChanges,

@@ -5,19 +5,11 @@ import {
   nodeAccessState,
 } from '@/shared/node-access';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
+import { nodeRef, nodeTitle, targetNode, type NoticeTargetDescriptor } from './descriptor';
 
 type NodeAccessFact = Extract<RoadmapChangeFact, { kind: 'node-access' }>;
 
-export const nodeAccessRef = (nodeId: string) => ({
-  noticeTarget: NOTICE_TARGET.nodeAccess,
-  targetKey: `node:${nodeId}:access`,
-  nodeId,
-});
-
-function nodeTitle({ context }: TargetValues) {
-  return String(context.nodeTitle ?? '');
-}
+export const nodeAccessRef = nodeRef(NOTICE_TARGET.nodeAccess, 'access');
 
 export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   noticeTarget: NOTICE_TARGET.nodeAccess,
@@ -31,7 +23,7 @@ export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   factRecipients: (fact) => [fact.recipientId],
   currentAtEdit: (fact) => ({ recipientIds: [fact.recipientId], value: fact.current }),
   async current(target, roadmap) {
-    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
+    const node = await targetNode(target, roadmap);
     return node ? { value: '', visible: true, context: { nodeTitle: node.title } } : null;
   },
   async entryValues(roadmap, recipientId) {

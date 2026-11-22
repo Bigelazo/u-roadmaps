@@ -3,17 +3,15 @@ import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import {
   isNodeViewer,
   nodePart,
+  nodeRef,
   nodeViewers,
   nodeVisibleBefore,
   nodeVisibleThroughout,
+  targetNode,
   type NoticeTargetDescriptor,
 } from './descriptor';
 
-const nodeTitleRef = (nodeId: string) => ({
-  noticeTarget: NOTICE_TARGET.nodeTitle,
-  targetKey: `node:${nodeId}:title`,
-  nodeId,
-});
+const nodeTitleRef = nodeRef(NOTICE_TARGET.nodeTitle, 'title');
 
 type NodeTitleFact = Extract<RoadmapChangeFact, { kind: 'node-title' }>;
 
@@ -29,7 +27,7 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
   audience: async (fact, changes, roadmap) =>
     nodeViewers(await nodeVisibleThroughout(fact.nodeId, changes, roadmap), roadmap),
   async current(target, roadmap, recipientId) {
-    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
+    const node = await targetNode(target, roadmap);
     if (!node) return null;
     return { value: node.title, visible: await isNodeViewer(node.isVisible, recipientId, roadmap) };
   },

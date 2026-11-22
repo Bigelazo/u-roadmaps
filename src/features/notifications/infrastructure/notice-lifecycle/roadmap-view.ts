@@ -68,7 +68,12 @@ function viewResource(
   return { id: row.id, nodeId: row.roadmapNodeId, ...resourceContentState(row) };
 }
 
+function viewNodeType(type: { id: string; name: string; nodes: unknown[] }): RoadmapViewNodeType {
+  return { id: type.id, name: type.name, hasVisibleNode: type.nodes.length > 0 };
+}
+
 const resourceOrder = [{ createdAt: 'asc' }, { id: 'asc' }] as const;
+const dependencySelect = { id: true, sourceNodeId: true, targetNodeId: true } as const;
 
 function firstBy<Row>(rows: readonly Row[], key: (row: Row) => string) {
   const index = new Map<string, Row>();
@@ -83,6 +88,29 @@ const dependencyKey = ({
 }: Pick<RoadmapViewDependency, 'sourceNodeId' | 'targetNodeId'>) =>
   JSON.stringify([sourceNodeId, targetNodeId]);
 
+function memo<Value>(cache: Map<string, Promise<Value>>, id: string, load: () => Promise<Value>) {
+  let value = cache.get(id);
+  if (!value) cache.set(id, (value = load()));
+  return value;
+}
+
+function collection<Row>(key: (row: NoInfer<Row>) => string, load: () => Promise<readonly Row[]>) {
+  let rows: Promise<readonly Row[]> | undefined;
+  let index: Promise<ReadonlyMap<string, Row>> | undefined;
+  const single = new Map<string, Promise<Row | null>>();
+  const find = (id: string, one: () => Promise<Row | null>) => {
+    if (!rows) return one();
+    index ??= rows.then((all) => firstBy(all, key));
+    return index.then((found) => found.get(id) ?? null);
+  };
+  return {
+    all: () => (rows ??= load()),
+    loaded: () => rows,
+    find,
+    cached: (id: string, one: () => Promise<Row | null>) => find(id, () => memo(single, id, one)),
+  };
+}
+
 export function roadmapView(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -90,23 +118,39 @@ export function roadmapView(
   readRoadmapAccess?: RoadmapAccessReader,
 ): RoadmapView {
   let participants: ReturnType<RoadmapView['participants']> | undefined;
-  let allNodes: Promise<readonly RoadmapViewNode[]> | undefined;
-  let allResources: Promise<readonly RoadmapViewResource[]> | undefined;
-  let allDependencies: Promise<readonly RoadmapViewDependency[]> | undefined;
-  let allNodeTypes: Promise<readonly RoadmapViewNodeType[]> | undefined;
-  let nodeIndex: Promise<ReadonlyMap<string, RoadmapViewNode>> | undefined;
-  let resourceIndex: Promise<ReadonlyMap<string, RoadmapViewResource>> | undefined;
+  let allAccess: Promise<ReadonlyMap<string, ParticipantAccess>> | undefined;
+  let course: ReturnType<RoadmapView['course']> | undefined;
   let resourcesByNode: Promise<ReadonlyMap<string, readonly RoadmapViewResource[]>> | undefined;
-  let dependencyIndex: Promise<ReadonlyMap<string, RoadmapViewDependency>> | undefined;
-  let nodeTypeIndex: Promise<ReadonlyMap<string, RoadmapViewNodeType>> | undefined;
-  const nodes = new Map<string, Promise<RoadmapViewNode | null>>();
-  const resources = new Map<string, Promise<RoadmapViewResource | null>>();
   const roles = new Map<string, Promise<ParticipantRole | null>>();
   const accessible = new Map<string, Promise<ReadonlySet<string>>>();
-  let allAccess: Promise<ReadonlyMap<string, ParticipantAccess>> | undefined;
-  const nodeTypes = new Map<string, Promise<RoadmapViewNodeType | null>>();
   const nodeResources = new Map<string, ReturnType<RoadmapView['nodeResources']>>();
-  let course: ReturnType<RoadmapView['course']> | undefined;
+  const nodeTypeSelect = {
+    id: true,
+    name: true,
+    nodes: { where: { roadmapId, isVisible: true }, select: { id: true }, take: 1 },
+  } as const;
+  const nodes = collection(byId, () =>
+    transaction.roadmapNode
+      .findMany({ where: { roadmapId }, select: nodeSelect, orderBy: { id: 'asc' } })
+      .then((rows) => rows.map(viewNode)),
+  );
+  const resources = collection(byId, () =>
+    transaction.resource
+      .findMany({ where: { roadmapNode: { roadmapId } }, orderBy: [...resourceOrder] })
+      .then((rows) => rows.map(viewResource)),
+  );
+  const dependencies = collection(dependencyKey, () =>
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId } },
+      select: dependencySelect,
+      orderBy: { id: 'asc' },
+    }),
+  );
+  const nodeTypes = collection(byId, () =>
+    transaction.nodeType
+      .findMany({ where: { roadmapId }, select: nodeTypeSelect, orderBy: { id: 'asc' } })
+      .then((rows) => rows.map(viewNodeType)),
+  );
   const view: RoadmapView = {
     roadmapId,
     participants() {
@@ -121,74 +165,43 @@ export function roadmapView(
       if (allAccess) return allAccess.then((all) => all.get(userId)?.role ?? null);
       if (participants)
         return participants.then((all) => all.find((one) => one.userId === userId)?.role ?? null);
-      let role = roles.get(userId);
-      if (!role) {
-        role = transaction.participation
+      return memo(roles, userId, () =>
+        transaction.participation
           .findFirst({
             where: { userId, courseOffering: { roadmap: { id: roadmapId } }, isActive: true },
             select: { role: true },
           })
-          .then((found) => found?.role ?? null);
-        roles.set(userId, role);
-      }
-      return role;
+          .then((found) => found?.role ?? null),
+      );
     },
-    nodes() {
-      allNodes ??= transaction.roadmapNode
-        .findMany({ where: { roadmapId }, select: nodeSelect, orderBy: { id: 'asc' } })
-        .then((rows) => rows.map(viewNode));
-      return allNodes;
-    },
-    node(nodeId) {
-      if (allNodes) {
-        nodeIndex ??= allNodes.then((all) => firstBy(all, byId));
-        return nodeIndex.then((index) => index.get(nodeId) ?? null);
-      }
-      let node = nodes.get(nodeId);
-      if (!node) {
-        node = transaction.roadmapNode
+    nodes: nodes.all,
+    node: (nodeId) =>
+      nodes.cached(nodeId, () =>
+        transaction.roadmapNode
           .findFirst({ where: { id: nodeId, roadmapId }, select: nodeSelect })
-          .then((found) => (found ? viewNode(found) : null));
-        nodes.set(nodeId, node);
-      }
-      return node;
-    },
-    resources() {
-      allResources ??= transaction.resource
-        .findMany({ where: { roadmapNode: { roadmapId } }, orderBy: [...resourceOrder] })
-        .then((rows) => rows.map(viewResource));
-      return allResources;
-    },
-    resource(resourceId) {
-      if (allResources) {
-        resourceIndex ??= allResources.then((all) => firstBy(all, byId));
-        return resourceIndex.then((index) => index.get(resourceId) ?? null);
-      }
-      let resource = resources.get(resourceId);
-      if (!resource) {
-        resource = transaction.resource
+          .then((found) => (found ? viewNode(found) : null)),
+      ),
+    resources: resources.all,
+    resource: (resourceId) =>
+      resources.cached(resourceId, () =>
+        transaction.resource
           .findFirst({ where: { id: resourceId, roadmapNode: { roadmapId } } })
-          .then((row) => (row ? viewResource(row) : null));
-        resources.set(resourceId, resource);
-      }
-      return resource;
-    },
+          .then((row) => (row ? viewResource(row) : null)),
+      ),
     nodeResources(nodeId) {
-      if (allResources) {
-        resourcesByNode ??= allResources.then((all) => Map.groupBy(all, ({ nodeId: id }) => id));
+      const all = resources.loaded();
+      if (all) {
+        resourcesByNode ??= all.then((rows) => Map.groupBy(rows, ({ nodeId: id }) => id));
         return resourcesByNode.then((groups) => [...(groups.get(nodeId) ?? [])]);
       }
-      let found = nodeResources.get(nodeId);
-      if (!found) {
-        found = transaction.resource
+      return memo(nodeResources, nodeId, () =>
+        transaction.resource
           .findMany({
             where: { roadmapNodeId: nodeId, roadmapNode: { roadmapId } },
             orderBy: [...resourceOrder],
           })
-          .then((rows) => rows.map(viewResource));
-        nodeResources.set(nodeId, found);
-      }
-      return found;
+          .then((rows) => rows.map(viewResource)),
+      );
     },
     course() {
       course ??= transaction.roadmap
@@ -203,12 +216,9 @@ export function roadmapView(
       if (allAccess)
         return allAccess.then((all) => participationRequired(all.get(userId)?.accessibleNodeIds));
       if (!readAccess) throw new Error('Node access is not available in this view.');
-      let ids = accessible.get(userId);
-      if (!ids) {
-        ids = roadmapNodeAccess(readAccess, transaction, userId, roadmapId);
-        accessible.set(userId, ids);
-      }
-      return ids;
+      return memo(accessible, userId, () =>
+        roadmapNodeAccess(readAccess, transaction, userId, roadmapId),
+      );
     },
     participantAccess() {
       if (!readRoadmapAccess) throw new Error('Roadmap access is not available in this view.');
@@ -223,69 +233,21 @@ export function roadmapView(
       );
       return allAccess.then((all) => [...all.values()]);
     },
-    dependencies() {
-      allDependencies ??= transaction.dependency.findMany({
-        where: { sourceNode: { roadmapId } },
-        select: { id: true, sourceNodeId: true, targetNodeId: true },
-        orderBy: { id: 'asc' },
-      });
-      return allDependencies;
-    },
-    dependency(sourceNodeId, targetNodeId) {
-      if (allDependencies) {
-        dependencyIndex ??= allDependencies.then((all) => firstBy(all, dependencyKey));
-        return dependencyIndex.then(
-          (index) => index.get(dependencyKey({ sourceNodeId, targetNodeId })) ?? null,
-        );
-      }
-      return transaction.dependency.findFirst({
-        where: { sourceNodeId, targetNodeId, sourceNode: { roadmapId } },
-        select: { id: true, sourceNodeId: true, targetNodeId: true },
-      });
-    },
-    nodeTypes() {
-      allNodeTypes ??= transaction.nodeType
-        .findMany({
-          where: { roadmapId },
-          select: {
-            id: true,
-            name: true,
-            nodes: { where: { roadmapId, isVisible: true }, select: { id: true }, take: 1 },
-          },
-          orderBy: { id: 'asc' },
-        })
-        .then((types) =>
-          types.map((type) => ({
-            id: type.id,
-            name: type.name,
-            hasVisibleNode: type.nodes.length > 0,
-          })),
-        );
-      return allNodeTypes;
-    },
-    nodeType(nodeTypeId) {
-      if (allNodeTypes) {
-        nodeTypeIndex ??= allNodeTypes.then((all) => firstBy(all, byId));
-        return nodeTypeIndex.then((index) => index.get(nodeTypeId) ?? null);
-      }
-      let nodeType = nodeTypes.get(nodeTypeId);
-      if (!nodeType) {
-        nodeType = transaction.nodeType
-          .findFirst({
-            where: { id: nodeTypeId, roadmapId },
-            select: {
-              id: true,
-              name: true,
-              nodes: { where: { roadmapId, isVisible: true }, select: { id: true }, take: 1 },
-            },
-          })
-          .then((type) =>
-            type ? { id: type.id, name: type.name, hasVisibleNode: type.nodes.length > 0 } : null,
-          );
-        nodeTypes.set(nodeTypeId, nodeType);
-      }
-      return nodeType;
-    },
+    dependencies: dependencies.all,
+    dependency: (sourceNodeId, targetNodeId) =>
+      dependencies.find(dependencyKey({ sourceNodeId, targetNodeId }), () =>
+        transaction.dependency.findFirst({
+          where: { sourceNodeId, targetNodeId, sourceNode: { roadmapId } },
+          select: dependencySelect,
+        }),
+      ),
+    nodeType: (nodeTypeId) =>
+      nodeTypes.cached(nodeTypeId, () =>
+        transaction.nodeType
+          .findFirst({ where: { id: nodeTypeId, roadmapId }, select: nodeTypeSelect })
+          .then((type) => (type ? viewNodeType(type) : null)),
+      ),
+    nodeTypes: nodeTypes.all,
     async preload() {
       await Promise.all([
         view.nodes(),
