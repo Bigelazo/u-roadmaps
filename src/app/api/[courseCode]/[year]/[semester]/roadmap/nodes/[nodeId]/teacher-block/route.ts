@@ -5,21 +5,18 @@ import type { TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock } from '@/features/roadmap/server';
 
 function changeTeacherBlockRoute(operation: TeacherBlockOperation) {
-  return courseRoute(
-    async ({ user, identifier, params, request }) =>
-      NextResponse.json(
-        await changeTeacherBlock(
-          {
-            userId: user.id,
-            identifier,
-            id: params.nodeId,
-            operation,
-            previewVersion: request.headers.get('x-change-impact-version') ?? undefined,
-          },
-          roadmapChangePort,
-        ),
+  return courseRoute(async ({ actor, params, request }) =>
+    NextResponse.json(
+      await changeTeacherBlock(
+        {
+          ...actor,
+          id: params.nodeId,
+          operation,
+          previewVersion: request.headers.get('x-change-impact-version') ?? undefined,
+        },
+        roadmapChangePort,
       ),
-    { authWithParams: true },
+    ),
   );
 }
 

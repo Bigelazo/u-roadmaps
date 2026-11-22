@@ -4,10 +4,9 @@ import { courseRoute } from '@/app/_adapters/http';
 import { createRoadmapDependency, deleteRoadmapDependencies } from '@/features/roadmap/server';
 
 export const POST = courseRoute(
-  async ({ identifier, user, body, request }) => {
+  async ({ actor, body, request }) => {
     const input = {
-      userId: user.id,
-      identifier,
+      ...actor,
       input: body,
       previewVersion: request.headers.get('x-change-impact-version') ?? undefined,
     };
@@ -18,11 +17,8 @@ export const POST = courseRoute(
 );
 
 export const DELETE = courseRoute(
-  async ({ identifier, user, body }) => {
-    await deleteRoadmapDependencies(
-      { userId: user.id, identifier, input: body },
-      roadmapChangePort,
-    );
+  async ({ actor, body }) => {
+    await deleteRoadmapDependencies({ ...actor, input: body }, roadmapChangePort);
     return new NextResponse(null, { status: 204 });
   },
   { body: true },

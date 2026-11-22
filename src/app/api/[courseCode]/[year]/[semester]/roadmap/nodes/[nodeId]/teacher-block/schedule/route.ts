@@ -4,12 +4,11 @@ import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
 import { scheduleTeacherUnlock } from '@/features/roadmap/server';
 
 export const PUT = courseRoute(
-  async ({ identifier, user, params, prepared: body }) =>
+  async ({ actor, params, prepared: body }) =>
     NextResponse.json(
       await scheduleTeacherUnlock(
         {
-          userId: user.id,
-          identifier,
+          ...actor,
           id: params.nodeId,
           unlockAt: body.unlockAt ?? null,
           includeDependents: body.includeDependents,
@@ -17,16 +16,11 @@ export const PUT = courseRoute(
         roadmapChangePort,
       ),
     ),
-  { prepare: parseJsonObject, authWithParams: true },
+  { prepare: parseJsonObject },
 );
 
-export const DELETE = courseRoute(
-  async ({ identifier, user, params }) =>
-    NextResponse.json(
-      await scheduleTeacherUnlock(
-        { userId: user.id, identifier, id: params.nodeId, unlockAt: null },
-        roadmapChangePort,
-      ),
-    ),
-  { authWithParams: true },
+export const DELETE = courseRoute(async ({ actor, params }) =>
+  NextResponse.json(
+    await scheduleTeacherUnlock({ ...actor, id: params.nodeId, unlockAt: null }, roadmapChangePort),
+  ),
 );

@@ -95,7 +95,6 @@ type CourseRouteOptions<Identifier, Prepared, WithBody extends boolean> = {
   prepare?: (request: Request) => Prepared | Promise<Prepared>;
   identify?: (params: RouteParams) => Identifier;
   body?: WithBody;
-  authWithParams?: boolean;
 };
 
 type CourseRouteInput<Identifier, Prepared, WithBody extends boolean> = {
@@ -103,6 +102,7 @@ type CourseRouteInput<Identifier, Prepared, WithBody extends boolean> = {
   params: RouteParams;
   identifier: Identifier;
   user: AuthenticatedUser;
+  actor: { userId: string; identifier: Identifier };
   prepared: Prepared;
   body: WithBody extends true ? JsonObject : undefined;
 };
@@ -123,22 +123,12 @@ export function courseRoute<
   return (request: Request, context: RouteContext) =>
     handleApplicationResult(async () => {
       const prepared = (options.prepare ? await options.prepare(request) : undefined) as Prepared;
-      let params: RouteParams;
-      let identifier: Identifier;
-      let body: JsonObject | undefined;
-      let user: AuthenticatedUser;
-      if (options.authWithParams) {
-        [params, body, user] = await Promise.all([
-          context.params,
-          parseBody(request),
-          requireAuthenticatedUser(),
-        ]);
-        identifier = identify(params);
-      } else {
-        params = await context.params;
-        identifier = identify(params);
-        [body, user] = await Promise.all([parseBody(request), requireAuthenticatedUser()]);
-      }
+      const [params, body, user] = await Promise.all([
+        context.params,
+        parseBody(request),
+        requireAuthenticatedUser(),
+      ]);
+      const identifier = identify(params);
       if (!options.identify && !readMethods.has(request.method))
         await synchronizeSessionParticipation(identifier as CourseOfferingIdentifier);
       return handle({
@@ -146,6 +136,7 @@ export function courseRoute<
         params,
         identifier,
         user,
+        actor: { userId: user.id, identifier },
         prepared,
         body: body as CourseRouteInput<Identifier, Prepared, WithBody>['body'],
       });

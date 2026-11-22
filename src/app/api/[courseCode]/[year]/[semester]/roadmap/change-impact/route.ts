@@ -12,10 +12,10 @@ const CHANGE_FIELDS = [
   'targetHandle',
 ];
 
-export const GET = courseRoute(async ({ identifier, user, request }) => {
+export const GET = courseRoute(async ({ actor, request }) => {
   const query = new URL(request.url).searchParams;
   const input = Object.fromEntries(
     CHANGE_FIELDS.flatMap((field) => (query.has(field) ? [[field, query.get(field)]] : [])),
   );
-  return NextResponse.json(await readRoadmapChangeImpact({ userId: user.id, identifier, input }));
+  return NextResponse.json(await readRoadmapChangeImpact({ ...actor, input }));
 });

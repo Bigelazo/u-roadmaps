@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
 import { completeSimulatedNode } from '@/features/roadmap/server';
 
-export const POST = courseRoute(async ({ identifier, user, params }) => {
+export const POST = courseRoute(async ({ actor, params }) => {
   const completion = await completeSimulatedNode(
-    { userId: user.id, identifier, nodeId: params.nodeId },
+    { ...actor, nodeId: params.nodeId },
     roadmapChangePort,
   );
   return NextResponse.json({

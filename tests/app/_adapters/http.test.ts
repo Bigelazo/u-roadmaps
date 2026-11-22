@@ -144,6 +144,14 @@ test.each([
     error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
   },
   {
+    name: 'unauthenticated User with an invalid Course offering identifier',
+    session: null,
+    courseCode: '  ',
+    body: '{}',
+    status: 401,
+    error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
+  },
+  {
     name: 'invalid Course offering identifier',
     session: { user: { id: '11111111-1111-4111-8111-111111111111' } },
     courseCode: '  ',

@@ -2,12 +2,9 @@ import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { courseRoute, fileDownloadResponse } from '@/app/_adapters/http';
 import { downloadRoadmapResource } from '@/features/roadmap/server';
 
-export const GET = courseRoute(async ({ request, identifier, user, params }) =>
+export const GET = courseRoute(async ({ request, actor, params }) =>
   fileDownloadResponse(
-    await downloadRoadmapResource(
-      { userId: user.id, identifier, resourceId: params.resourceId },
-      roadmapChangePort,
-    ),
+    await downloadRoadmapResource({ ...actor, resourceId: params.resourceId }, roadmapChangePort),
     request,
   ),
 );
