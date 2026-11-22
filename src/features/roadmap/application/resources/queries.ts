@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { resourceDto } from '@/features/roadmap/application/roadmap';
-import { requireStudentNodeAccess } from '@/features/roadmap/application/completion';
+import { requireNodeAccess } from '@/features/roadmap/application/completion';
 import {
   roadmapRead,
   type RoadmapParticipant,
@@ -13,16 +13,9 @@ import { requireUuid } from '@/shared/validation';
 import type { RoadmapChangePort } from '@/features/roadmap/application/change-port';
 import { recordFileResourceAccess } from './access';
 
-async function requireStudentResourceAccess(
-  { tx, participation, roadmap }: RoadmapReadContext,
-  nodeId: string,
-) {
-  if (participation.role !== 'STUDENT') return;
-  await requireStudentNodeAccess(tx, {
-    userId: participation.userId,
-    roadmapId: roadmap.id,
-    nodeId,
-  });
+async function requireStudentResourceAccess(context: RoadmapReadContext, nodeId: string) {
+  if (context.participation.role !== 'STUDENT') return;
+  await requireNodeAccess(context, 'COMPLETION', nodeId);
 }
 
 export async function getRoadmapNodeResources({

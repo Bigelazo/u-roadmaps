@@ -259,6 +259,20 @@ test('a Canvas preview Completion needs simulated reviews that never count and r
   ).rejects.toMatchObject({ status: 403 });
 });
 
+test('a Canvas preview Completion keeps its date when later Resources appear', async ({
+  course,
+}) => {
+  const nodeId = course.change.nodeId;
+  const editor = teacher(course);
+  const completion = await completeSimulatedNode({ ...editor, nodeId }, port());
+
+  await linkResource(course);
+  await expect(completeSimulatedNode({ ...editor, nodeId }, port())).resolves.toMatchObject({
+    id: completion.id,
+    completedAt: completion.completedAt,
+  });
+});
+
 test('a Roadmap copy carries file sizes but starts without accesses or reviews', async ({
   course,
 }) => {
