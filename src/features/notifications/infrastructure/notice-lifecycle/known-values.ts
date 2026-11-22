@@ -9,50 +9,10 @@ import {
 
 export type RecipientRoadmap = Readonly<{ recipientId: string; roadmapId: string }>;
 
-export async function recordKnownValues(
-  transaction: Prisma.TransactionClient,
-  roadmapId: string,
-  target: NoticeTargetRef,
-  recipientIds: readonly string[],
-  knownValue: string,
-  context: TargetContext = {},
-) {
-  if (!recipientIds.length) return;
-  await transaction.noticeKnownValue.createMany({
-    data: recipientIds.map((recipientId) => ({
-      recipientId,
-      roadmapId,
-      noticeTarget: target.noticeTarget,
-      targetKey: target.targetKey,
-      nodeId: target.nodeId,
-      knownValue,
-      context: context as Prisma.InputJsonObject,
-    })),
-    skipDuplicates: true,
-  });
-}
-
 const knownValueColumns = () =>
   Prisma.sql`"recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue"`;
 const onKnownValueConflict = () =>
   Prisma.sql`ON CONFLICT ("recipientId", "roadmapId", "targetKey")`;
-
-export async function recordKnowersValueAtEdit(
-  transaction: Prisma.TransactionClient,
-  roadmapId: string,
-  target: NoticeTargetRef,
-  knowerIds: readonly string[],
-  knownValue: string,
-  currentValue: string,
-) {
-  if (!knowerIds.length) return;
-  await transaction.$executeRaw`
-    INSERT INTO "NoticeKnownValue" (${knownValueColumns()}, "currentValue")
-    SELECT recipient, ${roadmapId}::uuid, ${target.targetKey}, ${target.noticeTarget},
-      ${target.nodeId ?? null}::uuid, ${knownValue}, ${currentValue}
-    FROM unnest(${[...knowerIds]}::uuid[]) AS recipient
-    ${onKnownValueConflict()} DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
-}
 
 export type RecipientKnownValue = Readonly<{
   recipientId: string;
@@ -62,7 +22,7 @@ export type RecipientKnownValue = Readonly<{
   currentValue?: string;
 }>;
 
-export async function recordRecipientKnownValues(
+export async function recordKnownValues(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   values: readonly RecipientKnownValue[],
@@ -108,17 +68,12 @@ export async function ensureKnownValue(
   transaction: Prisma.TransactionClient,
   identity: RecipientRoadmap,
   target: NoticeTargetRef,
-  fallback: string,
-  fallbackContext?: TargetContext,
+  knownValue: string,
+  context: TargetContext = {},
 ) {
-  await recordKnownValues(
-    transaction,
-    identity.roadmapId,
-    target,
-    [identity.recipientId],
-    fallback,
-    fallbackContext,
-  );
+  await recordKnownValues(transaction, identity.roadmapId, [
+    { recipientId: identity.recipientId, target, knownValue, context },
+  ]);
   const row = await transaction.noticeKnownValue.findUniqueOrThrow({
     where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
     select: { knownValue: true, currentValue: true, context: true },
@@ -147,27 +102,6 @@ export async function advanceKnownValue(
     WHERE "NoticeKnownValue"."knownValue" = ${previousValue}
     RETURNING 1`;
   return advanced.length > 0;
-}
-
-export async function setKnownValue(
-  transaction: Prisma.TransactionClient,
-  identity: RecipientRoadmap,
-  target: NoticeTargetRef,
-  knownValue: string,
-  context: TargetContext = {},
-) {
-  const known = { knownValue, context: context as Prisma.InputJsonObject };
-  await transaction.noticeKnownValue.upsert({
-    where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
-    create: {
-      ...identity,
-      noticeTarget: target.noticeTarget,
-      targetKey: target.targetKey,
-      nodeId: target.nodeId,
-      ...known,
-    },
-    update: known,
-  });
 }
 
 export type KnownValueUpdate = Readonly<{
