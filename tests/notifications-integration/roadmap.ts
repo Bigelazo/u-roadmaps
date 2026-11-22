@@ -148,6 +148,12 @@ export async function pendingNotices(userId: string, roadmapId: string) {
     .notifications;
 }
 
+export async function pendingTargets(userId: string, roadmapId: string, noticeTarget: string) {
+  return (await pendingNotices(userId, roadmapId)).filter(
+    ({ data }) => (data as { noticeTarget?: string }).noticeTarget === noticeTarget,
+  );
+}
+
 export async function inboxCount(userId: string, roadmapId: string) {
   const { offerings } = await readOwnInbox(userId);
   return { count: offerings.find((offering) => offering.roadmapId === roadmapId)?.unread ?? 0 };

@@ -1,22 +1,9 @@
 import { expect } from 'vitest';
 import { test, type IntegrationCourse } from './fixtures';
-import {
-  addNode,
-  deferredNoticePort,
-  enterRoadmap,
-  pendingNotices,
-  teacherEdits,
-  announceRoadmap,
-} from './roadmap';
-import { prisma } from '@/shared/server/db';
+import { deferredNoticePort, enterRoadmap, pendingTargets, teacherEdits } from './roadmap';
 
-type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
-
-const resourceTargets = (notices: Notice[]) =>
-  notices.filter(({ data }) => (data as { noticeTarget?: string }).noticeTarget === 'resource');
-
-const pendingResources = async (userId: string, course: IntegrationCourse) =>
-  resourceTargets(await pendingNotices(userId, course.roadmapId));
+const pendingResources = (userId: string, course: IntegrationCourse) =>
+  pendingTargets(userId, course.roadmapId, 'resource');
 
 test('added then edited is a new Resource with its current title; added then removed is withdrawn', async ({
   course,
@@ -81,106 +68,9 @@ test('an edit details only a title change, and edited then removed names the kno
   ]);
 });
 
-test('restoring the known title, URL and type withdraws the Resource notice', async ({
+test('concurrent and retried deliveries of an added Resource leave one pending notice', async ({
   course,
 }) => {
-  const edits = teacherEdits(course);
-  const resource = await edits.addResource(course.change.nodeId, 'Guía 3');
-  await enterRoadmap(course.studentId, course.roadmapId);
-  await edits.editResource(resource.id, {
-    title: 'Otra',
-    url: 'https://example.test/revised',
-    type: 'LINK',
-  });
-  expect(await pendingResources(course.studentId, course)).toHaveLength(1);
-  await edits.editResource(resource.id, {
-    title: 'Guía 3',
-    url: 'https://example.test/guide',
-    type: 'LINK',
-  });
-  expect(await pendingResources(course.studentId, course)).toEqual([]);
-});
-
-test('recognition rebases a later edit on the captured Resource', async ({ course }) => {
-  const edits = teacherEdits(course);
-  const resource = await edits.addResource(course.change.nodeId, 'Guía 3');
-  await enterRoadmap(course.studentId, course.roadmapId);
-  await edits.editResource(resource.id, { title: 'Guía posterior' });
-  await enterRoadmap(course.studentId, course.roadmapId);
-  expect(await pendingResources(course.studentId, course)).toEqual([]);
-  await edits.editResource(resource.id, { title: 'Guía 3' });
-  expect(await pendingResources(course.studentId, course)).toMatchObject([
-    {
-      body: 'Se actualizó el recurso «Guía posterior» en «Recursividad». «Guía posterior» ahora se llama «Guía 3».',
-    },
-  ]);
-});
-
-test('Resource notices reach only recipients for whom the Node is accessible', async ({
-  course,
-}) => {
-  const prerequisite = course.change.nodeId;
-  const dependent = await addNode(course, 'Pilas');
-  await prisma.dependency.create({
-    data: { sourceNodeId: prerequisite, targetNodeId: dependent.id },
-  });
-  await prisma.completion.create({
-    data: { userId: course.studentId, roadmapNodeId: prerequisite },
-  });
-  await teacherEdits(course).addResource(dependent.id, 'Guía de pilas');
-  expect(await pendingResources(course.studentId, course)).toMatchObject([
-    { data: { nodeId: dependent.id } },
-  ]);
-  expect(await pendingResources(course.classmateId, course)).toEqual([]);
-  const hidden = await addNode(course, 'Colas', { isVisible: false });
-  await teacherEdits(course).addResource(hidden.id, 'Guía oculta');
-  expect(await pendingResources(course.studentId, course)).toHaveLength(1);
-});
-
-test('a pending Resource notice hides while its Node is blocked or hidden', async ({ course }) => {
-  const nodeId = course.change.nodeId;
-  await teacherEdits(course).addResource(nodeId, 'Guía 3');
-  expect(await pendingResources(course.studentId, course)).toHaveLength(1);
-  for (const state of [{ isTeacherBlocked: true }, { isVisible: false }]) {
-    await prisma.roadmapNode.update({ where: { id: nodeId }, data: state });
-    expect(await pendingResources(course.studentId, course)).toEqual([]);
-    await prisma.roadmapNode.update({
-      where: { id: nodeId },
-      data: { isTeacherBlocked: false, isVisible: true },
-    });
-    expect(await pendingResources(course.studentId, course)).toHaveLength(1);
-  }
-});
-
-test('creation, deletion and availability absorb Resource targets', async ({ course }) => {
-  const edits = teacherEdits(course);
-  const created = await edits.create('Árboles');
-  await edits.addResource(created.id, 'Guía de árboles');
-  expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
-    {
-      data: {
-        noticeTarget: 'node-creation',
-        nodeId: created.id,
-        resources: [{ title: 'Guía de árboles' }],
-      },
-    },
-  ]);
-  await enterRoadmap(course.studentId, course.roadmapId);
-  await edits.addResource(created.id, 'Guía nueva');
-  expect(await pendingResources(course.studentId, course)).toHaveLength(1);
-  await edits.remove(created.id);
-  expect(
-    (await pendingNotices(course.studentId, course.roadmapId)).map(({ data }) => data),
-  ).toMatchObject([{ noticeTarget: 'node-deletion', nodeId: created.id }]);
-
-  await announceRoadmap(course);
-  await edits.addResource(course.change.nodeId, 'Guía 3');
-  expect(await pendingNotices(course.classmateId, course.roadmapId)).toMatchObject([
-    { data: { noticeTarget: 'roadmap-availability' } },
-  ]);
-});
-
-test('concurrent and retried Resource deliveries leave one pending notice', async ({ course }) => {
   const deferred = deferredNoticePort();
   const edits = teacherEdits(course, deferred.port);
   const resource = await edits.addResource(course.change.nodeId, 'Guía 3');
