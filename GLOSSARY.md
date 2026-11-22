@@ -91,8 +91,16 @@ _Avoid_: Academic history, archive, roadmap backups
 The creation of a Course offering's Roadmap from a frozen version of the same Course, chosen by the course professor only at the moment of creating the Roadmap as an alternative to starting an empty one. A copied Roadmap records the version it succeeds; an empty Roadmap has no predecessor. Every visible Node of the copy starts with a Teacher block, hidden Nodes remain hidden, and no Scheduled unlock is carried over.
 _Avoid_: Import, clone, template application
 
+**Roadmap import (Importación de roadmap)**:
+The additive creation of Nodes, their Dependencies, and their Resources in an open Roadmap from an Import file, either when creating the Roadmap or later while it remains open. It never changes or removes existing content, its Dependencies only join Nodes it creates, and every Node it creates is visible with a Teacher block and no Scheduled unlock. It takes effect entirely or not at all.
+_Avoid_: Roadmap copy, course import, sync
+
+**Import file (Archivo de importación)**:
+The structured description of Nodes, Dependencies, and Resources that a teacher obtains from an external assistant and supplies, together with the files it references by name, to perform a Roadmap import. It is untrusted input: U-Roadmaps validates all of it before creating anything.
+_Avoid_: Roadmap copy, backup, export
+
 **Roadmap creator (Creador del roadmap)**:
-The course professor who created a Roadmap, empty or by Roadmap copy. The attribution is permanent, even if that person later leaves the Course offering.
+The course professor who created a Roadmap, empty, by Roadmap copy, or by Roadmap import. The attribution is permanent, even if that person later leaves the Course offering.
 _Avoid_: Owner, author, coordinator
 
 **Roadmap change (Cambio del roadmap)**:
