@@ -28,7 +28,7 @@ export type CanvasCommandSession = {
   ): Promise<ReadChangeImpactOf<Command['kind']> | null>;
   execute(
     command: CanvasCommand,
-    previewVersion?: string,
+    changeImpactVersion?: string,
   ): Promise<{ readonly applied: boolean } & ExecutionResult>;
 };
 

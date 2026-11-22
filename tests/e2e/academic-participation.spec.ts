@@ -2,7 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { forgetUcampusUser, failUcampusEndpoint } from './ucampus';
 import { authenticateAs, ok, reviewNodeResources } from './helpers';
-import { changeTeacherBlock } from './previewed-writes';
+import { changeTeacherBlock } from './confirmed-actions';
 
 const forbidden = {
   error: {
@@ -178,7 +178,7 @@ test('promotion withdraws student access leftovers and retains colleague content
   const assistant = await apiAs(user);
   const nodePath = course.apiPath(`/nodes/${course.nodes.first}`);
   await ok(await teacher.patch(nodePath, { data: { title: 'Cambio de colega' } }));
-  await ok(await changeTeacherBlock(teacher, nodePath));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), course.nodes.first));
   const notices = async () =>
     (await (await assistant.get(`/api/notifications?nodeId=${course.nodes.first}`)).json())
       .notifications;

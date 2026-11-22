@@ -430,7 +430,7 @@ test('committed Node deletion logs every failed cleanup and still cleans other f
   });
   await expect(
     deleteRoadmapNode(
-      { ...teacher(course), id: course.change.nodeId, previewVersion: version },
+      { ...teacher(course), id: course.change.nodeId, changeImpactVersion: version },
       recordingChangePort().port,
     ),
   ).resolves.toEqual({});
@@ -521,7 +521,7 @@ for (const node of [false, true]) {
     });
     await expect(
       node
-        ? deleteRoadmapNode({ ...request, previewVersion: version }, refusal)
+        ? deleteRoadmapNode({ ...request, changeImpactVersion: version }, refusal)
         : removeRoadmapResource(request, refusal),
     ).rejects.toThrow('deletion commit refused');
     expect(
@@ -551,7 +551,10 @@ for (const node of [false, true]) {
     });
     await expect(
       node
-        ? deleteRoadmapNode({ ...request, previewVersion: version }, recordingChangePort().port)
+        ? deleteRoadmapNode(
+            { ...request, changeImpactVersion: version },
+            recordingChangePort().port,
+          )
         : removeRoadmapResource(request, recordingChangePort().port),
     ).resolves.toEqual({});
     await expect(

@@ -3,8 +3,9 @@ import { SignJWT } from 'jose';
 import { expect, test, type E2EUser } from './fixtures';
 import { authenticateAs, ok, reviewNodeResources } from './helpers';
 import { createDependency } from './create-node';
-import { changeTeacherBlock, connectNodes } from './previewed-writes';
+import { changeTeacherBlock, connectNodes } from './confirmed-actions';
 import { panRoadmapNodeIntoView } from './pan-roadmap';
+import { CHANGE_IMPACT_VERSION_HEADER } from '@/shared/change-impact';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -315,7 +316,7 @@ test('teacher API manages a node type, resources, and dependencies through their
     400,
   );
 
-  const dependency = await connectNodes(api, course.apiPath('/dependencies'), {
+  const dependency = await connectNodes(api, course.apiPath(), {
     sourceNodeId: sourceId,
     targetNodeId: targetId,
     sourceHandle: 'bottom',
@@ -376,7 +377,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   });
   await ok(resourceResponse, 201);
 
-  const dependencyResponse = await connectNodes(api, course.apiPath('/dependencies'), {
+  const dependencyResponse = await connectNodes(api, course.apiPath(), {
     sourceNodeId,
     targetNodeId,
     sourceHandle: 'right',
@@ -393,23 +394,23 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar' });
   await expect(requestDelete).toBeVisible();
 
-  const deletionPreviewPath = `/change-impact?kind=delete-node&nodeId=${sourceNodeId}`;
-  const initialPreviewPromise = page.waitForResponse(
+  const deletionImpactPath = `/change-impact?kind=delete-node&nodeId=${sourceNodeId}`;
+  const initialImpactPromise = page.waitForResponse(
     (response) =>
-      response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
+      response.request().method() === 'GET' && response.url().includes(deletionImpactPath),
   );
   await requestDelete.click();
-  const initialPreview = await initialPreviewPromise;
-  expect(initialPreview.status()).toBe(200);
+  const initialImpact = await initialImpactPromise;
+  expect(initialImpact.status()).toBe(200);
 
   const dialog = page.getByRole('alertdialog', { name: `¿Eliminar ${sourceTitle}?` });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Esta acción no se puede deshacer.');
   await expect(dialog.getByRole('list')).toHaveCount(0);
 
-  const latestPreviewPromise = page.waitForResponse(
+  const latestImpactPromise = page.waitForResponse(
     (response) =>
-      response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
+      response.request().method() === 'GET' && response.url().includes(deletionImpactPath),
   );
   const deletionRequestPromise = page.waitForRequest(
     (request) => request.method() === 'DELETE' && request.url().includes(`/nodes/${sourceNodeId}`),
@@ -419,15 +420,15 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
       response.request().method() === 'DELETE' && response.url().includes(`/nodes/${sourceNodeId}`),
   );
   await dialog.getByRole('button', { name: 'Eliminar nodo', exact: true }).click();
-  const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
-    latestPreviewPromise,
+  const [latestImpact, deletionRequest, deletionResponse] = await Promise.all([
+    latestImpactPromise,
     deletionRequestPromise,
     deletionResponsePromise,
   ]);
-  expect(latestPreview.status()).toBe(200);
+  expect(latestImpact.status()).toBe(200);
   expect(deletionResponse.status()).toBe(204);
-  expect(deletionRequest.headers()['x-change-impact-version']).toBe(
-    (await latestPreview.json()).version,
+  expect(deletionRequest.headers()[CHANGE_IMPACT_VERSION_HEADER]).toBe(
+    (await latestImpact.json()).version,
   );
 
   await expect(dialog).toHaveCount(0);
@@ -438,7 +439,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   );
 });
 
-test('hiding a Node with a stale visibility preview is refused until it is previewed again', async ({
+test('hiding a Node with a stale Change impact is refused until its Change impact is read again', async ({
   course,
   teacherApi: api,
 }) => {
@@ -457,29 +458,29 @@ test('hiding a Node with a stale visibility preview is refused until it is previ
     }),
   );
   await createDependency(api, course, nodeId, dependentId);
-  const previewPath = course.apiPath(`/change-impact?kind=hide-node&nodeId=${nodeId}`);
-  const confirmed = await api.get(previewPath);
+  const impactPath = course.apiPath(`/change-impact?kind=hide-node&nodeId=${nodeId}`);
+  const confirmed = await api.get(impactPath);
   await ok(confirmed);
   await createDependency(api, course, prerequisiteId, nodeId);
 
   const hide = (version: string) =>
     api.patch(course.apiPath(`/nodes/${nodeId}`), {
       data: { isVisible: false },
-      headers: { 'x-change-impact-version': version },
+      headers: { [CHANGE_IMPACT_VERSION_HEADER]: version },
     });
   const staleHide = await hide((await confirmed.json()).version);
   await ok(staleHide, 409);
   expect((await staleHide.json()).error.code).toBe('NODE_VISIBILITY_PREVIEW_STALE');
 
-  const refreshed = await api.get(previewPath);
+  const refreshed = await api.get(impactPath);
   await ok(refreshed);
-  const preview = await refreshed.json();
-  expect(preview.dependencies).toHaveLength(2);
-  const hidden = await hide(preview.version);
+  const impact = await refreshed.json();
+  expect(impact.dependencies).toHaveLength(2);
+  const hidden = await hide(impact.version);
   await ok(hidden);
   expect(await hidden.json()).toMatchObject({
     node: { id: nodeId, isVisible: false },
-    dependencies: preview.dependencies,
+    dependencies: impact.dependencies,
   });
 });
 
@@ -552,9 +553,9 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
       ),
     );
   await ok(await student.post(teacherBlockPath(root.id)), 403);
-  const preview = await teacherBlockImpact(root.id, 'BLOCK');
-  await ok(preview);
-  const blockImpact = await preview.json();
+  const blockResponse = await teacherBlockImpact(root.id, 'BLOCK');
+  await ok(blockResponse);
+  const blockImpact = await blockResponse.json();
   expect(blockImpact.nodes).toEqual(
     expect.arrayContaining(
       [root, left, right, join, leaf].map(({ id, title }) =>
@@ -577,7 +578,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   await ok(await student.post(course.apiPath(`/nodes/${root.id}/completion`)));
 
   const block = await teacher.post(teacherBlockPath(root.id), {
-    headers: { 'x-change-impact-version': blockImpact.version },
+    headers: { [CHANGE_IMPACT_VERSION_HEADER]: blockImpact.version },
   });
   await ok(block);
   expect((await block.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
@@ -588,9 +589,9 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
     (await teacherRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
   ).toMatchObject({ isTeacherBlocked: true, resources: [{ title: 'Recurso que se conserva' }] });
 
-  const individualPreview = await teacherBlockImpact(root.id, 'UNBLOCK');
-  await ok(individualPreview);
-  const individual = await individualPreview.json();
+  const individualResponse = await teacherBlockImpact(root.id, 'UNBLOCK');
+  await ok(individualResponse);
+  const individual = await individualResponse.json();
   expect(individual).toMatchObject({
     mode: 'SINGLE',
     nodes: [
@@ -605,9 +606,9 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
       }),
     ],
   });
-  const upstreamPreview = await teacherBlockImpact(left.id, 'UNBLOCK');
-  await ok(upstreamPreview);
-  const upstream = await upstreamPreview.json();
+  const upstreamResponse = await teacherBlockImpact(left.id, 'UNBLOCK');
+  await ok(upstreamResponse);
+  const upstream = await upstreamResponse.json();
   expect(upstream).toMatchObject({
     mode: 'UPSTREAM',
     nodes: expect.arrayContaining([
@@ -617,11 +618,11 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   });
   await ok(
     await teacher.delete(teacherBlockPath(root.id), {
-      headers: { 'x-change-impact-version': individual.version },
+      headers: { [CHANGE_IMPACT_VERSION_HEADER]: individual.version },
     }),
   );
   const staleUnlock = await teacher.delete(teacherBlockPath(left.id), {
-    headers: { 'x-change-impact-version': upstream.version },
+    headers: { [CHANGE_IMPACT_VERSION_HEADER]: upstream.version },
   });
   await ok(staleUnlock, 409);
   expect((await staleUnlock.json()).error.code).toBe('TEACHER_BLOCK_PREVIEW_STALE');
@@ -630,13 +631,13 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
     (await afterStaleUnlock.json()).nodes.find((node: { id: string }) => node.id === left.id)
       .isTeacherBlocked,
   ).toBe(true);
-  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${root.id}`)));
-  const refreshedUpstreamPreview = await teacherBlockImpact(left.id, 'UNBLOCK');
-  await ok(refreshedUpstreamPreview);
-  const refreshedUpstream = await refreshedUpstreamPreview.json();
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), root.id));
+  const refreshedUpstreamResponse = await teacherBlockImpact(left.id, 'UNBLOCK');
+  await ok(refreshedUpstreamResponse);
+  const refreshedUpstream = await refreshedUpstreamResponse.json();
   await ok(
     await teacher.delete(teacherBlockPath(left.id), {
-      headers: { 'x-change-impact-version': refreshedUpstream.version },
+      headers: { [CHANGE_IMPACT_VERSION_HEADER]: refreshedUpstream.version },
     }),
   );
   const studentRoadmap = await student.get(course.apiPath());
@@ -644,10 +645,10 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
     (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
   ).toMatchObject({ isCompleted: true });
 
-  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${external.id}`)));
-  const branchPreview = await teacherBlockImpact(root.id, 'BRANCH_UNLOCK');
-  await ok(branchPreview);
-  const branch = await branchPreview.json();
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), external.id));
+  const branchResponse = await teacherBlockImpact(root.id, 'BRANCH_UNLOCK');
+  await ok(branchResponse);
+  const branch = await branchResponse.json();
   expect(branch).toMatchObject({
     mode: 'BRANCH',
     nodes: expect.arrayContaining([
@@ -663,7 +664,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   expect(beforeBranchUnlockByNodeId.get(left.id)).toBe(false);
   expect(beforeBranchUnlockByNodeId.get(right.id)).toBe(true);
   const branchUnlock = await teacher.patch(teacherBlockPath(root.id), {
-    headers: { 'x-change-impact-version': branch.version },
+    headers: { [CHANGE_IMPACT_VERSION_HEADER]: branch.version },
   });
   await ok(branchUnlock);
   expect((await branchUnlock.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
@@ -690,7 +691,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   const concurrentBlocks = await Promise.all(
     Array.from({ length: 2 }, () =>
       teacher.post(teacherBlockPath(root.id), {
-        headers: { 'x-change-impact-version': version },
+        headers: { [CHANGE_IMPACT_VERSION_HEADER]: version },
       }),
     ),
   );
@@ -741,7 +742,7 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
 
   await createDependency(teacher, course, source.id, target.id);
 
-  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${source.id}`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), source.id));
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.emulateMedia({ reducedMotion: 'reduce' });

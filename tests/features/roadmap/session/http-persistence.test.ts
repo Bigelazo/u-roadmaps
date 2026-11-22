@@ -47,7 +47,7 @@ type Request = readonly [path: string, init: RequestInit];
 
 type Execution = {
   command: CanvasCommand;
-  previewVersion?: string;
+  changeImpactVersion?: string;
   requests: readonly Request[];
   response?: unknown;
   resolves?: unknown;
@@ -152,9 +152,9 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'create a Dependency with its preview version and return it with the Nodes it blocks': {
+  'create a Dependency with its Change impact version and return it with the Nodes it blocks': {
     command: { kind: 'create-dependency', ...dependency },
-    previewVersion: 'dependency-version',
+    changeImpactVersion: 'dependency-version',
     response: {
       dependency: { id: 'dependency-9', ...dependency },
       nodes: [{ id: 'node-2', title: 'Derivadas' }],
@@ -187,9 +187,9 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'place a Teacher block with its preview version': {
+  'place a Teacher block with its Change impact version': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },
-    previewVersion: 'block-version',
+    changeImpactVersion: 'block-version',
     requests: [
       [
         '/nodes/node-1/teacher-block',
@@ -197,9 +197,9 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'unlock a Node with its preview version': {
+  'unlock a Node with its Change impact version': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'UNBLOCK' },
-    previewVersion: 'unlock-version',
+    changeImpactVersion: 'unlock-version',
     requests: [
       [
         '/nodes/node-1/teacher-block',
@@ -207,9 +207,9 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'unlock a branch with its preview version': {
+  'unlock a branch with its Change impact version': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BRANCH_UNLOCK' },
-    previewVersion: 'branch-version',
+    changeImpactVersion: 'branch-version',
     requests: [
       [
         '/nodes/node-1/teacher-block',
@@ -262,9 +262,9 @@ const executions: Record<string, Execution> = {
     response: { ...scheduledUnlockResponse, teacherUnlockAt: null, scheduledPrerequisiteIds: [] },
     resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 0 } },
   },
-  'hide a Node with its preview version': {
+  'hide a Node with its Change impact version': {
     command: { kind: 'hide-node', nodeId: 'node-1' },
-    previewVersion: 'hide-version',
+    changeImpactVersion: 'hide-version',
     requests: [
       [
         '/nodes/node-1',
@@ -285,9 +285,9 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'delete a Node with its preview version': {
+  'delete a Node with its Change impact version': {
     command: { kind: 'delete-node', nodeId: 'node-1' },
-    previewVersion: 'deletion-version',
+    changeImpactVersion: 'deletion-version',
     requests: [
       [
         '/nodes/node-1',
@@ -439,10 +439,10 @@ test.each([
 
 test.each(Object.entries(executions))(
   '%s',
-  async (_name, { command, previewVersion, requests, response, resolves }) => {
+  async (_name, { command, changeImpactVersion, requests, response, resolves }) => {
     const fetchMock = respondWith(response);
 
-    await expect(http.execute(command, previewVersion)).resolves.toEqual(resolves);
+    await expect(http.execute(command, changeImpactVersion)).resolves.toEqual(resolves);
 
     expect(fetchMock.mock.calls).toEqual(requests.map(([path, init]) => [api(path), init]));
   },

@@ -5,7 +5,7 @@ import { sql } from './database';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
 import { openInbox, listNotices } from './notices';
-import { changeTeacherBlock, deleteNode, hideNode } from './previewed-writes';
+import { changeTeacherBlock, deleteNode, hideNode } from './confirmed-actions';
 
 test('access notices retain context through blocking, unlocking, hiding and deletion', async ({
   course,
@@ -58,7 +58,7 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   await sql(
     `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${crypto.randomUUID()}', '${rootId}', '${dependentId}'); INSERT INTO "Completion" ("id", "userId", "roadmapNodeId") VALUES ('${crypto.randomUUID()}', '${student.id}', '${rootId}');`,
   );
-  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${rootId}`)));
+  await ok(await changeTeacherBlock(author, roadmapPath(), rootId));
   await expect
     .poll(async () => (await noticesFor(withoutProgress, rootId))[0])
     .toMatchObject({
@@ -71,10 +71,10 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     .toMatchObject({
       data: { noticeTarget: 'node-access', currentValue: 'Bloqueado' },
     });
-  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${rootId}`), 'UNBLOCK'));
-  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${rootId}`), 'BRANCH_UNLOCK'));
-  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${dependentId}`)));
-  await ok(await hideNode(author, roadmapPath(`/nodes/${rootId}`)));
+  await ok(await changeTeacherBlock(author, roadmapPath(), rootId, 'UNBLOCK'));
+  await ok(await changeTeacherBlock(author, roadmapPath(), rootId, 'BRANCH_UNLOCK'));
+  await ok(await changeTeacherBlock(author, roadmapPath(), dependentId));
+  await ok(await hideNode(author, roadmapPath(), rootId));
 
   const removedTitle = `Eliminación bloqueada ${crypto.randomUUID()}`;
   const removedId = await existingNode(removedTitle);
@@ -88,8 +88,8 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     }),
     201,
   );
-  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${removedId}`)));
-  await ok(await deleteNode(author, roadmapPath(`/nodes/${removedId}`)), 204);
+  await ok(await changeTeacherBlock(author, roadmapPath(), removedId));
+  await ok(await deleteNode(author, roadmapPath(), removedId), 204);
 
   await expect
     .poll(async () => (await noticesFor(student, removedId))[0]?.data.noticeTarget)
@@ -135,7 +135,7 @@ test('a PostgreSQL access-notice failure leaves the Node visibility change commi
   });
   const failure = await rejectNoticeInserts({ roadmapId: course.roadmapId });
 
-  const hidden = await ok(await hideNode(author, roadmapPath(`/nodes/${nodeId}`)));
+  const hidden = await ok(await hideNode(author, roadmapPath(), nodeId));
   expect((await hidden.json()).node).toMatchObject({ id: nodeId, isVisible: false });
 
   const persistedRoadmap = await ok(await author.get(roadmapPath()));

@@ -7,7 +7,7 @@ export const GET = courseRoute(async ({ actor }) =>
   NextResponse.json(await readRoadmapForParticipant(actor)),
 );
 
-export const POST = courseRoute(async ({ identifier, user, request }) => {
+export const POST = courseRoute(async ({ actor: { identifier }, user, request }) => {
   const created = await createRoadmapForActor(
     user,
     identifier,

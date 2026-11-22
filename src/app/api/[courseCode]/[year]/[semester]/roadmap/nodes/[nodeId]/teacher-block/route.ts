@@ -1,6 +1,7 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
+import { changeImpactVersion } from '@/app/_adapters/roadmap';
 import type { TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock } from '@/features/roadmap/server';
 
@@ -12,7 +13,7 @@ function changeTeacherBlockRoute(operation: TeacherBlockOperation) {
           ...actor,
           id: params.nodeId,
           operation,
-          previewVersion: request.headers.get('x-change-impact-version') ?? undefined,
+          changeImpactVersion: changeImpactVersion(request),
         },
         roadmapChangePort,
       ),

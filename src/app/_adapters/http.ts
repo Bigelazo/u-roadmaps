@@ -100,7 +100,6 @@ type CourseRouteOptions<Identifier, Prepared, WithBody extends boolean> = {
 type CourseRouteInput<Identifier, Prepared, WithBody extends boolean> = {
   request: Request;
   params: RouteParams;
-  identifier: Identifier;
   user: AuthenticatedUser;
   actor: { userId: string; identifier: Identifier };
   prepared: Prepared;
@@ -134,7 +133,6 @@ export function courseRoute<
       return handle({
         request,
         params,
-        identifier,
         user,
         actor: { userId: user.id, identifier },
         prepared,

@@ -30,13 +30,13 @@ const context = {
   }),
 };
 
-const preview = { mode: 'BRANCH', nodes: [], version: 'preview-version' };
+const impact = { mode: 'BRANCH', nodes: [], version: 'impact-version' };
 
 afterEach(() => vi.restoreAllMocks());
 
 beforeEach(() => {
   vi.clearAllMocks();
-  changeTeacherBlock.mockResolvedValue(preview);
+  changeTeacherBlock.mockResolvedValue(impact);
 });
 
 test.each([
@@ -49,7 +49,7 @@ test.each([
     const response = await handler(
       new Request('http://localhost/teacher-block', {
         method,
-        headers: { 'x-change-impact-version': 'preview-version' },
+        headers: { 'x-change-impact-version': 'impact-version' },
       }),
       context as never,
     );
@@ -60,14 +60,14 @@ test.each([
         userId: 'teacher-id',
         id: 'selected-node-id',
         operation,
-        previewVersion: 'preview-version',
+        changeImpactVersion: 'impact-version',
       }),
       expect.any(Object),
     );
     expect(await response.json()).toEqual({
       mode: 'BRANCH',
       nodes: [],
-      version: 'preview-version',
+      version: 'impact-version',
     });
   },
 );

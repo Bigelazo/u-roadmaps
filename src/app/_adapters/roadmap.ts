@@ -1,4 +1,5 @@
 import { ApplicationError } from '@/shared/errors/types';
+import { CHANGE_IMPACT_VERSION_HEADER } from '@/shared/change-impact';
 import {
   parseCourseCode,
   parseCourseOfferingIdentifier,
@@ -31,3 +32,6 @@ export function requireCourseCode(param: string): string {
   }
   return courseCode;
 }
+
+export const changeImpactVersion = (request: Request) =>
+  request.headers.get(CHANGE_IMPACT_VERSION_HEADER) ?? undefined;

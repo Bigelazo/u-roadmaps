@@ -1,6 +1,7 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { UncertainNodeCreationError } from './placement-recovery';
 import { roadmapUrl } from '@/features/roadmap/client';
+import { CHANGE_IMPACT_VERSION_HEADER } from '@/shared/change-impact';
 import {
   changeImpactFailures,
   changeImpactPath,
@@ -13,7 +14,7 @@ import { readApiErrorBody } from '@/shared/api-error';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
 type RequestOptions = {
-  readonly previewVersion?: string;
+  readonly changeImpactVersion?: string;
   readonly load?: 'roadmap' | 'canvas-preview';
   readonly creation?: boolean;
   readonly signal?: AbortSignal;
@@ -34,12 +35,12 @@ export function createHttpRoadmapCanvasSessionPersistence(
   async function request(
     { method, path, body }: RouteRequest,
     failure: string,
-    { previewVersion, load, creation, signal }: RequestOptions = {},
+    { changeImpactVersion, load, creation, signal }: RequestOptions = {},
   ) {
     const json = body !== undefined && !(body instanceof FormData);
     const headers = {
       ...(json && { 'Content-Type': 'application/json' }),
-      ...(previewVersion && { 'x-change-impact-version': previewVersion }),
+      ...(changeImpactVersion && { [CHANGE_IMPACT_VERSION_HEADER]: changeImpactVersion }),
     };
     let response: Response;
     try {
@@ -96,10 +97,10 @@ export function createHttpRoadmapCanvasSessionPersistence(
       ).json();
     },
 
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       const entry: AnyHttpCommand = httpCommands[command.kind];
       const options = {
-        previewVersion,
+        changeImpactVersion,
         creation: command.kind === 'add-node',
       };
       const sent = await Promise.allSettled(

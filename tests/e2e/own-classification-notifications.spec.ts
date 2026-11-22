@@ -2,7 +2,7 @@ import { enterRoadmap } from './enter-roadmap';
 import { expect, test, type E2EUser } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { openInbox, countNotices, listNotices, type StoredNotice } from './notices';
-import { hideNode } from './previewed-writes';
+import { hideNode } from './confirmed-actions';
 
 test('used Type renames deliver one general notice across Sections and recognize together with Nodes', async ({
   request,
@@ -133,7 +133,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     ),
   ).toBe(false);
   for (const id of nodeIds.slice(0, 2)) {
-    await ok(await hideNode(author, roadmapPath(`/nodes/${id}`)));
+    await ok(await hideNode(author, roadmapPath(), id));
   }
   await patch({ name: `Oculto ${suffix}` });
   expect((await notices()).filter((n) => n.data.nextTypeName === `Oculto ${suffix}`)).toHaveLength(

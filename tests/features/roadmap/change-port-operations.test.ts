@@ -209,7 +209,7 @@ test('dependencies report the pair and distinct access for each recipient; Compl
     input: { kind: 'create-dependency', ...request.input },
   });
   const result = await createRoadmapDependency(
-    { ...request, previewVersion: version },
+    { ...request, changeImpactVersion: version },
     recording.port,
   );
   expect(recording.facts()).toContainEqual(
@@ -351,12 +351,12 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
       }),
     );
     recording.changes.length = 0;
-    const preview = await readRoadmapChangeImpact({
+    const impact = await readRoadmapChangeImpact({
       ...input,
       input: { kind: 'change-teacher-block', nodeId: input.id, operation },
     });
     await changeTeacherBlock(
-      { ...input, operation, previewVersion: preview.version },
+      { ...input, operation, changeImpactVersion: impact.version },
       recording.port,
     );
     expect(recording.facts()).toContainEqual(
@@ -459,13 +459,13 @@ test('a manual unlock before the release pass discards a due Scheduled unlock it
   });
   const recording = recordingChangePort();
   const input = { ...teacher(course), id: course.change.nodeId, operation: 'UNBLOCK' as const };
-  const preview = await readRoadmapChangeImpact({
+  const impact = await readRoadmapChangeImpact({
     ...input,
     input: { kind: 'change-teacher-block', nodeId: input.id, operation: input.operation },
   });
-  expect(preview.nodes.map(({ id }) => id)).toEqual([course.change.nodeId]);
+  expect(impact.nodes.map(({ id }) => id)).toEqual([course.change.nodeId]);
 
-  await changeTeacherBlock({ ...input, previewVersion: preview.version }, recording.port);
+  await changeTeacherBlock({ ...input, changeImpactVersion: impact.version }, recording.port);
   await releaseScheduledTeacherUnlocks(recording.port, new Date());
 
   expect(

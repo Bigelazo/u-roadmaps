@@ -214,14 +214,15 @@ test.each([
     synchronizeCourseOffering.mockImplementation(async () => {
       steps.push('synchronized');
     });
-    const handler = courseRoute(async () => {
+    const handler = courseRoute(async ({ actor }) => {
       steps.push('handled');
-      return Response.json({ saved: true });
+      return Response.json(actor);
     });
     const response = await handler(new Request('http://localhost/api/roadmap', { method }), {
       params: Promise.resolve({ courseCode: 'CC3002', year: '2026', semester: '2' }),
     });
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ userId, identifier: offering });
     expect(steps).toEqual(order);
     expect(
       synchronizeCourseOffering.mock.calls.map(([user, identifier]) => [user.id, identifier]),

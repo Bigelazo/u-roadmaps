@@ -41,7 +41,7 @@ export function teacherEdits(
       ...editor,
       input: { kind: 'change-teacher-block', nodeId, operation },
     });
-    return changeTeacherBlock({ ...input, previewVersion: version }, port);
+    return changeTeacherBlock({ ...input, changeImpactVersion: version }, port);
   };
   return {
     create: (title: string) =>
@@ -55,7 +55,7 @@ export function teacherEdits(
     rename: (nodeId: string, title: string) =>
       updateRoadmapNode({ ...editor, id: nodeId, input: { title } }, port),
     async update(nodeId: string, input: Record<string, unknown>) {
-      const previewVersion =
+      const changeImpactVersion =
         input.isVisible === false
           ? (
               await readRoadmapChangeImpact({
@@ -64,14 +64,14 @@ export function teacherEdits(
               })
             ).version
           : undefined;
-      return updateRoadmapNode({ ...editor, id: nodeId, input, previewVersion }, port);
+      return updateRoadmapNode({ ...editor, id: nodeId, input, changeImpactVersion }, port);
     },
     async remove(nodeId: string) {
       const { version } = await readRoadmapChangeImpact({
         ...editor,
         input: { kind: 'delete-node', nodeId: nodeId },
       });
-      return deleteRoadmapNode({ ...editor, id: nodeId, previewVersion: version }, port);
+      return deleteRoadmapNode({ ...editor, id: nodeId, changeImpactVersion: version }, port);
     },
     block: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'BLOCK'),
     unblock: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'UNBLOCK'),
@@ -83,7 +83,7 @@ export function teacherEdits(
         ...request,
         input: { kind: 'create-dependency', ...request.input },
       });
-      return (await createRoadmapDependency({ ...request, previewVersion: version }, port))
+      return (await createRoadmapDependency({ ...request, changeImpactVersion: version }, port))
         .dependency.id;
     },
     disconnect: (dependencyId: string) =>

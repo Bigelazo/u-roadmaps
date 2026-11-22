@@ -543,16 +543,19 @@ test('versions a different Change impact differently', () => {
 test.each([
   ['a different', 'previewed'],
   ['a missing', undefined],
-])('refuses to confirm a Dependency with %s preview version as stale', (_, previewVersion) => {
-  const snapshot = roadmap([node('intro'), node('theory')]);
+])(
+  'refuses to confirm a Dependency with %s Change impact version as stale',
+  (_, changeImpactVersion) => {
+    const snapshot = roadmap([node('intro'), node('theory')]);
 
-  expect(confirmChange(snapshot, dependency('intro', 'theory'), previewVersion)).toEqual({
-    kind: 'REJECTED',
-    reason: 'DEPENDENCY_PREVIEW_STALE',
-    message:
-      'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
-  });
-});
+    expect(confirmChange(snapshot, dependency('intro', 'theory'), changeImpactVersion)).toEqual({
+      kind: 'REJECTED',
+      reason: 'DEPENDENCY_PREVIEW_STALE',
+      message:
+        'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
+    });
+  },
+);
 
 test.each([
   ['BLOCK', 'del bloqueo'],
@@ -587,9 +590,9 @@ test.each([
   ['delete-node', undefined, 'NODE_DELETE_PREVIEW_STALE', 'de la eliminación'],
   ['delete-node', 'previewed', 'NODE_DELETE_PREVIEW_STALE', 'de la eliminación'],
 ] as const)(
-  'refuses to confirm %s with the preview version %s as stale',
-  (kind, previewVersion, reason, impact) => {
-    expect(confirmChange(touching, { kind, nodeId: 'theory' }, previewVersion)).toEqual({
+  'refuses to confirm %s with the Change impact version %s as stale',
+  (kind, changeImpactVersion, reason, impact) => {
+    expect(confirmChange(touching, { kind, nodeId: 'theory' }, changeImpactVersion)).toEqual({
       kind: 'REJECTED',
       reason,
       message: `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,

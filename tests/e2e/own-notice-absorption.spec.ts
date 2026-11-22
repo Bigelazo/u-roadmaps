@@ -7,7 +7,7 @@ import {
   listNotices,
   prepareOpening,
 } from './notices';
-import { deleteNode } from './previewed-writes';
+import { deleteNode } from './confirmed-actions';
 
 test('Node repeats arrive without an open Inbox and an earlier opening cannot acknowledge later changes', async ({
   page,
@@ -85,6 +85,6 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     await expect.poll(count).toBe(0);
     expect(await notices()).toHaveLength(0);
   } finally {
-    await deleteNode(author, course.apiPath(`/nodes/${nodeId}`));
+    await deleteNode(author, course.apiPath(), nodeId);
   }
 });

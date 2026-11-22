@@ -1,6 +1,7 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
+import { changeImpactVersion } from '@/app/_adapters/roadmap';
 import { createRoadmapDependency, deleteRoadmapDependencies } from '@/features/roadmap/server';
 
 export const POST = courseRoute(
@@ -8,7 +9,7 @@ export const POST = courseRoute(
     const input = {
       ...actor,
       input: body,
-      previewVersion: request.headers.get('x-change-impact-version') ?? undefined,
+      changeImpactVersion: changeImpactVersion(request),
     };
     const result = await createRoadmapDependency(input, roadmapChangePort);
     return NextResponse.json(result, { status: 201 });

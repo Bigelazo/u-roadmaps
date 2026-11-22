@@ -3,7 +3,7 @@ import { authenticateAs, reviewNodeResources } from './helpers';
 import { createExistingNode } from './existing-node';
 import { literal, sql } from './database';
 import { openInbox, openNativeStream, streamFrames, type StreamWindow } from './notices';
-import { connectNodes } from './previewed-writes';
+import { connectNodes } from './confirmed-actions';
 
 test('native SSE isolates Roadmap frames from a User outside the Course', async ({
   browser,
@@ -182,7 +182,7 @@ test('classification and Dependency repeats reconcile independent targets and wi
     ).toBe(200);
   }
   const connect = async () => {
-    const response = await connectNodes(teacher, course.apiPath('/dependencies'), {
+    const response = await connectNodes(teacher, course.apiPath(), {
       sourceNodeId: course.nodes.first,
       targetNodeId: nodeId,
     });

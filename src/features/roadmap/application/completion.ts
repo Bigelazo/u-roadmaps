@@ -41,7 +41,7 @@ function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BL
   return new ApplicationError(403, access.reason, blockedNodeAccessMessage(access));
 }
 
-export async function requireNodeAccess(
+export async function loadCompletedNodeIdsRequiringAccess(
   context: CompletionContext,
   kind: CompletionKind,
   nodeId: string,
@@ -104,19 +104,21 @@ export function readSimulatedRoadmap(participant: RoadmapParticipant) {
   );
 }
 
+const completionPermissions = {
+  COMPLETION: { capability: 'complete', access: 'actor' },
+  SIMULATED_COMPLETION: { capability: 'edit', access: 'none' },
+} as const;
+
 function completionCommand<Result>(
   kind: CompletionKind,
-  capability: 'complete' | 'edit',
-  access: 'actor' | 'none',
   record: (context: CompletionContext, nodeId: string) => Promise<Result>,
 ) {
   return roadmapCommand({
-    capability,
+    ...completionPermissions[kind],
     lock: 'key-share',
     parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
-    access,
     run: async ({ input: nodeId, ...context }) => {
-      const completedNodeIds = await requireNodeAccess(context, kind, nodeId);
+      const completedNodeIds = await loadCompletedNodeIdsRequiringAccess(context, kind, nodeId);
       if (!completedNodeIds.has(nodeId)) await requireReviewedResources(context, kind, nodeId);
       return { result: await record(context, nodeId), facts: [] };
     },
@@ -125,8 +127,6 @@ function completionCommand<Result>(
 
 export const completeNode = completionCommand(
   'COMPLETION',
-  'complete',
-  'actor',
   ({ tx, participation: { userId } }, roadmapNodeId) =>
     tx.completion.upsert({
       where: { userId_roadmapNodeId: { userId, roadmapNodeId } },
@@ -137,8 +137,6 @@ export const completeNode = completionCommand(
 
 export const completeSimulatedNode = completionCommand(
   'SIMULATED_COMPLETION',
-  'edit',
-  'none',
   async ({ tx, participation, roadmap }, roadmapNodeId) => {
     await tx.simulatedCompletion.createMany({
       data: {

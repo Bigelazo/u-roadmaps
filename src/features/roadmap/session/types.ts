@@ -53,7 +53,7 @@ export type RoadmapCanvasSessionPersistence = {
   readChangeImpact<Command extends ChangeImpactCommand>(
     command: Command,
   ): Promise<ReadChangeImpactOf<Command['kind']>>;
-  execute(command: CanvasCommand, previewVersion?: string): Promise<ExecutionResult | void>;
+  execute(command: CanvasCommand, changeImpactVersion?: string): Promise<ExecutionResult | void>;
 };
 
 export type RoadmapCanvasExperience =

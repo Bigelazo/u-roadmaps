@@ -6,7 +6,7 @@ import { requireUuid } from '@/shared/validation';
 import { resourceNotFound } from '../errors';
 import type { RoadmapChangePort } from '../change-port';
 import { roadmapCommand, type RoadmapParticipant } from '../roadmap-command';
-import { requireNodeAccess } from '@/features/roadmap/application/completion';
+import { loadCompletedNodeIdsRequiringAccess } from '@/features/roadmap/application/completion';
 
 async function requireRoadmapResource(
   transaction: Prisma.TransactionClient,
@@ -37,7 +37,11 @@ const resourceAccess = roadmapCommand({
         'INVALID_RESOURCE_TYPE',
         'Los archivos se registran al descargarlos.',
       );
-    await requireNodeAccess({ tx, participation, roadmap }, 'COMPLETION', resource.roadmapNodeId);
+    await loadCompletedNodeIdsRequiringAccess(
+      { tx, participation, roadmap },
+      'COMPLETION',
+      resource.roadmapNodeId,
+    );
     const reviewsCurrentMaterial = input.type === 'LINK' || resource.fileKey === input.fileKey;
     await tx.resourceAccess.upsert({
       where: { userId_resourceId: { userId: actor.userId, resourceId: resource.id } },
@@ -75,7 +79,7 @@ export const recordCanvasPreviewResourceReview = roadmapCommand({
   access: 'none',
   run: async ({ tx, roadmap, participation, input: resourceId }) => {
     const resource = await requireRoadmapResource(tx, resourceId, roadmap.id);
-    await requireNodeAccess(
+    await loadCompletedNodeIdsRequiringAccess(
       { tx, participation, roadmap },
       'SIMULATED_COMPLETION',
       resource.roadmapNodeId,

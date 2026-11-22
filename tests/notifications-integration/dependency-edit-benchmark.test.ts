@@ -154,7 +154,7 @@ describe.skipIf(!process.env.DEPENDENCY_EDIT_BENCHMARK)('dependency edit benchma
             input: { kind: 'create-dependency', ...request.input },
           });
           const created = await measured(counter, () =>
-            createRoadmapDependency({ ...request, previewVersion: version }, port),
+            createRoadmapDependency({ ...request, changeImpactVersion: version }, port),
           );
           rounds.create.push(created.ms);
           rounds.createQueries.push(created.queries);
@@ -210,7 +210,7 @@ describe.skipIf(!process.env.DEPENDENCY_EDIT_BENCHMARK)('dependency edit benchma
             input: { kind: 'create-dependency', ...request.input },
           });
           ids.push(
-            (await createRoadmapDependency({ ...request, previewVersion: version }, port))
+            (await createRoadmapDependency({ ...request, changeImpactVersion: version }, port))
               .dependency.id,
           );
         }

@@ -8,6 +8,7 @@ import {
   type RoadmapNodePlacement,
   type ScheduledUnlock,
 } from '@/features/roadmap/canvas/commands/canvas-command';
+import { CHANGE_IMPACT_FIELDS } from '@/shared/change-impact';
 import type { ExecutionResult } from '@/features/roadmap/session/types';
 import type { RoadmapDependency } from '@/features/roadmap/types';
 
@@ -25,11 +26,14 @@ type HttpCommand<Command extends { kind: string }> = {
 
 export type AnyHttpCommand = HttpCommand<CanvasCommand>;
 
-export const changeImpactPath = (command: ChangeImpactCommand) =>
+export const changeImpactPath = (
+  command: Partial<Record<(typeof CHANGE_IMPACT_FIELDS)[number], string>>,
+) =>
   `/change-impact?${new URLSearchParams(
-    Object.entries(command).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string',
-    ),
+    CHANGE_IMPACT_FIELDS.flatMap((field) => {
+      const value = command[field];
+      return value === undefined ? [] : [[field, value]];
+    }),
   )}`;
 
 export const changeImpactFailures: Record<ChangeImpactCommand['kind'], string> = {

@@ -11,7 +11,7 @@ import {
   storeTitleNotices,
   type StoredNotice,
 } from './notices';
-import { deleteNode, hideNode } from './previewed-writes';
+import { deleteNode, hideNode } from './confirmed-actions';
 
 test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
   course,
@@ -214,13 +214,13 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
   const hiddenSource = await createNode(`Ocultamiento origen ${crypto.randomUUID()}`);
   const hiddenTarget = await createNode(`Ocultamiento destino ${crypto.randomUUID()}`);
   const hiddenDependency = await insertDependency(hiddenSource, hiddenTarget);
-  await ok(await hideNode(author, roadmapPath(`/nodes/${hiddenTarget}`)));
+  await ok(await hideNode(author, roadmapPath(), hiddenTarget));
   expect(await routeNotices(hiddenDependency)).toHaveLength(0);
 
   const deleteSource = await createNode(`Eliminación origen ${crypto.randomUUID()}`);
   const deleteTarget = await createNode(`Eliminación destino ${crypto.randomUUID()}`);
   const deleteDependency = await insertDependency(deleteSource, deleteTarget);
-  await ok(await deleteNode(author, roadmapPath(`/nodes/${deleteTarget}`)), 204);
+  await ok(await deleteNode(author, roadmapPath(), deleteTarget), 204);
   expect(await routeNotices(deleteDependency)).toHaveLength(0);
   nodeIds.splice(nodeIds.indexOf(deleteTarget), 1);
 });

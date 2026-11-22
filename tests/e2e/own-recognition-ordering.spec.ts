@@ -9,7 +9,7 @@ import {
   recognize,
   type RoadmapOpening,
 } from './notices';
-import { deleteNode } from './previewed-writes';
+import { deleteNode } from './confirmed-actions';
 
 test('an older Roadmap entry cannot undo knowledge recognized by a newer entry', async ({
   course,
@@ -102,7 +102,7 @@ test('a newer entry recognizes Node absence after an older entry recreates its d
   const notices = () => listNotices(recipient, { nodeId });
   await recognize(recipient, course.roadmapId);
   const older = await prepareOpening(recipient, course.roadmapId);
-  await ok(await deleteNode(author, course.apiPath(`/nodes/${nodeId}`)), 204);
+  await ok(await deleteNode(author, course.apiPath(), nodeId), 204);
   await expect.poll(notices).toHaveLength(1);
   const newer = await prepareOpening(recipient, course.roadmapId);
   await acknowledgeOpening(recipient, older);
