@@ -46,7 +46,9 @@ test('hiding a node previews and removes every incident dependency atomically', 
 
   await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${selected.id}`)));
 
-  const preview = await teacher.get(course.apiPath(`/nodes/${selected.id}?operation=HIDE`));
+  const preview = await teacher.get(
+    course.apiPath(`/change-impact?kind=hide-node&nodeId=${selected.id}`),
+  );
   await ok(preview);
   const hidingImpact = await preview.json();
   expect(hidingImpact.dependencies).toEqual(
@@ -61,7 +63,7 @@ test('hiding a node previews and removes every incident dependency atomically', 
 
   const hidden = await teacher.patch(course.apiPath(`/nodes/${selected.id}`), {
     data: { isVisible: false },
-    headers: { 'x-node-visibility-preview': hidingImpact.version },
+    headers: { 'x-change-impact-version': hidingImpact.version },
   });
   await ok(hidden);
   const hiddenBody = await hidden.json();
@@ -144,7 +146,9 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
   await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${blockedSource.id}`)));
 
   const preview = await teacher.get(
-    course.apiPath(`/dependencies?sourceNodeId=${blockedSource.id}&targetNodeId=${target.id}`),
+    course.apiPath(
+      `/change-impact?kind=create-dependency&sourceNodeId=${blockedSource.id}&targetNodeId=${target.id}`,
+    ),
   );
   await ok(preview);
   const impact = await preview.json();
@@ -158,7 +162,7 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
 
   const dependency = await teacher.post(course.apiPath('/dependencies'), {
     data: { sourceNodeId: blockedSource.id, targetNodeId: target.id },
-    headers: { 'x-dependency-preview': impact.version },
+    headers: { 'x-change-impact-version': impact.version },
   });
   await ok(dependency, 201);
   const dependencyBody = await dependency.json();
@@ -183,7 +187,9 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
   expect(blockedByNodeId.get(finalDescendant.id)).toBe(true);
 
   await ok(
-    await teacher.delete(course.apiPath(`/dependencies/${dependencyBody.dependency.id}`)),
+    await teacher.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [dependencyBody.dependency.id] },
+    }),
     204,
   );
   const afterDelete = await teacher.get(course.apiPath());

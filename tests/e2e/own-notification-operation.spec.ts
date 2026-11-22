@@ -190,9 +190,13 @@ test('classification and Dependency repeats reconcile independent targets and wi
     return (await response.json()).dependency.id;
   };
   const firstDependency = await connect();
-  expect((await teacher.delete(course.apiPath(`/dependencies/${firstDependency}`))).status()).toBe(
-    204,
-  );
+  expect(
+    (
+      await teacher.delete(course.apiPath('/dependencies'), {
+        data: { dependencyIds: [firstDependency] },
+      })
+    ).status(),
+  ).toBe(204);
   await connect();
   await expect.poll(async () => (await feed(student)).length).toBe(2);
   const delivered = await feed(student);

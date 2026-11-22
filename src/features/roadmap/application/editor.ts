@@ -357,13 +357,6 @@ export const updateRoadmapNode = roadmapCommand({
   },
 });
 
-export const previewNodeDeletion = async ({
-  id,
-  ...participant
-}: RoadmapParticipant & { id: string }) => {
-  return readChangeImpact(participant, { kind: 'delete-node', nodeId: requireUuid(id, 'nodeId') });
-};
-
 const nodeDeletion = roadmapCommand({
   capability: 'edit',
   parse: ({ id, previewVersion }: { id: string; previewVersion?: string }) => ({
@@ -520,13 +513,6 @@ export const createRoadmapDependency = roadmapCommand({
   },
 });
 
-export const previewRoadmapDependency = async ({
-  input,
-  ...participant
-}: RoadmapParticipant & { input: JsonObject }) => {
-  return readChangeImpact(participant, dependencyChange(parseDependency({ input })));
-};
-
 const dependencyEnds = {
   sourceNode: { select: { title: true, isVisible: true } },
   targetNode: { select: { title: true, isVisible: true } },
@@ -546,27 +532,6 @@ function removedDependencyFact(
     targetNode: dependency.targetNode,
   };
 }
-
-export const deleteRoadmapDependency = roadmapCommand({
-  capability: 'edit',
-  parse: ({ id }: { id: string }) => requireUuid(id, 'dependencyId'),
-  access: 'roadmap',
-  conflictMessage: dependencyConflictMessage,
-  run: async ({ tx, roadmap, input: dependencyId }) => {
-    const dependency = await tx.dependency.findFirst({
-      where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
-      include: dependencyEnds,
-    });
-    if (!dependency)
-      throw new ApplicationError(
-        404,
-        'DEPENDENCY_NOT_FOUND',
-        'La dependencia no existe en este roadmap.',
-      );
-    await tx.dependency.delete({ where: { id: dependency.id } });
-    return { result: {}, facts: [removedDependencyFact(dependency)] };
-  },
-});
 
 function parseDependencyIds({ input }: { input: JsonObject }) {
   const { dependencyIds } = input;
@@ -597,26 +562,45 @@ export const deleteRoadmapDependencies = roadmapCommand({
   },
 });
 
-export const previewNodeVisibility = async ({
-  id,
-  ...participant
-}: RoadmapParticipant & { id: string }) => {
-  return readChangeImpact(participant, { kind: 'hide-node', nodeId: requireUuid(id, 'nodeId') });
-};
-
 type TeacherBlockRequest = { id: string; operation: TeacherBlockOperation };
 
 function teacherBlockChange({ id, operation }: TeacherBlockRequest) {
   return { kind: 'change-teacher-block', nodeId: requireUuid(id, 'nodeId'), operation } as const;
 }
 
-export const previewTeacherBlock = async ({
-  id,
-  operation,
+const TEACHER_BLOCK_OPERATIONS: readonly unknown[] = ['BLOCK', 'UNBLOCK', 'BRANCH_UNLOCK'];
+
+function parseChangeWithImpact(input: JsonObject): ChangeWithImpact {
+  switch (input.kind) {
+    case 'hide-node':
+    case 'delete-node':
+      return { kind: input.kind, nodeId: requireUuid(input.nodeId, 'nodeId') };
+    case 'change-teacher-block':
+      if (!TEACHER_BLOCK_OPERATIONS.includes(input.operation))
+        throw new ApplicationError(
+          400,
+          'INVALID_REQUEST',
+          'operation debe ser BLOCK, UNBLOCK o BRANCH_UNLOCK.',
+        );
+      return teacherBlockChange({
+        id: input.nodeId as string,
+        operation: input.operation as TeacherBlockOperation,
+      });
+    case 'create-dependency':
+      return dependencyChange(parseDependency({ input }));
+  }
+  throw new ApplicationError(
+    400,
+    'INVALID_REQUEST',
+    'kind debe ser hide-node, delete-node, change-teacher-block o create-dependency.',
+  );
+}
+
+export const readRoadmapChangeImpact = async <Kind extends ChangeWithImpact['kind']>({
+  input,
   ...participant
-}: RoadmapParticipant & TeacherBlockRequest) => {
-  return readChangeImpact(participant, teacherBlockChange({ id, operation }));
-};
+}: RoadmapParticipant & { input: JsonObject & { kind?: Kind } }) =>
+  readChangeImpact(participant, parseChangeWithImpact(input) as ChangeWithImpact & { kind: Kind });
 
 export const changeTeacherBlock = roadmapCommand({
   capability: 'edit',

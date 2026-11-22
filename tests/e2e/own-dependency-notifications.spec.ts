@@ -151,7 +151,10 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
 
-  await ok(await author.delete(roadmapPath(`/dependencies/${dependencyId}`)), 204);
+  await ok(
+    await author.delete(roadmapPath('/dependencies'), { data: { dependencyIds: [dependencyId] } }),
+    204,
+  );
   await expect
     .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
     .toHaveLength(1);

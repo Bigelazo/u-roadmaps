@@ -49,7 +49,12 @@ for (const target of ['dependency', 'node-type-name'] as const)
         ]),
       );
       await recognize();
-      await ok(await author.delete(course.apiPath(`/dependencies/${dependencyId}`)), 204);
+      await ok(
+        await author.delete(course.apiPath('/dependencies'), {
+          data: { dependencyIds: [dependencyId] },
+        }),
+        204,
+      );
     } else {
       await recognize();
       await ok(

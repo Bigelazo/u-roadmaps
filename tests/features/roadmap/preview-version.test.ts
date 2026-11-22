@@ -7,10 +7,7 @@ import {
   changeTeacherBlock,
   createRoadmapDependency,
   deleteRoadmapNode,
-  previewNodeDeletion,
-  previewNodeVisibility,
-  previewRoadmapDependency,
-  previewTeacherBlock,
+  readRoadmapChangeImpact,
   updateRoadmapNode,
 } from '@/features/roadmap/server';
 
@@ -40,7 +37,10 @@ test('hiding a Node checks a sent visibility preview version against the removed
     await addNode(course, 'Colas'),
   ];
   await connect(nodeId, dependent.id);
-  const preview = await previewNodeVisibility({ ...teacher(course), id: nodeId });
+  const preview = await readRoadmapChangeImpact({
+    ...teacher(course),
+    input: { kind: 'hide-node', nodeId: nodeId },
+  });
   await connect(prerequisite.id, nodeId);
   const hide = (previewVersion?: string) =>
     updateRoadmapNode(
@@ -54,7 +54,10 @@ test('hiding a Node checks a sent visibility preview version against the removed
   });
   expect(recording.changes).toEqual([]);
 
-  const current = await previewNodeVisibility({ ...teacher(course), id: nodeId });
+  const current = await readRoadmapChangeImpact({
+    ...teacher(course),
+    input: { kind: 'hide-node', nodeId: nodeId },
+  });
   expect(current.dependencies).toHaveLength(2);
   await expect(hide(current.version)).resolves.toMatchObject({
     node: { isVisible: false },
@@ -77,7 +80,10 @@ test('hiding a Node without a visibility preview version is refused as stale, wh
   });
   expect(recording.changes).toEqual([]);
 
-  const { version } = await previewNodeVisibility({ ...teacher(course), id: nodeId });
+  const { version } = await readRoadmapChangeImpact({
+    ...teacher(course),
+    input: { kind: 'hide-node', nodeId: nodeId },
+  });
   await updateRoadmapNode(
     { ...teacher(course), id: nodeId, input: { isVisible: false }, previewVersion: version },
     recording.port,
@@ -92,7 +98,12 @@ test('BLOCK checks a sent Teacher block preview version against the Nodes it blo
   const nodeId = course.change.nodeId;
   await connect(nodeId, (await addNode(course, 'Pilas')).id);
   const request = { ...teacher(course), id: nodeId, operation: 'BLOCK' as const };
-  const preview = await previewTeacherBlock(request);
+  const readImpact = () =>
+    readRoadmapChangeImpact({
+      ...teacher(course),
+      input: { kind: 'change-teacher-block', nodeId, operation: 'BLOCK' },
+    });
+  const preview = await readImpact();
   await connect(nodeId, (await addNode(course, 'Colas')).id);
   const block = (previewVersion?: string) =>
     changeTeacherBlock({ ...request, previewVersion }, recording.port);
@@ -103,7 +114,7 @@ test('BLOCK checks a sent Teacher block preview version against the Nodes it blo
   });
   expect(recording.changes).toEqual([]);
 
-  const current = await previewTeacherBlock(request);
+  const current = await readImpact();
   expect(current.nodes).toHaveLength(3);
   await expect(block(current.version)).resolves.toMatchObject({ nodes: current.nodes });
 });
@@ -133,7 +144,10 @@ test('Dependency creation checks a sent Dependency preview version against the T
     ...teacher(course),
     input: { sourceNodeId: source.id, targetNodeId: target.id },
   };
-  const preview = await previewRoadmapDependency(request);
+  const preview = await readRoadmapChangeImpact({
+    ...request,
+    input: { kind: 'create-dependency', ...request.input },
+  });
   await connect(target.id, (await addNode(course, 'Colas')).id);
   const create = (previewVersion?: string) =>
     createRoadmapDependency({ ...request, previewVersion }, recording.port);
@@ -144,7 +158,10 @@ test('Dependency creation checks a sent Dependency preview version against the T
   });
   expect(recording.changes).toEqual([]);
 
-  const current = await previewRoadmapDependency(request);
+  const current = await readRoadmapChangeImpact({
+    ...request,
+    input: { kind: 'create-dependency', ...request.input },
+  });
   expect(current.nodes).toHaveLength(2);
   await expect(create(current.version)).resolves.toMatchObject({ nodes: current.nodes });
 });
@@ -176,6 +193,9 @@ test('Node deletion without a deletion preview version is refused as stale', asy
   await expect(remove()).rejects.toMatchObject({ status: 409, code: 'NODE_DELETE_PREVIEW_STALE' });
   expect(recording.changes).toEqual([]);
 
-  const { version } = await previewNodeDeletion({ ...teacher(course), id: nodeId });
+  const { version } = await readRoadmapChangeImpact({
+    ...teacher(course),
+    input: { kind: 'delete-node', nodeId: nodeId },
+  });
   await expect(remove(version)).resolves.toEqual({});
 });

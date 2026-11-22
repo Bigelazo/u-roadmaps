@@ -239,7 +239,7 @@ test('closed Roadmaps refuse teaching edits with a clear closure error', async (
       suffix: '/dependencies',
       data: { sourceNodeId: second.id, targetNodeId: node.id },
     },
-    { method: 'DELETE', suffix: `/dependencies/${dependencyId}` },
+    { method: 'DELETE', suffix: '/dependencies', data: { dependencyIds: [dependencyId] } },
     { method: 'POST', suffix: `/nodes/${node.id}/teacher-block` },
     { method: 'DELETE', suffix: `/nodes/${node.id}/teacher-block` },
     { method: 'PATCH', suffix: `/nodes/${node.id}/teacher-block` },

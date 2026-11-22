@@ -3,10 +3,7 @@ vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ApplicationError } from '@/shared/errors/types';
 
-const { changeTeacherBlock, previewTeacherBlock } = vi.hoisted(() => ({
-  changeTeacherBlock: vi.fn(),
-  previewTeacherBlock: vi.fn(),
-}));
+const { changeTeacherBlock } = vi.hoisted(() => ({ changeTeacherBlock: vi.fn() }));
 
 vi.mock('@/shared/server/db', async () => {
   const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
@@ -16,11 +13,10 @@ vi.mock('@/app/_adapters/auth', () => ({
   synchronizeSessionParticipation: async () => undefined,
   requireAuthenticatedUser: async () => ({ id: 'teacher-id' }),
 }));
-vi.mock('@/features/roadmap/server', () => ({ changeTeacherBlock, previewTeacherBlock }));
+vi.mock('@/features/roadmap/server', () => ({ changeTeacherBlock }));
 
 import {
   DELETE,
-  GET,
   PATCH,
   POST,
 } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block/route';
@@ -41,7 +37,6 @@ afterEach(() => vi.restoreAllMocks());
 beforeEach(() => {
   vi.clearAllMocks();
   changeTeacherBlock.mockResolvedValue(preview);
-  previewTeacherBlock.mockResolvedValue(preview);
 });
 
 test.each([
@@ -54,14 +49,19 @@ test.each([
     const response = await handler(
       new Request('http://localhost/teacher-block', {
         method,
-        headers: { 'x-teacher-block-preview': 'preview-version' },
+        headers: { 'x-change-impact-version': 'preview-version' },
       }),
       context as never,
     );
 
     expect(response.status).toBe(200);
     expect(changeTeacherBlock).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'teacher-id', id: 'selected-node-id', operation }),
+      expect.objectContaining({
+        userId: 'teacher-id',
+        id: 'selected-node-id',
+        operation,
+        previewVersion: 'preview-version',
+      }),
       expect.any(Object),
     );
     expect(await response.json()).toEqual({
@@ -71,17 +71,6 @@ test.each([
     });
   },
 );
-
-test('a preview returns its result without a mutation', async () => {
-  const response = await GET(
-    new Request('http://localhost/teacher-block?operation=BRANCH_UNLOCK'),
-    context as never,
-  );
-
-  expect(response.status).toBe(200);
-  expect(previewTeacherBlock).toHaveBeenCalledOnce();
-  expect(changeTeacherBlock).not.toHaveBeenCalled();
-});
 
 test.each([
   {
@@ -107,7 +96,7 @@ test.each([
   const response = await DELETE(
     new Request('http://localhost/teacher-block', {
       method: 'DELETE',
-      headers: { 'x-teacher-block-preview': 'stale-version' },
+      headers: { 'x-change-impact-version': 'stale-version' },
     }),
     context,
   );

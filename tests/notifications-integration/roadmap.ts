@@ -15,13 +15,10 @@ import {
   changeTeacherBlock,
   createRoadmapDependency,
   createRoadmapNode,
-  deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   createRoadmapResource,
   deleteRoadmapNode,
-  previewNodeDeletion,
-  previewNodeVisibility,
-  previewRoadmapDependency,
-  previewTeacherBlock,
+  readRoadmapChangeImpact,
   removeRoadmapResource,
   replaceRoadmapResourceFile,
   updateRoadmapNode,
@@ -40,7 +37,10 @@ export function teacherEdits(
   const editor = teacher(course);
   const changeTeacherBlockConfirmed = async (nodeId: string, operation: TeacherBlockOperation) => {
     const input = { ...editor, id: nodeId, operation };
-    const { version } = await previewTeacherBlock(input);
+    const { version } = await readRoadmapChangeImpact({
+      ...editor,
+      input: { kind: 'change-teacher-block', nodeId, operation },
+    });
     return changeTeacherBlock({ ...input, previewVersion: version }, port);
   };
   return {
@@ -57,12 +57,20 @@ export function teacherEdits(
     async update(nodeId: string, input: Record<string, unknown>) {
       const previewVersion =
         input.isVisible === false
-          ? (await previewNodeVisibility({ ...editor, id: nodeId })).version
+          ? (
+              await readRoadmapChangeImpact({
+                ...editor,
+                input: { kind: 'hide-node', nodeId: nodeId },
+              })
+            ).version
           : undefined;
       return updateRoadmapNode({ ...editor, id: nodeId, input, previewVersion }, port);
     },
     async remove(nodeId: string) {
-      const { version } = await previewNodeDeletion({ ...editor, id: nodeId });
+      const { version } = await readRoadmapChangeImpact({
+        ...editor,
+        input: { kind: 'delete-node', nodeId: nodeId },
+      });
       return deleteRoadmapNode({ ...editor, id: nodeId, previewVersion: version }, port);
     },
     block: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'BLOCK'),
@@ -71,12 +79,15 @@ export function teacherEdits(
       updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port),
     async connect(sourceNodeId: string, targetNodeId: string) {
       const request = { ...editor, input: { sourceNodeId, targetNodeId } };
-      const { version } = await previewRoadmapDependency(request);
+      const { version } = await readRoadmapChangeImpact({
+        ...request,
+        input: { kind: 'create-dependency', ...request.input },
+      });
       return (await createRoadmapDependency({ ...request, previewVersion: version }, port))
         .dependency.id;
     },
     disconnect: (dependencyId: string) =>
-      deleteRoadmapDependency({ ...editor, id: dependencyId }, port),
+      deleteRoadmapDependencies({ ...editor, input: { dependencyIds: [dependencyId] } }, port),
     updateType: (nodeTypeId: string, input: Record<string, unknown>) =>
       updateRoadmapNodeType({ ...editor, id: nodeTypeId, input }, port),
     addResource: (nodeId: string, title: string, url = 'https://example.test/guide') =>

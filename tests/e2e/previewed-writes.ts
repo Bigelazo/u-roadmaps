@@ -2,20 +2,30 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
 
 type Send = (options: { headers: Record<string, string> }) => Promise<APIResponse>;
 
-async function confirm(api: APIRequestContext, previewPath: string, header: string, send: Send) {
-  const preview = await api.get(previewPath);
-  const version: unknown = preview.ok() ? (await preview.json()).version : undefined;
-  return send({ headers: typeof version === 'string' ? { [header]: version } : {} });
+async function confirm(
+  api: APIRequestContext,
+  path: string,
+  change: Record<string, string>,
+  send: Send,
+) {
+  const roadmapPath = path.replace(/\/(nodes\/[^/]+|dependencies)$/, '');
+  const impact = await api.get(`${roadmapPath}/change-impact?${new URLSearchParams(change)}`);
+  const version: unknown = impact.ok() ? (await impact.json()).version : undefined;
+  return send({
+    headers: typeof version === 'string' ? { 'x-change-impact-version': version } : {},
+  });
 }
 
+const nodeId = (nodePath: string) => nodePath.slice(nodePath.lastIndexOf('/') + 1);
+
 export function hideNode(api: APIRequestContext, nodePath: string) {
-  return confirm(api, `${nodePath}?operation=HIDE`, 'x-node-visibility-preview', (options) =>
+  return confirm(api, nodePath, { kind: 'hide-node', nodeId: nodeId(nodePath) }, (options) =>
     api.patch(nodePath, { data: { isVisible: false }, ...options }),
   );
 }
 
 export function deleteNode(api: APIRequestContext, nodePath: string) {
-  return confirm(api, `${nodePath}?operation=DELETE`, 'x-node-delete-preview', (options) =>
+  return confirm(api, nodePath, { kind: 'delete-node', nodeId: nodeId(nodePath) }, (options) =>
     api.delete(nodePath, options),
   );
 }
@@ -27,9 +37,9 @@ export function changeTeacherBlock(
   nodePath: string,
   operation: keyof typeof teacherBlockMethods = 'BLOCK',
 ) {
-  const path = `${nodePath}/teacher-block`;
-  return confirm(api, `${path}?operation=${operation}`, 'x-teacher-block-preview', (options) =>
-    api[teacherBlockMethods[operation]](path, options),
+  const change = { kind: 'change-teacher-block', nodeId: nodeId(nodePath), operation };
+  return confirm(api, nodePath, change, (options) =>
+    api[teacherBlockMethods[operation]](`${nodePath}/teacher-block`, options),
   );
 }
 
@@ -38,8 +48,7 @@ export function connectNodes(
   dependenciesPath: string,
   dependency: { sourceNodeId: string; targetNodeId: string } & Record<string, string>,
 ) {
-  const query = new URLSearchParams(dependency);
-  return confirm(api, `${dependenciesPath}?${query}`, 'x-dependency-preview', (options) =>
+  return confirm(api, dependenciesPath, { kind: 'create-dependency', ...dependency }, (options) =>
     api.post(dependenciesPath, { data: dependency, ...options }),
   );
 }

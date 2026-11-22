@@ -152,7 +152,12 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
   expect((await descendantCompletion.json()).error.code).toBe('PREREQUISITE_BLOCK');
 
   const prerequisiteDependencyId = dependencyIds.shift();
-  await ok(await teacher.delete(course.apiPath(`/dependencies/${prerequisiteDependencyId}`)), 204);
+  await ok(
+    await teacher.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [prerequisiteDependencyId] },
+    }),
+    204,
+  );
   const releasedRoadmap = await student.get(course.apiPath());
   const releasedNode = (await releasedRoadmap.json()).nodes.find(
     (node: { id: string }) => node.id === completedBeforeDependency.id,
@@ -258,7 +263,12 @@ test('student roadmap shows effective block reasons and restores a completed nod
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const targetDependencyId = dependencyIds.shift();
-  await ok(await teacher.delete(course.apiPath(`/dependencies/${targetDependencyId}`)), 204);
+  await ok(
+    await teacher.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [targetDependencyId] },
+    }),
+    204,
+  );
   await ok(
     await changeTeacherBlock(teacher, course.apiPath(`/nodes/${completedTarget.id}`), 'UNBLOCK'),
   );

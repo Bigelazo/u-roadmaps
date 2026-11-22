@@ -168,7 +168,7 @@ const executions: Record<string, Execution> = {
         '/dependencies',
         {
           method: 'POST',
-          headers: { ...json, 'x-dependency-preview': 'dependency-version' },
+          headers: { ...json, 'x-change-impact-version': 'dependency-version' },
           body: JSON.stringify(dependency),
         },
       ],
@@ -193,7 +193,7 @@ const executions: Record<string, Execution> = {
     requests: [
       [
         '/nodes/node-1/teacher-block',
-        { method: 'POST', headers: { 'x-teacher-block-preview': 'block-version' } },
+        { method: 'POST', headers: { 'x-change-impact-version': 'block-version' } },
       ],
     ],
   },
@@ -203,7 +203,7 @@ const executions: Record<string, Execution> = {
     requests: [
       [
         '/nodes/node-1/teacher-block',
-        { method: 'DELETE', headers: { 'x-teacher-block-preview': 'unlock-version' } },
+        { method: 'DELETE', headers: { 'x-change-impact-version': 'unlock-version' } },
       ],
     ],
   },
@@ -213,7 +213,7 @@ const executions: Record<string, Execution> = {
     requests: [
       [
         '/nodes/node-1/teacher-block',
-        { method: 'PATCH', headers: { 'x-teacher-block-preview': 'branch-version' } },
+        { method: 'PATCH', headers: { 'x-change-impact-version': 'branch-version' } },
       ],
     ],
   },
@@ -270,7 +270,7 @@ const executions: Record<string, Execution> = {
         '/nodes/node-1',
         {
           method: 'PATCH',
-          headers: { ...json, 'x-node-visibility-preview': 'hide-version' },
+          headers: { ...json, 'x-change-impact-version': 'hide-version' },
           body: JSON.stringify({ isVisible: false }),
         },
       ],
@@ -291,7 +291,7 @@ const executions: Record<string, Execution> = {
     requests: [
       [
         '/nodes/node-1',
-        { method: 'DELETE', headers: { 'x-node-delete-preview': 'deletion-version' } },
+        { method: 'DELETE', headers: { 'x-change-impact-version': 'deletion-version' } },
       ],
     ],
   },
@@ -358,27 +358,32 @@ const changeImpacts: Record<
 > = {
   'read the Change impact of a Dependency': {
     command: { kind: 'create-dependency', ...dependency },
-    path: '/dependencies?sourceNodeId=node-1&targetNodeId=node-2&sourceHandle=bottom&targetHandle=top',
+    path: '/change-impact?kind=create-dependency&sourceNodeId=node-1&targetNodeId=node-2&sourceHandle=bottom&targetHandle=top',
     response: { nodes: [{ id: 'node-3', title: 'Derivadas' }], version: 'dependency-version' },
   },
-  'read the Change impact of a Teacher block': {
-    command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },
-    path: '/nodes/node-1/teacher-block?operation=BLOCK',
+  'read the Change impact of a Teacher block without its schedule': {
+    command: {
+      kind: 'change-teacher-block',
+      nodeId: 'node-1',
+      operation: 'BLOCK',
+      schedule: { unlockAt: '2026-11-01T12:00:00.000Z' },
+    },
+    path: '/change-impact?kind=change-teacher-block&nodeId=node-1&operation=BLOCK',
     response: { mode: 'BLOCK', nodes: [], version: 'block-version' },
   },
   'read the Change impact of a Branch unlock': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BRANCH_UNLOCK' },
-    path: '/nodes/node-1/teacher-block?operation=BRANCH_UNLOCK',
+    path: '/change-impact?kind=change-teacher-block&nodeId=node-1&operation=BRANCH_UNLOCK',
     response: { mode: 'BRANCH', nodes: [], version: 'branch-version' },
   },
   'read the Change impact of hiding a Node': {
     command: { kind: 'hide-node', nodeId: 'node-1' },
-    path: '/nodes/node-1?operation=HIDE',
+    path: '/change-impact?kind=hide-node&nodeId=node-1',
     response: hidingImpact,
   },
   'read the Change impact of deleting a Node': {
     command: { kind: 'delete-node', nodeId: 'node-1' },
-    path: '/nodes/node-1?operation=DELETE',
+    path: '/change-impact?kind=delete-node&nodeId=node-1',
     response: deletionImpact,
   },
 };
