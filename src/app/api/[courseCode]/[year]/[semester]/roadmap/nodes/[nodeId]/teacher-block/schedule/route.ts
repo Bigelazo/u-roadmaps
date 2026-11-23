@@ -1,10 +1,10 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
+import { courseRoute } from '@/app/_adapters/http';
 import { scheduleTeacherUnlock } from '@/features/roadmap/server';
 
 export const PUT = courseRoute(
-  async ({ actor, params, prepared: body }) =>
+  async ({ actor, params, body }) =>
     NextResponse.json(
       await scheduleTeacherUnlock(
         {
@@ -16,7 +16,7 @@ export const PUT = courseRoute(
         roadmapChangePort,
       ),
     ),
-  { prepare: parseJsonObject },
+  { body: true },
 );
 
 export const DELETE = courseRoute(async ({ actor, params }) =>

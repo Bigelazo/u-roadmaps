@@ -144,6 +144,14 @@ test.each([
     error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
   },
   {
+    name: 'unauthenticated User with malformed JSON',
+    session: null,
+    courseCode: 'CC3002',
+    body: '{',
+    status: 401,
+    error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
+  },
+  {
     name: 'unauthenticated User with an invalid Course offering identifier',
     session: null,
     courseCode: '  ',
@@ -181,7 +189,9 @@ test.each([
 ])(
   'refuses $name before invoking the domain operation',
   async ({ session, courseCode, body, status, error }) => {
-    getApplicationSession.mockResolvedValue(session);
+    getApplicationSession.mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 10, session)),
+    );
     findUser.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' });
     const mutation = vi.fn(async () => Response.json({ saved: true }));
     const handler = courseRoute(mutation, { body: true });

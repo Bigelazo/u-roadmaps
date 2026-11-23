@@ -205,7 +205,9 @@ test.for<[Record<string, string>, string]>([
     { kind: 'show-node' },
     'kind debe ser hide-node, delete-node, change-teacher-block o create-dependency.',
   ],
+  [{}, 'kind debe ser hide-node, delete-node, change-teacher-block o create-dependency.'],
   [{ kind: 'hide-node', nodeId: 'not-a-node' }, 'nodeId debe ser un UUID válido.'],
+  [{ kind: 'delete-node', nodeId: 'not-a-node' }, 'nodeId debe ser un UUID válido.'],
   [
     { kind: 'change-teacher-block', operation: 'HIDE' },
     'operation debe ser BLOCK, UNBLOCK o BRANCH_UNLOCK.',

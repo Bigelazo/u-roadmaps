@@ -41,7 +41,7 @@ import {
   type RoadmapSnapshot,
   type StaleChangeImpactReason,
 } from '@/features/roadmap/domain/change-impact';
-import { requireUuid } from '@/shared/validation';
+import { requireOneOf, requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
 import type { ApplicationErrorStatus } from '@/shared/errors/types';
 import { TEACHER_BLOCK_OPERATIONS, type TeacherBlockOperation } from '@/features/roadmap/types';
@@ -572,16 +572,6 @@ type TeacherBlockRequest = { id: string; operation: TeacherBlockOperation };
 
 function teacherBlockChange({ id, operation }: TeacherBlockRequest) {
   return { kind: 'change-teacher-block', nodeId: requireUuid(id, 'nodeId'), operation } as const;
-}
-
-function requireOneOf<Value extends string>(
-  value: unknown,
-  field: string,
-  allowed: readonly Value[],
-) {
-  if (allowed.includes(value as Value)) return value as Value;
-  const options = new Intl.ListFormat('es', { type: 'disjunction' }).format(allowed);
-  throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser ${options}.`);
 }
 
 const changeParsers: Record<ChangeWithImpact['kind'], (input: JsonObject) => ChangeWithImpact> = {

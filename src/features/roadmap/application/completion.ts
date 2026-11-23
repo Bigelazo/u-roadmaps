@@ -27,26 +27,40 @@ import {
 
 type CompletionKind = RoadmapCompletionScope['kind'];
 type CompletionContext = Pick<RoadmapReadContext, 'tx' | 'participation' | 'roadmap'>;
+type ScopeSource = Omit<CompletionContext, 'tx'>;
 
-function completionScope(
-  kind: CompletionKind,
-  { participation, roadmap }: Omit<CompletionContext, 'tx'>,
-): RoadmapCompletionScope {
-  return kind === 'COMPLETION'
-    ? { kind, userId: participation.userId, roadmapId: roadmap.id }
-    : { kind, participationId: participation.id, roadmapId: roadmap.id };
-}
+const completionKinds = {
+  COMPLETION: {
+    permissions: { capability: 'complete', access: 'actor' },
+    scope: ({ participation, roadmap }: ScopeSource): RoadmapCompletionScope => ({
+      kind: 'COMPLETION',
+      userId: participation.userId,
+      roadmapId: roadmap.id,
+    }),
+  },
+  SIMULATED_COMPLETION: {
+    permissions: { capability: 'edit', access: 'none' },
+    scope: ({ participation, roadmap }: ScopeSource): RoadmapCompletionScope => ({
+      kind: 'SIMULATED_COMPLETION',
+      participationId: participation.id,
+      roadmapId: roadmap.id,
+    }),
+  },
+} as const;
 
 function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>) {
   return new ApplicationError(403, access.reason, blockedNodeAccessMessage(access));
 }
 
-export async function loadCompletedNodeIdsRequiringAccess(
+async function loadCompletedNodeIdsRequiringAccess(
   context: CompletionContext,
   kind: CompletionKind,
   nodeId: string,
 ) {
-  const completedNodeIds = await loadCompletedNodeIds(context.tx, completionScope(kind, context));
+  const completedNodeIds = await loadCompletedNodeIds(
+    context.tx,
+    completionKinds[kind].scope(context),
+  );
   const accessByNodeId = await loadStudentNodeAccess(context.tx, {
     roadmapId: context.roadmap.id,
     completedNodeIds,
@@ -57,6 +71,14 @@ export async function loadCompletedNodeIdsRequiringAccess(
   return completedNodeIds;
 }
 
+export async function requireNodeAccess(
+  context: CompletionContext,
+  kind: CompletionKind,
+  nodeId: string,
+) {
+  await loadCompletedNodeIdsRequiringAccess(context, kind, nodeId);
+}
+
 async function requireReviewedResources(
   context: CompletionContext,
   kind: CompletionKind,
@@ -64,7 +86,7 @@ async function requireReviewedResources(
 ) {
   const [resources, reviewedResourceIds] = await Promise.all([
     context.tx.resource.findMany({ where: { roadmapNodeId: nodeId }, select: { id: true } }),
-    loadReviewedResourceIds(context.tx, completionScope(kind, context), nodeId),
+    loadReviewedResourceIds(context.tx, completionKinds[kind].scope(context), nodeId),
   ]);
   const pending = unreviewedResourceIds(
     resources.map(({ id }) => id),
@@ -79,7 +101,7 @@ async function projectStudentProgress(
   { tx, participation, roadmap }: RoadmapReadContext,
   identifier: RoadmapParticipant['identifier'],
 ) {
-  const scope = completionScope(kind, { participation, roadmap });
+  const scope = completionKinds[kind].scope({ participation, roadmap });
   const [data, completedNodeIds, reviewedResourceIds] = await Promise.all([
     loadRoadmapProjectionData(tx, { roadmap }),
     loadCompletedNodeIds(tx, scope),
@@ -104,17 +126,12 @@ export function readSimulatedRoadmap(participant: RoadmapParticipant) {
   );
 }
 
-const completionPermissions = {
-  COMPLETION: { capability: 'complete', access: 'actor' },
-  SIMULATED_COMPLETION: { capability: 'edit', access: 'none' },
-} as const;
-
 function completionCommand<Result>(
   kind: CompletionKind,
   record: (context: CompletionContext, nodeId: string) => Promise<Result>,
 ) {
   return roadmapCommand({
-    ...completionPermissions[kind],
+    ...completionKinds[kind].permissions,
     lock: 'key-share',
     parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
     run: async ({ input: nodeId, ...context }) => {
