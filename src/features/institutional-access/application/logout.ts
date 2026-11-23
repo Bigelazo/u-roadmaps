@@ -3,6 +3,9 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { vtiLoginStateCookieNames } from '@/integrations/vti/server';
 import { siteUrl } from '@/shared/server/environment/site-url';
+import { getApplicationSession } from '@/shared/server/session';
+import { isUuid } from '@/shared/validation';
+import { revokeUserSessions } from '../infrastructure/user';
 
 const authenticationCookieNames = [
   'next-auth.session-token',
@@ -13,7 +16,13 @@ const authenticationCookieNames = [
   ...vtiLoginStateCookieNames,
 ];
 
-export function endInstitutionalSession(request: Request) {
+export async function endInstitutionalSession(request: Request) {
+  try {
+    const userId = (await getApplicationSession())?.user?.id;
+    if (isUuid(userId)) await revokeUserSessions(userId);
+  } catch (error) {
+    console.error('[logout] no se pudieron revocar las sesiones', error);
+  }
   const response = NextResponse.redirect(siteUrl('/', request), 303);
   for (const name of authenticationCookieNames) {
     if (name.startsWith('__Secure-') || name.startsWith('__Host-')) {

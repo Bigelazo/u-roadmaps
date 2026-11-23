@@ -6,6 +6,7 @@ declare module 'next-auth' {
     user: {
       id: string;
       useLocalFixtureData?: boolean;
+      issuedAt?: number;
     } & DefaultSession['user'];
   }
 }

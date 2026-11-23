@@ -1355,6 +1355,10 @@ test('logout requires confirmation and removes the application session', async (
 }) => {
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
+  const sessionBeforeLogout = (await page.context().cookies()).find(
+    (cookie) => cookie.name === 'next-auth.session-token',
+  );
+  expect(sessionBeforeLogout).toBeDefined();
 
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
   const dialog = page.getByRole('alertdialog', { name: '¿Cerrar sesión?' });
@@ -1374,6 +1378,11 @@ test('logout requires confirmation and removes the application session', async (
   await expect(page.context().cookies()).resolves.not.toContainEqual(
     expect.objectContaining({ name: 'next-auth.session-token' }),
   );
+
+  const replayed = await page.request.get('/api/notifications', {
+    headers: { cookie: `next-auth.session-token=${sessionBeforeLogout!.value}` },
+  });
+  expect(replayed.status()).toBe(401);
 });
 
 test('1440px visual references cover the public shell states in each browser', async ({

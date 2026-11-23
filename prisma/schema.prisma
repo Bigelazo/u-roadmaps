@@ -193,6 +193,7 @@ model User {
   teachingTutorialOpenedAt      DateTime?                     @db.Timestamptz(3)
   // When the first-visit tutorial invitation was shown, or any tutorial was first opened.
   tutorialInvitationShownAt     DateTime?                     @db.Timestamptz(3)
+  sessionsRevokedAt             DateTime?                     @db.Timestamptz(3)
   notices                       RoadmapNotice[]
   noticeEffects                 NoticeDeliveryEffect[]
   roadmapVisits                 RoadmapVisit[]
