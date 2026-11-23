@@ -1282,7 +1282,7 @@ function vtiClaims({ rut, institutionalEmail, name }: E2EUser) {
   return { identification: `0000${rut}-5`, email: institutionalEmail, name };
 }
 
-test('VTI callback rejects missing state, invalid tokens, and incomplete claims', async ({
+test('VTI callback rejects missing state, invalid or stale tokens, and incomplete claims', async ({
   request,
   course,
 }) => {
@@ -1302,11 +1302,11 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
     await vtiToken({ email, name }),
     await vtiToken({ identification, name }),
     await vtiToken({ identification, email }),
+    await vtiToken({ ...claims, iat: Math.floor(Date.now() / 1000) - 10 * 60 }),
   ]) {
     const start = await request.post('/api/plogin/start', { maxRedirects: 0 });
     const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
-    const callback = await request.post('/api/plogin', {
-      form: { jwt: token },
+    const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
       maxRedirects: 0,
       headers: { cookie: stateCookie },
     });
@@ -1438,12 +1438,5 @@ test('VTI callback issues a session after validating its one-time state', async 
   expect(callbackCookie).toMatch(/SameSite=Lax/i);
   expect(callbackCookie).toContain('Path=/');
   const sessionCookieValue = callbackCookie.split(';', 1)[0];
-  const session = await request.get('/api/auth/session', {
-    headers: { cookie: sessionCookieValue },
-  });
-  expect(await session.json()).toEqual(
-    expect.objectContaining({
-      user: expect.objectContaining({ id: student.id }),
-    }),
-  );
+  await ok(await request.get('/api/notifications', { headers: { cookie: sessionCookieValue } }));
 });

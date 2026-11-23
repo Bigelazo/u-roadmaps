@@ -11,7 +11,7 @@ export type VtiIdentity = Readonly<{
 
 export class VtiAuthenticationError extends Error {
   constructor(
-    readonly status: 400 | 403 | 500,
+    readonly status: 400 | 500,
     readonly code: VtiAuthenticationErrorCode,
     message: string,
     readonly details?: Record<string, unknown>,

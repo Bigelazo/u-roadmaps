@@ -2,7 +2,6 @@ import 'server-only';
 
 import { jwtVerify } from 'jose';
 import { prisma } from '@/shared/server/db';
-import { siteOrigin } from '@/shared/server/environment/site-url';
 import {
   invalidVtiClaims,
   normalizeInstitutionalEmail,
@@ -42,9 +41,22 @@ function parseLoginUrl(value: string | undefined): URL | null {
   }
 }
 
-function isCrossSiteCallback(request: Request) {
-  const origin = request.headers.get('origin');
-  return origin !== null && origin !== siteOrigin(request).origin;
+const vtiTokenMaxAge = 5 * 60;
+const vtiClockTolerance = 30;
+const reportedVtiClaims = ['iat', 'exp', 'nbf', 'jti', 'iss', 'aud', 'state', 'nonce'];
+
+function isStale(issuedAt: unknown) {
+  return (
+    typeof issuedAt === 'number' &&
+    Date.now() / 1000 - issuedAt > vtiTokenMaxAge + vtiClockTolerance
+  );
+}
+
+function reportVtiClaimPresence(payload: Record<string, unknown>) {
+  console.info(
+    '[plogin] claims estándar del token VTI',
+    Object.fromEntries(reportedVtiClaims.map((claim) => [claim, claim in payload])),
+  );
 }
 
 export async function startVtiLogin() {
@@ -61,39 +73,30 @@ export async function startVtiLogin() {
 }
 
 export async function authenticateVtiCallback(
-  request: Request,
   state: string | undefined,
-  rawToken: FormDataEntryValue | null,
+  rawToken: string | null,
 ): Promise<VtiIdentity> {
-  if (request.method === 'POST' && isCrossSiteCallback(request)) {
-    throw new VtiAuthenticationError(
-      403,
-      'INVALID_AUTH_CALLBACK',
-      'No fue posible completar la autenticación.',
-      {
-        reason: 'cross-site-origin',
-        origin: request.headers.get('origin'),
-        expected: siteOrigin(request).origin,
-      },
-    );
-  }
   if (!state) throw invalidCallback({ reason: 'missing-state-cookie' });
 
   const consumed = await prisma.vtiLoginTransaction.deleteMany({
     where: { state, expiresAt: { gt: new Date() } },
   });
   if (consumed.count !== 1) throw invalidCallback({ reason: 'unknown-or-expired-state' });
-  if (typeof rawToken !== 'string' || !rawToken.trim()) {
+  if (!rawToken?.trim()) {
     throw invalidCallback({ reason: 'missing-token' });
   }
 
   let payload;
   try {
-    ({ payload } = await jwtVerify(rawToken, vtiSecret(), { algorithms: ['HS256'] }));
+    ({ payload } = await jwtVerify(rawToken, vtiSecret(), {
+      algorithms: ['HS256'],
+      clockTolerance: vtiClockTolerance,
+    }));
   } catch (error) {
     if (error instanceof VtiAuthenticationError) throw error;
     throw invalidCallback({ reason: 'invalid-token-signature' });
   }
+  if (isStale(payload.iat)) throw invalidCallback({ reason: 'stale-token' });
   const invalidClaimsError = (claim: string): never => {
     throw new VtiAuthenticationError(
       400,
@@ -115,6 +118,7 @@ export async function authenticateVtiCallback(
     () => invalidClaimsError('name'),
   );
 
+  reportVtiClaimPresence(payload);
   return {
     rut,
     institutionalEmail,

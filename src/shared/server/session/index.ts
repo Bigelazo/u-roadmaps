@@ -9,7 +9,6 @@ export const authOptions: NextAuthOptions = {
   secret: sessionSecret,
   session: { strategy: 'jwt' },
   providers: [],
-  pages: { signIn: '/api/plogin/start' },
   callbacks: {
     async session({ session, token }) {
       if (session.user && token.sub) {
