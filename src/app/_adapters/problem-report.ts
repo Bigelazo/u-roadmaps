@@ -46,17 +46,31 @@ export function parseProblemReport(body: Record<string, unknown>): ProblemReport
 
 type MailSettings = Readonly<{ transportUrl: string; sender: string; recipient: string }>;
 
+function problemReportsUnavailable() {
+  return new ApplicationError(
+    503,
+    'PROBLEM_REPORTS_UNAVAILABLE',
+    'Los reportes no están disponibles por ahora. Inténtalo más tarde.',
+  );
+}
+
 function mailSettings(): MailSettings {
   const recipient = process.env.PROBLEM_REPORT_EMAIL;
   const transportUrl = process.env.SMTP_URL;
   const sender = process.env.SMTP_FROM;
-  if (!recipient || !transportUrl || !sender)
-    throw new ApplicationError(
-      503,
-      'PROBLEM_REPORTS_UNAVAILABLE',
-      'Los reportes no están disponibles por ahora. Inténtalo más tarde.',
-    );
+  if (!recipient || !transportUrl || !sender) throw problemReportsUnavailable();
   return { recipient, transportUrl, sender };
+}
+
+const reportWindowMs = 60 * 60 * 1000;
+const reportsPerWindow = 10;
+let reportWindow = { startedAt: 0, sent: 0 };
+
+function claimReportSlot() {
+  const now = Date.now();
+  if (now - reportWindow.startedAt >= reportWindowMs) reportWindow = { startedAt: now, sent: 0 };
+  if (reportWindow.sent >= reportsPerWindow) throw problemReportsUnavailable();
+  reportWindow.sent += 1;
 }
 
 function problemReportText(report: ProblemReport) {
@@ -73,6 +87,7 @@ function problemReportText(report: ProblemReport) {
 
 export async function sendProblemReport(report: ProblemReport) {
   const { recipient, transportUrl, sender } = mailSettings();
+  claimReportSlot();
   const transport = nodemailer.createTransport(transportUrl);
   try {
     await transport.sendMail({

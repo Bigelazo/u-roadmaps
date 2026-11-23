@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 
 const sendMail = vi.hoisted(() => vi.fn());
 
@@ -31,7 +31,18 @@ function report(body: unknown) {
   );
 }
 
+const reportWindowMs = 60 * 60 * 1000;
+
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(() => {
+  vi.setSystemTime(Date.now() + reportWindowMs);
   sendMail.mockReset().mockResolvedValue({});
   vi.stubEnv('PROBLEM_REPORT_EMAIL', 'reportes@example.test');
   vi.stubEnv('SMTP_URL', 'smtp://localhost:2525');
@@ -83,4 +94,19 @@ test('reports a delivery failure without losing the reason in the logs', async (
   const response = await report(validReport);
 
   expect(response.status).toBe(502);
+});
+
+test('accepts ten reports per hour and turns away the rest until the window elapses', async () => {
+  for (let sent = 0; sent < 10; sent += 1) expect((await report(validReport)).status).toBe(201);
+
+  const capped = await report(validReport);
+
+  expect(capped.status).toBe(503);
+  expect(await capped.json()).toMatchObject({ error: { code: 'PROBLEM_REPORTS_UNAVAILABLE' } });
+  expect(sendMail).toHaveBeenCalledTimes(10);
+
+  vi.setSystemTime(Date.now() + reportWindowMs);
+
+  expect((await report(validReport)).status).toBe(201);
+  expect(sendMail).toHaveBeenCalledTimes(11);
 });

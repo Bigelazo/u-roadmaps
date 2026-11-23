@@ -4,6 +4,9 @@ const nextConfig = {
     '/*': ['./src/generated/prisma/**'],
   },
   reactStrictMode: true,
+  images: {
+    unoptimized: true,
+  },
   experimental: {
     proxyClientMaxBodySize: '11mb',
   },

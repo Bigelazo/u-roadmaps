@@ -16,6 +16,10 @@ const readUserOncePerRequest = cache((userId: string) =>
   prisma.user.findUnique({ where: { id: userId } }),
 );
 
+function issuedBeforeRevocation(issuedAtSeconds: number, sessionsRevokedAt: Date | null) {
+  return Boolean(sessionsRevokedAt) && issuedAtSeconds * 1000 <= Number(sessionsRevokedAt);
+}
+
 export async function resolveSessionUser(
   session: Session | null,
   { sharedAcademicHistory = false }: { sharedAcademicHistory?: boolean } = {},
@@ -23,15 +27,16 @@ export async function resolveSessionUser(
   const userId = session?.user?.id;
   if (!isUuid(userId)) return null;
   const user = await readUserOncePerRequest(userId);
-  return (
-    user && {
-      ...user,
-      ucampus:
-        session?.user?.useLocalFixtureData === true
-          ? { ...localFixtureUCampus, getPersonNames: readFixtureParticipantNames }
-          : createMufasaUCampus({ sharedAcademicHistory }),
-    }
-  );
+  if (!user || issuedBeforeRevocation(session?.user?.issuedAt ?? 0, user.sessionsRevokedAt)) {
+    return null;
+  }
+  return {
+    ...user,
+    ucampus:
+      session?.user?.useLocalFixtureData === true
+        ? { ...localFixtureUCampus, getPersonNames: readFixtureParticipantNames }
+        : createMufasaUCampus({ sharedAcademicHistory }),
+  };
 }
 
 export async function requireAuthenticatedUser() {
