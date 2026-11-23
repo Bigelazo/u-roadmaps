@@ -4,3 +4,5 @@ allowBuilds:
   lefthook: false
   prisma: true
   unrs-resolver: true
+overrides:
+  '@prisma/config>effect': ^3.22.1
