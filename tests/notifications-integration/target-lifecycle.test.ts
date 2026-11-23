@@ -284,8 +284,7 @@ describe.each(targets)(
       const hidden = await seeded(course, edits, { isVisible: false });
       await blocked.set(first);
       await hidden.set(first);
-      const toldOfBlocked =
-        audience === 'visible' ? [{ data: { noticeTarget, nodeId: blocked.node.id } }] : [];
+      const toldOfBlocked = audience === 'visible' ? [blocked.notice(known, first)] : [];
       for (const recipient of [course.studentId, course.classmateId])
         expect(await pendingNotices(recipient, course.roadmapId)).toMatchObject(toldOfBlocked);
       await edits.unblock(blocked.node.id);
@@ -299,8 +298,7 @@ describe.each(targets)(
     }) => {
       const edits = teacherEdits(course);
       const { node, set, notice } = await seeded(course, edits);
-      const setVisible = (isVisible: boolean) =>
-        prisma.roadmapNode.update({ where: { id: node.id }, data: { isVisible } });
+      const setVisible = (isVisible: boolean) => edits.update(node.id, { isVisible });
       await set(first);
       const [pending] = await ownTargets(course.studentId, course);
       for (const { conceal, reveal, shown } of [
@@ -313,9 +311,7 @@ describe.each(targets)(
       ]) {
         await conceal();
         expect(await ownTargets(course.studentId, course)).toHaveLength(shown);
-        expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({
-          count: (await pendingNotices(course.studentId, course.roadmapId)).length,
-        });
+        expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: shown + 1 });
         await reveal();
         expect(await ownTargets(course.studentId, course)).toMatchObject([
           { id: pending.id, ...notice(known, first) },

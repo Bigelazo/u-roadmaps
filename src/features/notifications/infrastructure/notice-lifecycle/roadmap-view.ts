@@ -98,7 +98,7 @@ function collection<Row>(key: (row: NoInfer<Row>) => string, load: () => Promise
   let rows: Promise<readonly Row[]> | undefined;
   let index: Promise<ReadonlyMap<string, Row>> | undefined;
   const single = new Map<string, Promise<Row | null>>();
-  const find = (id: string, one: () => Promise<Row | null>) => {
+  const uncached = (id: string, one: () => Promise<Row | null>) => {
     if (!rows) return one();
     index ??= rows.then((all) => firstBy(all, key));
     return index.then((found) => found.get(id) ?? null);
@@ -106,8 +106,9 @@ function collection<Row>(key: (row: NoInfer<Row>) => string, load: () => Promise
   return {
     all: () => (rows ??= load()),
     loaded: () => rows,
-    find,
-    cached: (id: string, one: () => Promise<Row | null>) => find(id, () => memo(single, id, one)),
+    uncached,
+    cached: (id: string, one: () => Promise<Row | null>) =>
+      uncached(id, () => memo(single, id, one)),
   };
 }
 
@@ -235,7 +236,7 @@ export function roadmapView(
     },
     dependencies: dependencies.all,
     dependency: (sourceNodeId, targetNodeId) =>
-      dependencies.find(dependencyKey({ sourceNodeId, targetNodeId }), () =>
+      dependencies.uncached(dependencyKey({ sourceNodeId, targetNodeId }), () =>
         transaction.dependency.findFirst({
           where: { sourceNodeId, targetNodeId, sourceNode: { roadmapId } },
           select: dependencySelect,

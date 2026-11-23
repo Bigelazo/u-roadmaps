@@ -11,7 +11,7 @@ import {
 import { PRESENT, nodeCreationRef, nodeDeletionRef } from '../../application/absorption';
 import { setKnownValues, type KnownValueUpdate, type RecipientRoadmap } from './known-values';
 import { roadmapView, type ParticipantAccessReader } from './roadmap-view';
-import { reconcileFor } from './reconcile';
+import { reconcileFor, valueToCompare } from './reconcile';
 import { lazyNoticeCourseContext } from './course-context';
 
 export type TargetSnapshot = NoticeTargetRef &
@@ -85,7 +85,7 @@ export async function recognizeTargetSnapshots(
   const recognized = snapshots.map(targetSnapshot);
   const roadmap = roadmapView(transaction, roadmapId, readAccess);
   if (recognized.length) await roadmap.preload();
-  const reconciler = reconcileFor(transaction, {
+  const { hasPending, reconcile } = reconcileFor(transaction, {
     identity,
     roadmap,
     courseContext: lazyNoticeCourseContext(transaction, roadmapId),
@@ -99,7 +99,7 @@ export async function recognizeTargetSnapshots(
     unannouncedKnownValues.clear();
   };
   for (const { snapshot, target, descriptor } of recognized) {
-    const knownValue = {
+    const recognizedValue = {
       target,
       knownValue: snapshot.currentValue,
       context: targetContext(snapshot.context),
@@ -111,7 +111,7 @@ export async function recognizeTargetSnapshots(
           descriptor.keepsKnownValue !== false &&
           (await descriptor.current(target, roadmap, recipientId))
         )
-          unannouncedKnownValues.set(snapshot.targetKey, knownValue);
+          unannouncedKnownValues.set(snapshot.targetKey, recognizedValue);
         continue;
       }
     }
@@ -134,13 +134,13 @@ export async function recognizeTargetSnapshots(
     }
     if (!(await descriptor.current(target, roadmap, recipientId))) continue;
     if (descriptor.keepsKnownValue !== false)
-      await setKnownValues(transaction, identity, [knownValue]);
-    if (snapshot.onlyPending && !(await reconciler.pending(snapshot.targetKey))) continue;
-    await reconciler.reconcile({
+      await setKnownValues(transaction, identity, [recognizedValue]);
+    if (snapshot.onlyPending && !(await hasPending(snapshot.targetKey))) continue;
+    await reconcile({
       descriptor,
       target,
       fallbackKnown: snapshot.currentValue,
-      fallbackContext: knownValue.context,
+      fallbackContext: recognizedValue.context,
     });
   }
   await recordUnannouncedKnownValues();
@@ -154,7 +154,7 @@ export async function recognizeTargetSnapshots(
     const deletion = nodeDeletionRef(snapshot.nodeId);
     const deletionDescriptor = descriptorForNoticeTarget(deletion.noticeTarget);
     if (!deletionDescriptor) continue;
-    await reconciler.reconcile({
+    await reconcile({
       descriptor: deletionDescriptor,
       target: deletion,
       fallbackKnown: PRESENT,
@@ -169,7 +169,7 @@ export async function recognizeTargetSnapshots(
       scope: descriptor.scope === 'node' ? { nodeId: snapshot.nodeId } : {},
       captured,
       roadmap,
-      reconcile: reconciler.reconcile,
+      reconcile,
     });
   }
   return acknowledged;
@@ -224,10 +224,7 @@ async function reconcileUncaptured(
     };
     if (!pending.has(known.targetKey)) {
       const current = await descriptor.current(target, roadmap, identity.recipientId);
-      const value = descriptor.currentAtEdit
-        ? (known.currentValue ?? known.knownValue)
-        : current?.value;
-      if (current && value === known.knownValue) continue;
+      if (current && valueToCompare(descriptor, known, current) === known.knownValue) continue;
     }
     await input.reconcile({ descriptor, target, fallbackKnown: known.knownValue });
   }

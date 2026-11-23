@@ -50,7 +50,13 @@ export function reconcileFor(
   },
 ) {
   return {
-    pending: (targetKey: string) => pendingNotice(transaction, scope.identity, targetKey),
+    hasPending: async (targetKey: string) =>
+      Boolean(
+        await transaction.roadmapNotice.findFirst({
+          where: { ...scope.identity, targetKey, acknowledgedAt: null },
+          select: { id: true },
+        }),
+      ),
     reconcile: (
       input: Omit<TargetReconciliationInput, ReconciliationScope | 'eventId' | 'occurredAt'>,
     ) =>
@@ -62,6 +68,12 @@ export function reconcileFor(
       }),
   };
 }
+
+export const valueToCompare = (
+  descriptor: NoticeTargetDescriptor,
+  known: Readonly<{ knownValue: string; currentValue: string | null }>,
+  current: Readonly<{ value: string }>,
+) => (descriptor.currentAtEdit ? (known.currentValue ?? known.knownValue) : current.value);
 
 export async function reconcileNoticeTarget(
   transaction: Prisma.TransactionClient,
@@ -163,12 +175,15 @@ async function reconcileOne(
   const { descriptor, identity, target } = input;
   const current = await descriptor.current(target, input.roadmap, identity.recipientId);
   const pending = await pendingNotice(transaction, identity, target.targetKey);
-  if (!current) {
+  const withdraw = async () => {
     if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
+    return null;
+  };
+  if (!current) {
     await transaction.noticeKnownValue.deleteMany({
       where: { ...identity, targetKey: target.targetKey },
     });
-    return null;
+    return withdraw();
   }
   const known =
     descriptor.keepsKnownValue === false
@@ -185,13 +200,8 @@ async function reconcileOne(
           input.fallbackContext,
         );
   const { knownValue } = known;
-  const currentValue = descriptor.currentAtEdit
-    ? (known.currentValue ?? knownValue)
-    : current.value;
-  if (currentValue === knownValue) {
-    if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
-    return null;
-  }
+  const currentValue = valueToCompare(descriptor, known, current);
+  if (currentValue === knownValue) return withdraw();
   const pendingValues = pending && storedTargetValues(pending.data)?.values;
   const unchanged =
     pendingValues?.knownValue === knownValue && pendingValues.currentValue === currentValue;

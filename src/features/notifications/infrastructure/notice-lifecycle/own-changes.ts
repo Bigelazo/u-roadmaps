@@ -41,7 +41,7 @@ export async function recordOwnChanges(
 ) {
   const identity = { recipientId: changes.actorId, roadmapId: changes.roadmapId };
   if (promoted(changes)) return rebaselineStaffAccess(transaction, identity, roadmap);
-  const { pending, reconcile } = reconcileFor(transaction, {
+  const { hasPending, reconcile } = reconcileFor(transaction, {
     identity,
     roadmap,
     courseContext: lazyNoticeCourseContext(transaction, changes.roadmapId),
@@ -50,28 +50,31 @@ export async function recordOwnChanges(
   });
   for (const { descriptor, fact, target, previousValue } of ownTargets) {
     if (descriptor.keepsKnownValue === false) continue;
-    if (!(await pending(target.targetKey))) {
-      const current = await descriptor.current(target, roadmap, identity.recipientId);
-      if (!current) continue;
-      const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
-      if (
-        await advanceKnownValue(
-          transaction,
-          identity,
-          target,
-          previousValue,
-          value,
-          current.context,
-        )
-      )
-        continue;
+    const reconcileTarget = () =>
+      reconcile({
+        descriptor,
+        target,
+        fallbackKnown: previousValue,
+        fallbackContext: descriptor.previousContext?.(fact),
+      });
+    if (await hasPending(target.targetKey)) {
+      await reconcileTarget();
+      continue;
     }
-    await reconcile({
-      descriptor,
-      target,
-      fallbackKnown: previousValue,
-      fallbackContext: descriptor.previousContext?.(fact),
-    });
+    const current = await descriptor.current(target, roadmap, identity.recipientId);
+    if (!current) continue;
+    const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
+    if (
+      !(await advanceKnownValue(
+        transaction,
+        identity,
+        target,
+        previousValue,
+        value,
+        current.context,
+      ))
+    )
+      await reconcileTarget();
   }
 }
 

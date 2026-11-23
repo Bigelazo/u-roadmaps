@@ -61,7 +61,9 @@ export async function recordNoticeTargets(
     const previousValue = descriptor.previousValue(fact);
     const previousContext = descriptor.previousContext?.(fact);
     const factRecipients = descriptor.factRecipients?.(fact);
-    const knowers = factRecipients ?? (await descriptor.knowers(fact, changes, roadmap));
+    const knowers = factRecipients ?? [
+      ...new Set(await descriptor.knowers(fact, changes, roadmap)),
+    ];
     const atEdit = descriptor.currentAtEdit?.(fact);
     if (atEdit?.recipientIds.some((recipientId) => !knowers.includes(recipientId)))
       throw new Error(`${descriptor.noticeTarget}: currentAtEdit names a non-knower.`);
@@ -71,7 +73,7 @@ export async function recordNoticeTargets(
       target,
       knownValue: previousValue,
       context: previousContext ?? {},
-      currentValue: edited.has(recipientId) ? atEdit!.value : undefined,
+      currentValue: atEdit && edited.has(recipientId) ? atEdit.value : undefined,
     }));
     if (factRecipients) factRecipientKnownValues.push(...knownValues);
     else await recordKnownValues(transaction, changes.roadmapId, knownValues);
