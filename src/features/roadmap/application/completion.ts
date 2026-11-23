@@ -1,6 +1,5 @@
 import 'server-only';
 
-import type { Prisma } from '@/shared/server/db';
 import type { StudentNodeAccess } from '@/features/roadmap/types';
 import { ApplicationError } from '@/shared/errors/server';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
@@ -10,7 +9,12 @@ import {
 } from '@/features/roadmap/domain/resource-review';
 import { requireUuid } from '@/shared/validation';
 import { nodeNotFound } from './errors';
-import { roadmapCommand, roadmapRead, type RoadmapParticipant } from './roadmap-command';
+import {
+  roadmapCommand,
+  roadmapRead,
+  type RoadmapParticipant,
+  type RoadmapReadContext,
+} from './roadmap-command';
 import {
   loadRoadmapProjectionData,
   loadCompletedNodeIds,
@@ -21,37 +25,68 @@ import {
   type RoadmapCompletionScope,
 } from '@/features/roadmap/application/completion-projection';
 
-type StudentNodeAccessInput = { userId: string; roadmapId: string; nodeId: string };
+type CompletionKind = RoadmapCompletionScope['kind'];
+type CompletionContext = Pick<RoadmapReadContext, 'tx' | 'participation' | 'roadmap'>;
+type ScopeSource = Omit<CompletionContext, 'tx'>;
+
+const completionKinds = {
+  COMPLETION: {
+    permissions: { capability: 'complete', access: 'actor' },
+    scope: ({ participation, roadmap }: ScopeSource): RoadmapCompletionScope => ({
+      kind: 'COMPLETION',
+      userId: participation.userId,
+      roadmapId: roadmap.id,
+    }),
+  },
+  SIMULATED_COMPLETION: {
+    permissions: { capability: 'edit', access: 'none' },
+    scope: ({ participation, roadmap }: ScopeSource): RoadmapCompletionScope => ({
+      kind: 'SIMULATED_COMPLETION',
+      participationId: participation.id,
+      roadmapId: roadmap.id,
+    }),
+  },
+} as const;
 
 function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>) {
   return new ApplicationError(403, access.reason, blockedNodeAccessMessage(access));
 }
 
-async function requireNodeAccess(
-  transaction: Prisma.TransactionClient,
-  {
-    roadmapId,
-    nodeId,
-    completedNodeIds,
-  }: { roadmapId: string; nodeId: string; completedNodeIds: ReadonlySet<string> },
+async function loadCompletedNodeIdsRequiringAccess(
+  context: CompletionContext,
+  kind: CompletionKind,
+  nodeId: string,
 ) {
-  const accessByNodeId = await loadStudentNodeAccess(transaction, {
-    roadmapId,
+  const completedNodeIds = await loadCompletedNodeIds(
+    context.tx,
+    completionKinds[kind].scope(context),
+  );
+  const accessByNodeId = await loadStudentNodeAccess(context.tx, {
+    roadmapId: context.roadmap.id,
     completedNodeIds,
   });
   const access = accessByNodeId.get(nodeId);
   if (!access) throw nodeNotFound();
   if (access.status === 'BLOCKED') throw blockedNodeAccessError(access);
+  return completedNodeIds;
+}
+
+export async function requireNodeAccess(
+  context: CompletionContext,
+  kind: CompletionKind,
+  nodeId: string,
+) {
+  await loadCompletedNodeIdsRequiringAccess(context, kind, nodeId);
 }
 
 async function requireReviewedResources(
-  transaction: Prisma.TransactionClient,
-  scope: RoadmapCompletionScope,
+  context: CompletionContext,
+  kind: CompletionKind,
   nodeId: string,
 ) {
   const [resources, reviewedResourceIds] = await Promise.all([
-    transaction.resource.findMany({ where: { roadmapNodeId: nodeId }, select: { id: true } }),
-    loadReviewedResourceIds(transaction, scope, nodeId),
+    context.tx.resource.findMany({ where: { roadmapNodeId: nodeId }, select: { id: true } }),
+    loadReviewedResourceIds(context.tx, completionKinds[kind].scope(context), nodeId),
   ]);
   const pending = unreviewedResourceIds(
     resources.map(({ id }) => id),
@@ -61,129 +96,81 @@ async function requireReviewedResources(
     throw new ApplicationError(409, 'UNREVIEWED_RESOURCES', unreviewedResourcesMessage);
 }
 
-async function loadProgress(transaction: Prisma.TransactionClient, scope: RoadmapCompletionScope) {
-  const [completedNodeIds, reviewedResourceIds] = await Promise.all([
-    loadCompletedNodeIds(transaction, scope),
-    loadReviewedResourceIds(transaction, scope),
+async function projectStudentProgress(
+  kind: CompletionKind,
+  { tx, participation, roadmap }: RoadmapReadContext,
+  identifier: RoadmapParticipant['identifier'],
+) {
+  const scope = completionKinds[kind].scope({ participation, roadmap });
+  const [data, completedNodeIds, reviewedResourceIds] = await Promise.all([
+    loadRoadmapProjectionData(tx, { roadmap }),
+    loadCompletedNodeIds(tx, scope),
+    loadReviewedResourceIds(tx, scope),
   ]);
-  return { completedNodeIds, reviewedResourceIds };
-}
-
-export async function requireStudentNodeAccess(
-  transaction: Prisma.TransactionClient,
-  { userId, roadmapId, nodeId }: StudentNodeAccessInput,
-) {
-  const completedNodeIds = await loadCompletedNodeIds(transaction, {
-    kind: 'COMPLETION',
-    userId,
-    roadmapId,
-  });
-  return requireNodeAccess(transaction, {
-    roadmapId,
-    nodeId,
-    completedNodeIds,
-  });
-}
-
-export async function requireCanvasPreviewNodeAccess(
-  transaction: Prisma.TransactionClient,
-  {
-    participationId,
-    roadmapId,
-    nodeId,
-  }: { participationId: string; roadmapId: string; nodeId: string },
-) {
-  const completedNodeIds = await loadCompletedNodeIds(transaction, {
-    kind: 'SIMULATED_COMPLETION',
-    participationId,
-    roadmapId,
-  });
-  return requireNodeAccess(transaction, { roadmapId, nodeId, completedNodeIds });
+  return projectStudentRoadmap(data, identifier, { completedNodeIds, reviewedResourceIds });
 }
 
 export function readRoadmapForParticipant(participant: RoadmapParticipant) {
-  return roadmapRead(participant, 'read', async ({ tx, participation, roadmap }) => {
-    if (participation.role === 'TEACHER') {
-      const data = await loadRoadmapProjectionData(tx, { roadmap });
+  return roadmapRead(participant, 'read', async (context) => {
+    if (context.participation.role === 'TEACHER') {
+      const data = await loadRoadmapProjectionData(context.tx, { roadmap: context.roadmap });
       return projectTeacherRoadmap(data, participant.identifier);
     }
-    const [data, progress] = await Promise.all([
-      loadRoadmapProjectionData(tx, { roadmap }),
-      loadProgress(tx, { kind: 'COMPLETION', userId: participant.userId, roadmapId: roadmap.id }),
-    ]);
-    return projectStudentRoadmap(data, participant.identifier, progress);
+    return projectStudentProgress('COMPLETION', context, participant.identifier);
   });
 }
-
-export const completeNode = roadmapCommand({
-  capability: 'complete',
-  lock: 'key-share',
-  parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
-  access: 'actor',
-  run: async ({ tx, roadmap, actor, input: nodeId }) => {
-    await requireStudentNodeAccess(tx, { userId: actor.userId, roadmapId: roadmap.id, nodeId });
-    const where = { userId_roadmapNodeId: { userId: actor.userId, roadmapNodeId: nodeId } };
-    const existing = await tx.completion.findUnique({ where });
-    if (existing) return { result: existing, facts: [] };
-    await requireReviewedResources(
-      tx,
-      { kind: 'COMPLETION', userId: actor.userId, roadmapId: roadmap.id },
-      nodeId,
-    );
-    const completion = await tx.completion.upsert({
-      where,
-      update: {},
-      create: { userId: actor.userId, roadmapNodeId: nodeId },
-    });
-    return { result: completion, facts: [] };
-  },
-});
 
 export function readSimulatedRoadmap(participant: RoadmapParticipant) {
-  return roadmapRead(participant, 'oversee', async ({ tx, participation, roadmap }) => {
-    const [data, progress] = await Promise.all([
-      loadRoadmapProjectionData(tx, { roadmap }),
-      loadProgress(tx, {
-        kind: 'SIMULATED_COMPLETION',
-        participationId: participation.id,
-        roadmapId: roadmap.id,
-      }),
-    ]);
-    return projectStudentRoadmap(data, participant.identifier, progress);
+  return roadmapRead(participant, 'oversee', (context) =>
+    projectStudentProgress('SIMULATED_COMPLETION', context, participant.identifier),
+  );
+}
+
+function completionCommand<Result>(
+  kind: CompletionKind,
+  record: (context: CompletionContext, nodeId: string) => Promise<Result>,
+) {
+  return roadmapCommand({
+    ...completionKinds[kind].permissions,
+    lock: 'key-share',
+    parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
+    run: async ({ input: nodeId, ...context }) => {
+      const completedNodeIds = await loadCompletedNodeIdsRequiringAccess(context, kind, nodeId);
+      if (!completedNodeIds.has(nodeId)) await requireReviewedResources(context, kind, nodeId);
+      return { result: await record(context, nodeId), facts: [] };
+    },
   });
 }
 
-export const completeSimulatedNode = roadmapCommand({
-  capability: 'edit',
-  lock: 'key-share',
-  parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
-  access: 'none',
-  run: async ({ tx, roadmap, participation, input: nodeId }) => {
-    const scope = {
-      kind: 'SIMULATED_COMPLETION',
-      participationId: participation.id,
-      roadmapId: roadmap.id,
-    } as const;
-    const completedNodeIds = await loadCompletedNodeIds(tx, scope);
-    await requireNodeAccess(tx, { roadmapId: roadmap.id, nodeId, completedNodeIds });
-    if (!completedNodeIds.has(nodeId)) await requireReviewedResources(tx, scope, nodeId);
+export const completeNode = completionCommand(
+  'COMPLETION',
+  ({ tx, participation: { userId } }, roadmapNodeId) =>
+    tx.completion.upsert({
+      where: { userId_roadmapNodeId: { userId, roadmapNodeId } },
+      update: {},
+      create: { userId, roadmapNodeId },
+    }),
+);
+
+export const completeSimulatedNode = completionCommand(
+  'SIMULATED_COMPLETION',
+  async ({ tx, participation, roadmap }, roadmapNodeId) => {
     await tx.simulatedCompletion.createMany({
       data: {
         participationId: participation.id,
         courseOfferingId: roadmap.courseOfferingId,
         roadmapId: roadmap.id,
-        roadmapNodeId: nodeId,
+        roadmapNodeId,
       },
       skipDuplicates: true,
     });
-    const completion = await tx.simulatedCompletion.findUniqueOrThrow({
+    return tx.simulatedCompletion.findUniqueOrThrow({
       where: {
-        participationId_roadmapNodeId: { participationId: participation.id, roadmapNodeId: nodeId },
+        participationId_roadmapNodeId: { participationId: participation.id, roadmapNodeId },
       },
     });
-    return { result: completion, facts: [] };
   },
-});
+);
 
 export const resetSimulatedCompletions = roadmapCommand({
   capability: 'edit',

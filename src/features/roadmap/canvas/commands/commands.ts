@@ -43,7 +43,7 @@ type CommandSession<Command extends { kind: string }> = {
   readChangeImpact(command: Command): Promise<ImpactRead<Command['kind']> | null>;
   execute(
     command: Command,
-    previewVersion?: string,
+    changeImpactVersion?: string,
   ): Promise<{ readonly applied: boolean } & ExecutionResult>;
 };
 

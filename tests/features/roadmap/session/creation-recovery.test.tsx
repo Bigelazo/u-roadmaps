@@ -85,8 +85,8 @@ test('a committed creation with a lost response recovers its exact identity and 
   const saved = createInMemoryRoadmapSessionPersistence(roadmap);
   const canvas = await openCanvas({
     ...saved,
-    async execute(command, previewVersion) {
-      const result = await saved.execute(command, previewVersion);
+    async execute(command, changeImpactVersion) {
+      const result = await saved.execute(command, changeImpactVersion);
       if (command.kind === 'add-node') {
         await saved.execute(move(180));
         await saved.execute({
@@ -122,9 +122,9 @@ test('unavailable recovery preserves uncertainty, discards dependent movement an
       if (unavailable) throw new Error('Sin conexión');
       return saved.load();
     },
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (command.kind === 'add-node') creationSubmissions += 1;
-      const result = await saved.execute(command, previewVersion);
+      const result = await saved.execute(command, changeImpactVersion);
       if (command.kind === 'add-node' && loseResponse) {
         loseResponse = false;
         unavailable = true;
@@ -186,13 +186,13 @@ test('a definitive rejection of an uncertain creation resend clears the uncertai
   let creationAttempts = 0;
   const canvas = await openCanvas({
     ...saved,
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (command.kind === 'add-node') {
         creationAttempts += 1;
         if (creationAttempts === 1) throw new UncertainNodeCreationError();
         throw new Error('Rechazo definitivo');
       }
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   });
   await act(async () => {
@@ -269,8 +269,8 @@ test.for(['response', 'rejection'] as const)(
     });
     const canvas = await openCanvas({
       ...saved,
-      async execute(command, previewVersion) {
-        const result = await saved.execute(command, previewVersion);
+      async execute(command, changeImpactVersion) {
+        const result = await saved.execute(command, changeImpactVersion);
         if (command.kind === 'add-resource') {
           started();
           await pending;
@@ -324,9 +324,9 @@ test('a committed placement whose authoritative reload fails discards queued pos
       if (unavailable) throw new Error('Sin conexión');
       return saved.load();
     },
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       await pending;
-      const result = await saved.execute(command, previewVersion);
+      const result = await saved.execute(command, changeImpactVersion);
       unavailable = true;
       return result;
     },
@@ -386,12 +386,12 @@ test('a later authoritative identity lookup confirms the creation without resubm
   let submissions = 0;
   const canvas = await openCanvas({
     ...saved,
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (command.kind === 'add-node') {
         submissions += 1;
         throw new UncertainNodeCreationError();
       }
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   });
   await act(async () => {
@@ -451,8 +451,8 @@ test('leaving during uncertain identity recovery suppresses attachment continuat
       }
       return saved.load();
     },
-    async execute(command, previewVersion) {
-      const result = await saved.execute(command, previewVersion);
+    async execute(command, changeImpactVersion) {
+      const result = await saved.execute(command, changeImpactVersion);
       if (command.kind === 'add-node') {
         recovering = true;
         throw new UncertainNodeCreationError();
@@ -520,9 +520,9 @@ test('continuing a creation already found by identity preserves current position
       }
       return saved.load();
     },
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (command.kind === 'add-node') throw new UncertainNodeCreationError();
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   };
   const view = render(
@@ -573,8 +573,8 @@ test.for(['known identity', 'server replay'] as const)(
           if (unavailable) throw new Error('Sin conexión');
           return saved.load();
         },
-        async execute(command, previewVersion) {
-          const result = await saved.execute(command, previewVersion);
+        async execute(command, changeImpactVersion) {
+          const result = await saved.execute(command, changeImpactVersion);
           if (command.kind === 'add-node') {
             if (first) {
               first = false;

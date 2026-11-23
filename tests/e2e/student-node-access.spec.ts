@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, ok, toast } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
-import { changeTeacherBlock, deleteNode, hideNode } from './previewed-writes';
+import { changeTeacherBlock, deleteNode, hideNode } from './confirmed-actions';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -25,18 +25,18 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
     await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
     await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
 
-    const endpoint = course.apiPath(`/nodes/${node.id}`);
     const restrict = {
-      blocked: () => changeTeacherBlock(teacher, endpoint),
-      hidden: () => hideNode(teacher, endpoint),
-      deleted: () => deleteNode(teacher, endpoint),
+      blocked: () => changeTeacherBlock(teacher, course.apiPath(), node.id),
+      hidden: () => hideNode(teacher, course.apiPath(), node.id),
+      deleted: () => deleteNode(teacher, course.apiPath(), node.id),
     };
     expect((await restrict[restriction]()).status()).toBe(restriction === 'deleted' ? 204 : 200);
     await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
     await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const completion = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === `${endpoint}/completion`,
+      (response) =>
+        new URL(response.url()).pathname === course.apiPath(`/nodes/${node.id}/completion`),
     );
     await page.getByRole('button', { name: 'Completar', exact: true }).click();
     expect((await completion).status()).toBe(restriction === 'blocked' ? 403 : 404);
@@ -152,7 +152,12 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
   expect((await descendantCompletion.json()).error.code).toBe('PREREQUISITE_BLOCK');
 
   const prerequisiteDependencyId = dependencyIds.shift();
-  await ok(await teacher.delete(course.apiPath(`/dependencies/${prerequisiteDependencyId}`)), 204);
+  await ok(
+    await teacher.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [prerequisiteDependencyId] },
+    }),
+    204,
+  );
   const releasedRoadmap = await student.get(course.apiPath());
   const releasedNode = (await releasedRoadmap.json()).nodes.find(
     (node: { id: string }) => node.id === completedBeforeDependency.id,
@@ -197,7 +202,7 @@ test('student roadmap shows effective block reasons and restores a completed nod
     dependencyIds.push(await createDependency(teacher, course, prerequisite.id, targetNodeId));
   }
 
-  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${completedTarget.id}`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), completedTarget.id));
 
   const studentRoadmap = await ok(await student.get(course.apiPath()));
   const studentNodes = (await studentRoadmap.json()).nodes as Array<{
@@ -258,10 +263,13 @@ test('student roadmap shows effective block reasons and restores a completed nod
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const targetDependencyId = dependencyIds.shift();
-  await ok(await teacher.delete(course.apiPath(`/dependencies/${targetDependencyId}`)), 204);
   await ok(
-    await changeTeacherBlock(teacher, course.apiPath(`/nodes/${completedTarget.id}`), 'UNBLOCK'),
+    await teacher.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [targetDependencyId] },
+    }),
+    204,
   );
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), completedTarget.id, 'UNBLOCK'));
 
   await expect
     .poll(async () => {

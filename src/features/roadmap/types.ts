@@ -89,7 +89,9 @@ export type RoadmapDependencyRequest = {
   readonly targetHandle: DependencyHandle;
 };
 
-export type TeacherBlockOperation = 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK';
+export const TEACHER_BLOCK_OPERATIONS = ['BLOCK', 'UNBLOCK', 'BRANCH_UNLOCK'] as const;
+
+export type TeacherBlockOperation = (typeof TEACHER_BLOCK_OPERATIONS)[number];
 
 export type TeacherBlockUnlockMode = 'BLOCK' | 'UPSTREAM' | 'SINGLE' | 'BRANCH';
 

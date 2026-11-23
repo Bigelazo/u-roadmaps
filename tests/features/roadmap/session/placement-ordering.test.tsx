@@ -92,13 +92,13 @@ test.for(['movement', 'automatic layout'] as const)(
     let first = true;
     const canvas = await openCanvas({
       ...saved,
-      async execute(command, previewVersion) {
+      async execute(command, changeImpactVersion) {
         if (first) {
           first = false;
           submitted.resolve();
           await release.promise;
         }
-        return saved.execute(command, previewVersion);
+        return saved.execute(command, changeImpactVersion);
       },
     });
     let earlier!: ReturnType<typeof canvas.result.current.canvasCommands.run>;
@@ -143,14 +143,14 @@ test('a failed placement discards dependent unsent gestures and reloads another 
   let first = true;
   const canvas = await openCanvas({
     ...saved,
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (first) {
         first = false;
         submitted.resolve();
         await release.promise;
         throw new Error('No se pudo guardar la posición.');
       }
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   });
   let earlier!: ReturnType<typeof canvas.result.current.canvasCommands.run>;
@@ -184,13 +184,13 @@ test('a new streamed entry snapshot preserves newer pending placement and the mo
   const canvas = await openCanvas(
     {
       ...saved,
-      async execute(command, previewVersion) {
+      async execute(command, changeImpactVersion) {
         if (first) {
           first = false;
           submitted.resolve();
           await release.promise;
         }
-        return saved.execute(command, previewVersion);
+        return saved.execute(command, changeImpactVersion);
       },
     },
     Promise.resolve(roadmap),
@@ -239,13 +239,13 @@ test('a new authoritative entry snapshot recovers a blocked placement session wi
         if (unavailable) throw new Error('Sin conexión');
         return saved.load();
       },
-      async execute(command, previewVersion) {
+      async execute(command, changeImpactVersion) {
         if (reject) {
           reject = false;
           unavailable = true;
           throw new Error('No se pudo guardar la posición.');
         }
-        return saved.execute(command, previewVersion);
+        return saved.execute(command, changeImpactVersion);
       },
     },
     Promise.resolve(roadmap),
@@ -283,13 +283,13 @@ test('failed recovery keeps explicit unsynchronized feedback and refuses placeme
       }
       return saved.load();
     },
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (failNext) {
         failNext = false;
         unavailable = true;
         throw new Error('No se pudo guardar la posición.');
       }
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   });
   await act(async () => {
@@ -332,13 +332,13 @@ test.for(['network load', 'server entry'] as const)(
     let first = true;
     const persistence: RoadmapCanvasSessionPersistence = {
       ...saved,
-      async execute(command, previewVersion) {
+      async execute(command, changeImpactVersion) {
         if (first) {
           first = false;
           submitted.resolve();
           await release.promise;
         }
-        return saved.execute(command, previewVersion);
+        return saved.execute(command, changeImpactVersion);
       },
     };
     const previous = await openCanvas(
@@ -373,13 +373,13 @@ test('a refresh from another teacher preserves newer pending positions over the 
   let first = true;
   const canvas = await openCanvas({
     ...saved,
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (first) {
         first = false;
         submitted.resolve();
         await release.promise;
       }
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   });
   let earlier!: ReturnType<typeof canvas.result.current.canvasCommands.run>;
@@ -417,13 +417,13 @@ test('a queued creation waits for its result and attaches staged Resources after
   let first = true;
   const canvas = await openCanvas({
     ...saved,
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       if (first) {
         first = false;
         submitted.resolve();
         await release.promise;
       }
-      return saved.execute(command, previewVersion);
+      return saved.execute(command, changeImpactVersion);
     },
   });
   const creation = {

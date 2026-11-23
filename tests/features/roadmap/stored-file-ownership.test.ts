@@ -88,7 +88,7 @@ const directory = mkdtempSync(join(tmpdir(), 'resource-ownership-'));
 process.env.UPLOADS_DIRECTORY = relative(process.cwd(), directory);
 const { uploadRoadmapResource, removeRoadmapResource, replaceRoadmapResourceFile } =
   await import('@/features/roadmap/application/resources/commands');
-const { deleteRoadmapNode, previewNodeDeletion } =
+const { deleteRoadmapNode, readRoadmapChangeImpact } =
   await import('@/features/roadmap/application/editor');
 const { createRoadmap } = await import('@/features/roadmap/application/roadmap');
 const { downloadRoadmapResource, getRoadmapNodeResources } =
@@ -424,10 +424,13 @@ test('committed Node deletion logs every failed cleanup and still cleans other f
   const keys = await readdir(directory);
   faults.cleanupPaths = keys.slice(0, 2).map((key) => join(directory, key));
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-  const { version } = await previewNodeDeletion({ ...teacher(course), id: course.change.nodeId });
+  const { version } = await readRoadmapChangeImpact({
+    ...teacher(course),
+    input: { kind: 'delete-node', nodeId: course.change.nodeId },
+  });
   await expect(
     deleteRoadmapNode(
-      { ...teacher(course), id: course.change.nodeId, previewVersion: version },
+      { ...teacher(course), id: course.change.nodeId, changeImpactVersion: version },
       recordingChangePort().port,
     ),
   ).resolves.toEqual({});
@@ -512,10 +515,13 @@ for (const node of [false, true]) {
         await tx.$executeRawUnsafe('INSERT INTO delete_commit_guard VALUES (1)');
       },
     };
-    const { version } = await previewNodeDeletion({ ...teacher(course), id: course.change.nodeId });
+    const { version } = await readRoadmapChangeImpact({
+      ...teacher(course),
+      input: { kind: 'delete-node', nodeId: course.change.nodeId },
+    });
     await expect(
       node
-        ? deleteRoadmapNode({ ...request, previewVersion: version }, refusal)
+        ? deleteRoadmapNode({ ...request, changeImpactVersion: version }, refusal)
         : removeRoadmapResource(request, refusal),
     ).rejects.toThrow('deletion commit refused');
     expect(
@@ -539,10 +545,16 @@ for (const node of [false, true]) {
     await rm(join(directory, key));
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const request = { ...teacher(course), id: node ? course.change.nodeId : resource.id };
-    const { version } = await previewNodeDeletion({ ...teacher(course), id: course.change.nodeId });
+    const { version } = await readRoadmapChangeImpact({
+      ...teacher(course),
+      input: { kind: 'delete-node', nodeId: course.change.nodeId },
+    });
     await expect(
       node
-        ? deleteRoadmapNode({ ...request, previewVersion: version }, recordingChangePort().port)
+        ? deleteRoadmapNode(
+            { ...request, changeImpactVersion: version },
+            recordingChangePort().port,
+          )
         : removeRoadmapResource(request, recordingChangePort().port),
     ).resolves.toEqual({});
     await expect(

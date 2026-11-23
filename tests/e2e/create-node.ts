@@ -1,6 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, type E2ECourseOffering } from './fixtures';
-import { connectNodes } from './previewed-writes';
+import { connectNodes } from './confirmed-actions';
 
 export async function prepareNodeCreator(
   api: APIRequestContext,
@@ -37,7 +37,7 @@ export async function createDependency(
   sourceNodeId: string,
   targetNodeId: string,
 ) {
-  const response = await connectNodes(api, course.apiPath('/dependencies'), {
+  const response = await connectNodes(api, course.apiPath(), {
     sourceNodeId,
     targetNodeId,
   });

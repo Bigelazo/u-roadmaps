@@ -6,10 +6,7 @@ import { requireUuid } from '@/shared/validation';
 import { resourceNotFound } from '../errors';
 import type { RoadmapChangePort } from '../change-port';
 import { roadmapCommand, type RoadmapParticipant } from '../roadmap-command';
-import {
-  requireCanvasPreviewNodeAccess,
-  requireStudentNodeAccess,
-} from '@/features/roadmap/application/completion';
+import { requireNodeAccess } from '@/features/roadmap/application/completion';
 
 async function requireRoadmapResource(
   transaction: Prisma.TransactionClient,
@@ -32,7 +29,7 @@ const resourceAccess = roadmapCommand({
     resourceId: requireUuid(input.resourceId, 'resourceId'),
   }),
   access: 'none',
-  run: async ({ tx, roadmap, actor, input }) => {
+  run: async ({ tx, roadmap, participation, actor, input }) => {
     const resource = await requireRoadmapResource(tx, input.resourceId, roadmap.id);
     if (resource.type !== input.type)
       throw new ApplicationError(
@@ -40,11 +37,7 @@ const resourceAccess = roadmapCommand({
         'INVALID_RESOURCE_TYPE',
         'Los archivos se registran al descargarlos.',
       );
-    await requireStudentNodeAccess(tx, {
-      userId: actor.userId,
-      roadmapId: roadmap.id,
-      nodeId: resource.roadmapNodeId,
-    });
+    await requireNodeAccess({ tx, participation, roadmap }, 'COMPLETION', resource.roadmapNodeId);
     const reviewsCurrentMaterial = input.type === 'LINK' || resource.fileKey === input.fileKey;
     await tx.resourceAccess.upsert({
       where: { userId_resourceId: { userId: actor.userId, resourceId: resource.id } },
@@ -82,11 +75,11 @@ export const recordCanvasPreviewResourceReview = roadmapCommand({
   access: 'none',
   run: async ({ tx, roadmap, participation, input: resourceId }) => {
     const resource = await requireRoadmapResource(tx, resourceId, roadmap.id);
-    await requireCanvasPreviewNodeAccess(tx, {
-      participationId: participation.id,
-      roadmapId: roadmap.id,
-      nodeId: resource.roadmapNodeId,
-    });
+    await requireNodeAccess(
+      { tx, participation, roadmap },
+      'SIMULATED_COMPLETION',
+      resource.roadmapNodeId,
+    );
     await tx.simulatedResourceReview.createMany({
       data: { participationId: participation.id, resourceId: resource.id },
       skipDuplicates: true,

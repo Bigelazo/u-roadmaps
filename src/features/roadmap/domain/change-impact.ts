@@ -126,10 +126,12 @@ function planAnyChange(snapshot: RoadmapSnapshot, change: ChangeWithImpact): Pla
 export function confirmChange<Change extends ChangeWithImpact>(
   snapshot: RoadmapSnapshot,
   change: Change,
-  previewVersion: string | undefined,
+  changeImpactVersion: string | undefined,
 ): ChangePlan<Change['kind']> | RuleRejection<StaleChangeImpactReason> {
   const plan = planChange(snapshot, change);
-  return plan.kind === 'REJECTED' || plan.impact.version === previewVersion ? plan : plan.stale;
+  return plan.kind === 'REJECTED' || plan.impact.version === changeImpactVersion
+    ? plan
+    : plan.stale;
 }
 
 function staleImpact(reason: StaleChangeImpactReason, impact: string) {

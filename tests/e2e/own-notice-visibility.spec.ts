@@ -4,7 +4,7 @@ import { sql } from './database';
 import { createExistingNode } from './existing-node';
 import { ok } from './helpers';
 import { countNotices, findNode, listNotices, prepareOpening } from './notices';
-import { changeTeacherBlock, hideNode } from './previewed-writes';
+import { changeTeacherBlock, hideNode } from './confirmed-actions';
 
 test('blocking hides a pending description from Inbox and counts; unblocking restores the same notice', async ({
   course,
@@ -16,7 +16,7 @@ test('blocking hides a pending description from Inbox and counts; unblocking res
   await ok(await author.patch(path, { data: { description: 'Descripción pendiente' } }));
   await expect.poll(notices).toHaveLength(1);
   const noticeId = (await notices())[0].id;
-  await ok(await changeTeacherBlock(author, path));
+  await ok(await changeTeacherBlock(author, course.apiPath(), course.nodes.first));
   await expect
     .poll(async () => (await notices()).map((notice) => notice.data.noticeTarget))
     .toEqual(['node-access']);
@@ -25,7 +25,7 @@ test('blocking hides a pending description from Inbox and counts; unblocking res
   ).json();
   expect(count.byNode[course.nodes.first]).toBe(1);
   expect(await countNotices(recipient, `roadmapId=${course.roadmapId}`)).toBe(1);
-  await ok(await changeTeacherBlock(author, path, 'UNBLOCK'));
+  await ok(await changeTeacherBlock(author, course.apiPath(), course.nodes.first, 'UNBLOCK'));
   await expect.poll(async () => (await notices()).map((notice) => notice.id)).toEqual([noticeId]);
 });
 
@@ -120,12 +120,12 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
   const targets = async () => (await notices()).map((notice) => notice.data.noticeTarget);
   await expect.poll(notices).toHaveLength(4);
   const ids = (await notices()).map((notice) => notice.id).sort();
-  await ok(await hideNode(author, path));
+  await ok(await hideNode(author, course.apiPath(), nodeId));
   await expect.poll(targets).toEqual(['node-access']);
   expect((await notices()).map(({ id }) => id)).not.toContain(ids[0]);
   await ok(await author.patch(path, { data: { isVisible: true } }));
   await expect.poll(async () => (await notices()).map((notice) => notice.id).sort()).toEqual(ids);
-  await ok(await hideNode(author, path));
+  await ok(await hideNode(author, course.apiPath(), nodeId));
   await expect.poll(async () => (await notices())[0]?.data.currentValue).toBe('Retirado');
   const recognized = await recognize();
   expect(recognized.acknowledged).toBe(5);

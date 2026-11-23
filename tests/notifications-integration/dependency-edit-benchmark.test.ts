@@ -7,9 +7,8 @@ import { prisma } from '@/shared/server/db';
 import { noticesPort } from '@/app/_adapters/notice-change-port';
 import {
   createRoadmapDependency,
-  deleteRoadmapDependency,
   deleteRoadmapDependencies,
-  previewRoadmapDependency,
+  readRoadmapChangeImpact,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import { teacher, test, type IntegrationCourse } from './fixtures';
@@ -150,15 +149,21 @@ describe.skipIf(!process.env.DEPENDENCY_EDIT_BENCHMARK)('dependency edit benchma
       } = { create: [], createQueries: [], remove: [], removeQueries: [] };
       try {
         for (let round = 0; round < ROUNDS; round += 1) {
-          const { version } = await previewRoadmapDependency(request);
+          const { version } = await readRoadmapChangeImpact({
+            ...request,
+            input: { kind: 'create-dependency', ...request.input },
+          });
           const created = await measured(counter, () =>
-            createRoadmapDependency({ ...request, previewVersion: version }, port),
+            createRoadmapDependency({ ...request, changeImpactVersion: version }, port),
           );
           rounds.create.push(created.ms);
           rounds.createQueries.push(created.queries);
           await Promise.all(scheduled.splice(0).map((task) => task()));
           const removed = await measured(counter, () =>
-            deleteRoadmapDependency({ ...editor, id: created.result.dependency.id }, port),
+            deleteRoadmapDependencies(
+              { ...editor, input: { dependencyIds: [created.result.dependency.id] } },
+              port,
+            ),
           );
           rounds.remove.push(removed.ms);
           rounds.removeQueries.push(removed.queries);
@@ -200,9 +205,12 @@ describe.skipIf(!process.env.DEPENDENCY_EDIT_BENCHMARK)('dependency edit benchma
             ...editor,
             input: { sourceNodeId: scenario.sourceNodeId, targetNodeId },
           };
-          const { version } = await previewRoadmapDependency(request);
+          const { version } = await readRoadmapChangeImpact({
+            ...request,
+            input: { kind: 'create-dependency', ...request.input },
+          });
           ids.push(
-            (await createRoadmapDependency({ ...request, previewVersion: version }, port))
+            (await createRoadmapDependency({ ...request, changeImpactVersion: version }, port))
               .dependency.id,
           );
         }
@@ -220,7 +228,11 @@ describe.skipIf(!process.env.DEPENDENCY_EDIT_BENCHMARK)('dependency edit benchma
         for (let round = 0; round < ROUNDS; round += 1) {
           const separate = await connectAll();
           const each = await measured(counter, () =>
-            Promise.all(separate.map((id) => deleteRoadmapDependency({ ...editor, id }, port))),
+            Promise.all(
+              separate.map((id) =>
+                deleteRoadmapDependencies({ ...editor, input: { dependencyIds: [id] } }, port),
+              ),
+            ),
           );
           rounds.each.push(each.ms);
           rounds.eachQueries.push(each.queries);

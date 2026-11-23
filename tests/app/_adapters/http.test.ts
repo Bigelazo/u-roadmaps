@@ -144,6 +144,22 @@ test.each([
     error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
   },
   {
+    name: 'unauthenticated User with malformed JSON',
+    session: null,
+    courseCode: 'CC3002',
+    body: '{',
+    status: 401,
+    error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
+  },
+  {
+    name: 'unauthenticated User with an invalid Course offering identifier',
+    session: null,
+    courseCode: '  ',
+    body: '{}',
+    status: 401,
+    error: { code: 'UNAUTHENTICATED', message: 'Debes iniciar sesión para continuar.' },
+  },
+  {
     name: 'invalid Course offering identifier',
     session: { user: { id: '11111111-1111-4111-8111-111111111111' } },
     courseCode: '  ',
@@ -173,7 +189,9 @@ test.each([
 ])(
   'refuses $name before invoking the domain operation',
   async ({ session, courseCode, body, status, error }) => {
-    getApplicationSession.mockResolvedValue(session);
+    getApplicationSession.mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 10, session)),
+    );
     findUser.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' });
     const mutation = vi.fn(async () => Response.json({ saved: true }));
     const handler = courseRoute(mutation, { body: true });
@@ -206,14 +224,15 @@ test.each([
     synchronizeCourseOffering.mockImplementation(async () => {
       steps.push('synchronized');
     });
-    const handler = courseRoute(async () => {
+    const handler = courseRoute(async ({ actor }) => {
       steps.push('handled');
-      return Response.json({ saved: true });
+      return Response.json(actor);
     });
     const response = await handler(new Request('http://localhost/api/roadmap', { method }), {
       params: Promise.resolve({ courseCode: 'CC3002', year: '2026', semester: '2' }),
     });
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ userId, identifier: offering });
     expect(steps).toEqual(order);
     expect(
       synchronizeCourseOffering.mock.calls.map(([user, identifier]) => [user.id, identifier]),

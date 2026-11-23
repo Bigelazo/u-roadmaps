@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test, type E2EPrimaryCourseOffering } from './fixtures';
 import { authenticateAs, ok, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
-import { deleteNode } from './previewed-writes';
+import { deleteNode } from './confirmed-actions';
 
 async function panNodeIntoView(page: Page, nodeId: string) {
   const pane = page.locator('.react-flow__pane');
@@ -142,7 +142,7 @@ test('a teacher keeps a local draft and resolves incompatible remote edits befor
       .getByRole('button', { name: 'Conservar mi borrador sobre la versión actual' })
       .click();
     await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled();
-    await ok(await deleteNode(author.request, course.apiPath(`/nodes/${nodeId}`)), 204);
+    await ok(await deleteNode(author.request, course.apiPath(), nodeId), 204);
     await loadSavedRoadmap(page, course);
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Mi borrador local');
     await expect(

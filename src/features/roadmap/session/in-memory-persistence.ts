@@ -152,8 +152,8 @@ export function createInMemoryRoadmapSessionPersistence(
       );
     },
 
-    confirm(change, previewVersion) {
-      const plan = confirmChange(snapshotOf(practice.roadmap), change, previewVersion);
+    confirm(change, changeImpactVersion) {
+      const plan = confirmChange(snapshotOf(practice.roadmap), change, changeImpactVersion);
       if (plan.kind === 'REJECTED') throw new Error(plan.message);
       const blocked = new Set(plan.consequences.blockedNodeIds);
       const unblocked = new Set(plan.consequences.unblockedNodeIds);
@@ -223,9 +223,9 @@ export function createInMemoryRoadmapSessionPersistence(
       return plan.impact;
     },
 
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       const apply: AnyPracticeCommand = practiceCommands[command.kind];
-      return apply(practice, command, previewVersion);
+      return apply(practice, command, changeImpactVersion);
     },
   };
 }

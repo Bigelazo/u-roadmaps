@@ -17,14 +17,11 @@ import {
   completeSimulatedNode,
   createRoadmapNodeType,
   createRoadmapResource,
-  deleteRoadmapDependency,
+  deleteRoadmapDependencies,
   downloadRoadmapResource,
   getNodeTypesForActor,
   getRoadmapNodeResources,
-  previewNodeDeletion,
-  previewNodeVisibility,
-  previewRoadmapDependency,
-  previewTeacherBlock,
+  readRoadmapChangeImpact,
   readCourseParticipants,
   readRoadmapForParticipant,
   readSimulatedRoadmap,
@@ -48,13 +45,16 @@ async function editorPreviews(course: IntegrationCourse) {
   });
   const editor = teacher(course);
   return (): Promise<unknown>[] => [
-    previewNodeDeletion({ ...editor, id: nodeId }),
-    previewNodeVisibility({ ...editor, id: nodeId }),
-    previewRoadmapDependency({
+    readRoadmapChangeImpact({ ...editor, input: { kind: 'delete-node', nodeId } }),
+    readRoadmapChangeImpact({ ...editor, input: { kind: 'hide-node', nodeId } }),
+    readRoadmapChangeImpact({
       ...editor,
-      input: { sourceNodeId: nodeId, targetNodeId: target.id },
+      input: { kind: 'create-dependency', sourceNodeId: nodeId, targetNodeId: target.id },
     }),
-    previewTeacherBlock({ ...editor, id: nodeId, operation: 'BLOCK' }),
+    readRoadmapChangeImpact({
+      ...editor,
+      input: { kind: 'change-teacher-block', nodeId, operation: 'BLOCK' },
+    }),
   ];
 }
 
@@ -200,7 +200,10 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
           port,
         ),
         scheduleTeacherUnlock({ ...nonEditor, id: nodeId, unlockAt: '17-10-2026' }, port),
-        deleteRoadmapDependency({ ...nonEditor, id: 'not-a-dependency' }, port),
+        deleteRoadmapDependencies(
+          { ...nonEditor, input: { dependencyIds: ['not-a-dependency'] } },
+          port,
+        ),
         completeNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
         completeSimulatedNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
       ].map((operation) => settledWithin(operation)),

@@ -2,7 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test as base, type E2ECourseOffering } from './fixtures';
 import { authenticateAs, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
-import { connectNodes } from './previewed-writes';
+import { connectNodes } from './confirmed-actions';
 
 const test = base.extend<{
   touchRoadmap: {
@@ -32,7 +32,7 @@ const test = base.extend<{
     const second = await createNode('Touch dependent', 240);
     expect(
       (
-        await connectNodes(teacher, offering.apiPath('/dependencies'), {
+        await connectNodes(teacher, offering.apiPath(), {
           sourceNodeId: first.id,
           targetNodeId: second.id,
         })

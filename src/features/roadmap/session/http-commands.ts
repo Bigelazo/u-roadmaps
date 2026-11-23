@@ -8,7 +8,7 @@ import {
   type RoadmapNodePlacement,
   type ScheduledUnlock,
 } from '@/features/roadmap/canvas/commands/canvas-command';
-import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
+import { CHANGE_IMPACT_FIELDS } from '@/shared/change-impact';
 import type { ExecutionResult } from '@/features/roadmap/session/types';
 import type { RoadmapDependency } from '@/features/roadmap/types';
 
@@ -20,16 +20,28 @@ export type RouteRequest = {
 
 type HttpCommand<Command extends { kind: string }> = {
   requests(command: Command): RouteRequest | readonly RouteRequest[];
-  readonly previewHeader?: string;
   readonly failure: string;
   result?(responses: readonly Response[]): Promise<ExecutionResult>;
-} & (Command['kind'] extends keyof PlannedChangeImpactOf
-  ? { readonly changeImpact: { path(command: Command): string; readonly failure: string } }
-  : unknown);
+};
 
 export type AnyHttpCommand = HttpCommand<CanvasCommand>;
 
-export type ChangeImpactHttpCommand = HttpCommand<ChangeImpactCommand>;
+export const changeImpactPath = (
+  command: Partial<Record<(typeof CHANGE_IMPACT_FIELDS)[number], string>>,
+) =>
+  `/change-impact?${new URLSearchParams(
+    CHANGE_IMPACT_FIELDS.flatMap((field) => {
+      const value = command[field];
+      return value === undefined ? [] : [[field, value]];
+    }),
+  )}`;
+
+export const changeImpactFailures: Record<ChangeImpactCommand['kind'], string> = {
+  'hide-node': 'No se pudo calcular el impacto de ocultar el nodo.',
+  'delete-node': 'No se pudo calcular el impacto de eliminar el nodo.',
+  'change-teacher-block': 'No se pudo calcular el impacto del bloqueo docente.',
+  'create-dependency': 'No se pudo calcular el impacto de la dependencia.',
+};
 
 const scheduledUnlockRequest = ({
   nodeId,
@@ -56,29 +68,17 @@ const visibility = (isVisible: boolean) => ({
     path: `/nodes/${nodeId}`,
     body: { isVisible },
   }),
-  previewHeader: 'x-node-visibility-preview',
   failure: 'No se pudo cambiar la visibilidad.',
 });
 
 export const httpCommands: {
   [Kind in CanvasCommandKind]: HttpCommand<CanvasCommandOf<Kind>>;
 } = {
-  'hide-node': {
-    ...visibility(false),
-    changeImpact: {
-      path: ({ nodeId }) => `/nodes/${nodeId}?operation=HIDE`,
-      failure: 'No se pudo calcular el impacto de ocultar el nodo.',
-    },
-  },
+  'hide-node': visibility(false),
   'show-node': visibility(true),
   'delete-node': {
     requests: ({ nodeId }) => ({ method: 'DELETE', path: `/nodes/${nodeId}` }),
-    previewHeader: 'x-node-delete-preview',
     failure: 'No se pudo eliminar el nodo.',
-    changeImpact: {
-      path: ({ nodeId }) => `/nodes/${nodeId}?operation=DELETE`,
-      failure: 'No se pudo calcular el impacto de eliminar el nodo.',
-    },
   },
   'change-teacher-block': {
     requests: ({ nodeId, operation, schedule }) =>
@@ -88,12 +88,7 @@ export const httpCommands: {
             method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
             path: `/nodes/${nodeId}/teacher-block`,
           },
-    previewHeader: 'x-teacher-block-preview',
     failure: 'No se pudo cambiar el bloqueo docente.',
-    changeImpact: {
-      path: ({ nodeId, operation }) => `/nodes/${nodeId}/teacher-block?operation=${operation}`,
-      failure: 'No se pudo calcular el impacto del bloqueo docente.',
-    },
   },
   'schedule-teacher-unlock': {
     requests: scheduledUnlockRequest,
@@ -109,13 +104,7 @@ export const httpCommands: {
       path: '/dependencies',
       body: { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
     }),
-    previewHeader: 'x-dependency-preview',
     failure: 'No se pudo crear la dependencia.',
-    changeImpact: {
-      path: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) =>
-        `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
-      failure: 'No se pudo calcular el impacto de la dependencia.',
-    },
     result: async ([response]) => {
       const { dependency, nodes }: { dependency: RoadmapDependency; nodes: { id: string }[] } =
         await response.json();

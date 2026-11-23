@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type TestUserConfig } from 'vitest/config';
 
 const notificationsDatabaseTests = [
-  'tests/features/roadmap/{change-port-operations,participant-access,placement,preview-version,resource-access,roadmap-command,stored-file-ownership}.test.ts',
+  'tests/features/roadmap/{change-impact-version,change-port-operations,participant-access,placement,resource-access,roadmap-command,stored-file-ownership}.test.ts',
   'tests/features/roadmap/application/academic-participation.test.ts',
   'tests/prisma/**/*.test.ts',
   'tests/features/roadmap/application/academic-calendar-sync.test.ts',

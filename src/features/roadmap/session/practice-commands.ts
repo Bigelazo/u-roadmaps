@@ -58,7 +58,7 @@ export type PracticeRoadmap = {
   appendResource(nodeId: string, resource: Resource): void;
   confirm(
     change: ChangeWithImpact,
-    previewVersion?: string,
+    changeImpactVersion?: string,
   ): { readonly blockedNodeIds: readonly string[] };
   requireAvailableNodeType(nodeTypeId: string): void;
   decideNodeType(change: NodeTypeChange): void;
@@ -68,7 +68,7 @@ type PracticeCommand<Command> = {
   apply(
     practice: PracticeRoadmap,
     command: Command,
-    previewVersion?: string,
+    changeImpactVersion?: string,
   ): ExecutionResult | void;
 }['apply'];
 
@@ -155,25 +155,25 @@ const setVisibility = (practice: PracticeRoadmap, nodeId: string, isVisible: boo
 export const practiceCommands: {
   [Kind in CanvasCommandKind]: PracticeCommand<CanvasCommandOf<Kind>>;
 } = {
-  'hide-node': (practice, command, previewVersion) => {
-    practice.confirm(command, previewVersion);
+  'hide-node': (practice, command, changeImpactVersion) => {
+    practice.confirm(command, changeImpactVersion);
     setVisibility(practice, command.nodeId, false);
   },
   'show-node': (practice, { nodeId }) => setVisibility(practice, nodeId, true),
-  'delete-node': (practice, command, previewVersion) => {
-    practice.confirm(command, previewVersion);
+  'delete-node': (practice, command, changeImpactVersion) => {
+    practice.confirm(command, changeImpactVersion);
     practice.updateNodes((nodes) => nodes.filter(({ id }) => id !== command.nodeId));
   },
-  'change-teacher-block': (practice, command, previewVersion) =>
+  'change-teacher-block': (practice, command, changeImpactVersion) =>
     command.schedule
       ? void scheduleUnlock(
           practice,
           teacherBlockScheduledUnlock(command.nodeId, command.operation, command.schedule),
         )
-      : void practice.confirm(command, previewVersion),
+      : void practice.confirm(command, changeImpactVersion),
   'schedule-teacher-unlock': scheduleUnlock,
-  'create-dependency': (practice, command, previewVersion) => {
-    const { blockedNodeIds } = practice.confirm(command, previewVersion);
+  'create-dependency': (practice, command, changeImpactVersion) => {
+    const { blockedNodeIds } = practice.confirm(command, changeImpactVersion);
     const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = command;
     const dependency = {
       id: crypto.randomUUID(),

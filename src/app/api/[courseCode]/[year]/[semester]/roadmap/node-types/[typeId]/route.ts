@@ -4,9 +4,9 @@ import { courseRoute } from '@/app/_adapters/http';
 import { deleteRoadmapNodeType, updateRoadmapNodeType } from '@/features/roadmap/server';
 
 export const PATCH = courseRoute(
-  async ({ identifier, user, params, body }) => {
+  async ({ actor, params, body }) => {
     const result = await updateRoadmapNodeType(
-      { userId: user.id, identifier, id: params.typeId, input: body },
+      { ...actor, id: params.typeId, input: body },
       roadmapChangePort,
     );
     return NextResponse.json({ nodeType: result.nodeType });
@@ -14,10 +14,7 @@ export const PATCH = courseRoute(
   { body: true },
 );
 
-export const DELETE = courseRoute(async ({ identifier, user, params }) => {
-  await deleteRoadmapNodeType(
-    { userId: user.id, identifier, id: params.typeId },
-    roadmapChangePort,
-  );
+export const DELETE = courseRoute(async ({ actor, params }) => {
+  await deleteRoadmapNodeType({ ...actor, id: params.typeId }, roadmapChangePort);
   return new NextResponse(null, { status: 204 });
 });

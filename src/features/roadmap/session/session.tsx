@@ -107,7 +107,7 @@ type PlacementCommand = Extract<
 type PlacementOutcome = Awaited<ReturnType<CanvasCommandSession['execute']>>;
 type PendingPlacement = {
   command: PlacementCommand;
-  previewVersion?: string;
+  changeImpactVersion?: string;
   resolve: (outcome: PlacementOutcome) => void;
 };
 type PlacementQueue = { pending: PendingPlacement[]; running: boolean; blocked: boolean };
@@ -460,7 +460,7 @@ function useInjectedSession(
   const executeCommand = useCallback(
     async (
       command: CanvasCommand,
-      previewVersion?: string,
+      changeImpactVersion?: string,
       placement?: PendingPlacement,
     ): Promise<PlacementOutcome> => {
       const entry: AnyCommandEntry = canvasCommandCatalog[command.kind];
@@ -478,7 +478,7 @@ function useInjectedSession(
       try {
         result = recoveredCreation
           ? { createdNodeId: command.nodeId }
-          : await persistence.execute(command, previewVersion);
+          : await persistence.execute(command, changeImpactVersion);
         if (placement) {
           placementsRef.current.pending = placementsRef.current.pending.filter(
             (pending) => pending !== placement,
@@ -572,9 +572,9 @@ function useInjectedSession(
   );
 
   const execute = useCallback<CanvasCommandSession['execute']>(
-    (command, previewVersion) => {
+    (command, changeImpactVersion) => {
       if (!sessionAliveRef.current) return Promise.resolve({ applied: false, sessionEnded: true });
-      if (!isPlacement(command)) return executeCommand(command, previewVersion);
+      if (!isPlacement(command)) return executeCommand(command, changeImpactVersion);
       const retained = uncertainCreationRef.current;
       const resending = command.kind === 'add-node' && retained?.nodeId === command.nodeId;
       if (placementsRef.current.blocked && !resending) return Promise.resolve({ applied: false });
@@ -582,7 +582,7 @@ function useInjectedSession(
         const placements = placementsRef.current;
         placements.pending.push({
           command: resending ? retained : command,
-          previewVersion,
+          changeImpactVersion,
           resolve,
         });
         setRoadmap((current) =>
@@ -594,7 +594,7 @@ function useInjectedSession(
           while (placements.pending.length) {
             const placement = placements.pending[0];
             placement.resolve(
-              await executeCommand(placement.command, placement.previewVersion, placement),
+              await executeCommand(placement.command, placement.changeImpactVersion, placement),
             );
           }
           placements.running = false;

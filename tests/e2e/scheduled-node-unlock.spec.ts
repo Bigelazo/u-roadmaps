@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { ok } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { literal, sql } from './database';
-import { changeTeacherBlock } from './previewed-writes';
+import { changeTeacherBlock } from './confirmed-actions';
 import { releaseScheduledUnlocks } from './scheduled-unlocks';
 
 function uniqueName(prefix: string) {
@@ -44,7 +44,7 @@ test('a scheduled unlock releases at its time and is discarded while a prerequis
   expect((await unblocked.json()).error.code).toBe('TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK');
 
   for (const node of [prerequisite, standalone]) {
-    await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${node.id}`)));
+    await ok(await changeTeacherBlock(teacher, course.apiPath(), node.id));
   }
   await ok(
     await teacher.put(schedulePath(scheduled.id), {
@@ -121,9 +121,7 @@ test('a scheduled unlock releases at its time and is discarded while a prerequis
     teacherUnlockAt: tomorrow,
   });
 
-  await ok(
-    await changeTeacherBlock(teacher, course.apiPath(`/nodes/${prerequisite.id}`), 'UNBLOCK'),
-  );
+  await ok(await changeTeacherBlock(teacher, course.apiPath(), prerequisite.id, 'UNBLOCK'));
   expect(await studentAccess(scheduled.id)).toEqual({
     status: 'BLOCKED',
     reason: 'TEACHER_BLOCK',

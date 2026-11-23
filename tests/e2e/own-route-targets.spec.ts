@@ -17,7 +17,12 @@ test('removing and re-adding a Dependency with a new id withdraws the same pair 
       ({ data }) =>
         data.sourceNodeId === pair.sourceNodeId && data.targetNodeId === pair.targetNodeId,
     );
-  await ok(await author.delete(course.apiPath(`/dependencies/${dependency.id}`)), 204);
+  await ok(
+    await author.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [dependency.id] },
+    }),
+    204,
+  );
   await expect
     .poll(notices)
     .toMatchObject([{ data: { knownValue: 'present', currentValue: 'absent' } }]);
@@ -29,7 +34,12 @@ test('removing and re-adding a Dependency with a new id withdraws the same pair 
     (edge: typeof pair) =>
       edge.sourceNodeId === pair.sourceNodeId && edge.targetNodeId === pair.targetNodeId,
   );
-  await ok(await author.delete(course.apiPath(`/dependencies/${replacement.id}`)), 204);
+  await ok(
+    await author.delete(course.apiPath('/dependencies'), {
+      data: { dependencyIds: [replacement.id] },
+    }),
+    204,
+  );
   await expect.poll(notices).toMatchObject([{ data: { currentValue: 'absent' } }]);
   await recognize(recipient, course.roadmapId);
   await createDependency(author, course, pair.sourceNodeId, pair.targetNodeId);

@@ -3,17 +3,14 @@ import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
 import { createRoadmapNodeType, getNodeTypesForActor } from '@/features/roadmap/server';
 
-export const GET = courseRoute(async ({ identifier, user }) => {
-  const nodeTypes = await getNodeTypesForActor({ userId: user.id, identifier });
+export const GET = courseRoute(async ({ actor }) => {
+  const nodeTypes = await getNodeTypesForActor(actor);
   return NextResponse.json({ nodeTypes });
 });
 
 export const POST = courseRoute(
-  async ({ identifier, user, body }) => {
-    const nodeType = await createRoadmapNodeType(
-      { userId: user.id, identifier, input: body },
-      roadmapChangePort,
-    );
+  async ({ actor, body }) => {
+    const nodeType = await createRoadmapNodeType({ ...actor, input: body }, roadmapChangePort);
     return NextResponse.json({ nodeType }, { status: 201 });
   },
   { body: true },

@@ -3,26 +3,17 @@ vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ApplicationError } from '@/shared/errors/types';
 
-const {
-  createRoadmapDependency,
-  deleteRoadmapDependency,
-  deleteRoadmapDependencies,
-  previewRoadmapDependency,
-  after,
-  afterTasks,
-  sequence,
-} = vi.hoisted(() => ({
-  createRoadmapDependency: vi.fn(),
-  deleteRoadmapDependency: vi.fn(),
-  deleteRoadmapDependencies: vi.fn(),
-  previewRoadmapDependency: vi.fn(),
-  after: vi.fn((task: () => void | Promise<void>) => {
-    afterTasks.push(task);
-    sequence.push('scheduled');
-  }),
-  afterTasks: [] as Array<() => void | Promise<void>>,
-  sequence: [] as string[],
-}));
+const { createRoadmapDependency, deleteRoadmapDependencies, after, afterTasks, sequence } =
+  vi.hoisted(() => ({
+    createRoadmapDependency: vi.fn(),
+    deleteRoadmapDependencies: vi.fn(),
+    after: vi.fn((task: () => void | Promise<void>) => {
+      afterTasks.push(task);
+      sequence.push('scheduled');
+    }),
+    afterTasks: [] as Array<() => void | Promise<void>>,
+    sequence: [] as string[],
+  }));
 
 vi.mock('next/server', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/server')>()),
@@ -39,16 +30,10 @@ vi.mock('@/app/_adapters/auth', () => ({
 }));
 vi.mock('@/features/roadmap/server', () => ({
   createRoadmapDependency,
-  deleteRoadmapDependency,
   deleteRoadmapDependencies,
-  previewRoadmapDependency,
 }));
 
-import {
-  DELETE as DELETE_MANY,
-  POST,
-} from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/route';
-import { DELETE } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/[dependencyId]/route';
+import { DELETE, POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/route';
 
 const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
 function committed<T>(value: T) {
@@ -63,7 +48,6 @@ const context = {
     courseCode: 'CC3002',
     year: '2026',
     semester: '2',
-    dependencyId: 'dependency-id',
   }),
 };
 
@@ -127,32 +111,10 @@ test.each([
   expect(after).not.toHaveBeenCalled();
 });
 
-test('DELETE returns an empty 204 response', async () => {
-  deleteRoadmapDependency.mockImplementation(committed({}));
-
-  const response = await DELETE(
-    new Request('http://localhost/dependencies/dependency-id'),
-    context as never,
-  );
-
-  expect(response.status).toBe(204);
-  expect(await response.text()).toBe('');
-  expect(deleteRoadmapDependency).toHaveBeenCalledWith(
-    {
-      userId: 'teacher-id',
-      identifier,
-      id: 'dependency-id',
-    },
-    expect.any(Object),
-  );
-  expect(after).not.toHaveBeenCalled();
-  expect(sequence).toEqual(['mutation-committed']);
-});
-
 test('DELETE on the collection deletes the listed Dependencies with an empty 204 response', async () => {
   deleteRoadmapDependencies.mockImplementation(committed({}));
 
-  const response = await DELETE_MANY(
+  const response = await DELETE(
     new Request('http://localhost/dependencies', {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
@@ -167,5 +129,6 @@ test('DELETE on the collection deletes the listed Dependencies with an empty 204
     { userId: 'teacher-id', identifier, input: { dependencyIds: ['first-id', 'second-id'] } },
     expect.any(Object),
   );
+  expect(after).not.toHaveBeenCalled();
   expect(sequence).toEqual(['mutation-committed']);
 });

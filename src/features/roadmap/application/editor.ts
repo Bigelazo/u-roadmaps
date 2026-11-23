@@ -41,10 +41,10 @@ import {
   type RoadmapSnapshot,
   type StaleChangeImpactReason,
 } from '@/features/roadmap/domain/change-impact';
-import { requireUuid } from '@/shared/validation';
+import { requireOneOf, requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
 import type { ApplicationErrorStatus } from '@/shared/errors/types';
-import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import { TEACHER_BLOCK_OPERATIONS, type TeacherBlockOperation } from '@/features/roadmap/types';
 import type { RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
   blockedPrerequisiteNodeIds,
@@ -189,10 +189,10 @@ async function persistConfirmedChange<Change extends ChangeWithImpact>(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   change: Change,
-  previewVersion: string | undefined,
+  changeImpactVersion: string | undefined,
 ) {
   const snapshot = await loadRoadmapSnapshot(transaction, roadmapId);
-  const plan = confirmChange(snapshot, change, previewVersion);
+  const plan = confirmChange(snapshot, change, changeImpactVersion);
   if (plan.kind === 'REJECTED') throw ruleError(plan);
   await persistConsequences(transaction, plan.consequences);
   return { snapshot, impact: plan.impact };
@@ -267,11 +267,11 @@ export const updateRoadmapNode = roadmapCommand({
   parse: ({
     id,
     input,
-    previewVersion,
+    changeImpactVersion,
   }: {
     id: string;
     input: JsonObject;
-    previewVersion?: string;
+    changeImpactVersion?: string;
   }) => {
     const nodeId = requireUuid(id, 'nodeId');
     const changes: NodeChanges = {};
@@ -283,10 +283,10 @@ export const updateRoadmapNode = roadmapCommand({
     if ('positionY' in input) changes.positionY = requireFiniteNumber(input.positionY, 'positionY');
     if (Object.keys(changes).length === 0)
       noChanges('Debe indicar al menos un campo para actualizar.');
-    return { nodeId, changes, previewVersion };
+    return { nodeId, changes, changeImpactVersion };
   },
   access: ({ changes }) => (changes.isVisible === undefined ? 'none' : 'roadmap'),
-  run: async ({ tx, roadmap, actor, input: { nodeId, changes, previewVersion } }) => {
+  run: async ({ tx, roadmap, actor, input: { nodeId, changes, changeImpactVersion } }) => {
     const node = await requireNode(tx, nodeId, roadmap.id);
     if (changes.nodeTypeId !== undefined) await requireType(tx, changes.nodeTypeId, roadmap.id);
     const hiding =
@@ -295,7 +295,7 @@ export const updateRoadmapNode = roadmapCommand({
             tx,
             roadmap.id,
             { kind: 'hide-node', nodeId },
-            previewVersion,
+            changeImpactVersion,
           )
         : null;
     const removedDependencies = hiding?.impact.dependencies ?? [];
@@ -357,27 +357,20 @@ export const updateRoadmapNode = roadmapCommand({
   },
 });
 
-export const previewNodeDeletion = async ({
-  id,
-  ...participant
-}: RoadmapParticipant & { id: string }) => {
-  return readChangeImpact(participant, { kind: 'delete-node', nodeId: requireUuid(id, 'nodeId') });
-};
-
 const nodeDeletion = roadmapCommand({
   capability: 'edit',
-  parse: ({ id, previewVersion }: { id: string; previewVersion?: string }) => ({
+  parse: ({ id, changeImpactVersion }: { id: string; changeImpactVersion?: string }) => ({
     nodeId: requireUuid(id, 'nodeId'),
-    previewVersion,
+    changeImpactVersion,
   }),
   access: 'roadmap',
   conflictMessage: 'La eliminación entra en conflicto con otra modificación.',
-  run: async ({ tx, roadmap, input: { nodeId, previewVersion } }) => {
+  run: async ({ tx, roadmap, input: { nodeId, changeImpactVersion } }) => {
     const { impact } = await persistConfirmedChange(
       tx,
       roadmap.id,
       { kind: 'delete-node', nodeId },
-      previewVersion,
+      changeImpactVersion,
     );
     const resources = await tx.resource.findMany({
       where: { roadmapNodeId: nodeId, fileKey: { not: null } },
@@ -499,18 +492,24 @@ function dependencyChange({ sourceNodeId, targetNodeId }: ReturnType<typeof pars
 
 export const createRoadmapDependency = roadmapCommand({
   capability: 'edit',
-  parse: ({ previewVersion, ...request }: { input: JsonObject; previewVersion?: string }) => ({
+  parse: ({
+    changeImpactVersion,
+    ...request
+  }: {
+    input: JsonObject;
+    changeImpactVersion?: string;
+  }) => ({
     dependency: parseDependency(request),
-    previewVersion,
+    changeImpactVersion,
   }),
   access: 'roadmap',
   conflictMessage: dependencyConflictMessage,
-  run: async ({ tx, roadmap, input: { dependency: input, previewVersion } }) => {
+  run: async ({ tx, roadmap, input: { dependency: input, changeImpactVersion } }) => {
     const { snapshot, impact } = await persistConfirmedChange(
       tx,
       roadmap.id,
       dependencyChange(input),
-      previewVersion,
+      changeImpactVersion,
     );
     const dependency = await tx.dependency.create({ data: input });
     return {
@@ -519,13 +518,6 @@ export const createRoadmapDependency = roadmapCommand({
     };
   },
 });
-
-export const previewRoadmapDependency = async ({
-  input,
-  ...participant
-}: RoadmapParticipant & { input: JsonObject }) => {
-  return readChangeImpact(participant, dependencyChange(parseDependency({ input })));
-};
 
 const dependencyEnds = {
   sourceNode: { select: { title: true, isVisible: true } },
@@ -546,27 +538,6 @@ function removedDependencyFact(
     targetNode: dependency.targetNode,
   };
 }
-
-export const deleteRoadmapDependency = roadmapCommand({
-  capability: 'edit',
-  parse: ({ id }: { id: string }) => requireUuid(id, 'dependencyId'),
-  access: 'roadmap',
-  conflictMessage: dependencyConflictMessage,
-  run: async ({ tx, roadmap, input: dependencyId }) => {
-    const dependency = await tx.dependency.findFirst({
-      where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
-      include: dependencyEnds,
-    });
-    if (!dependency)
-      throw new ApplicationError(
-        404,
-        'DEPENDENCY_NOT_FOUND',
-        'La dependencia no existe en este roadmap.',
-      );
-    await tx.dependency.delete({ where: { id: dependency.id } });
-    return { result: {}, facts: [removedDependencyFact(dependency)] };
-  },
-});
 
 function parseDependencyIds({ input }: { input: JsonObject }) {
   const { dependencyIds } = input;
@@ -597,36 +568,46 @@ export const deleteRoadmapDependencies = roadmapCommand({
   },
 });
 
-export const previewNodeVisibility = async ({
-  id,
-  ...participant
-}: RoadmapParticipant & { id: string }) => {
-  return readChangeImpact(participant, { kind: 'hide-node', nodeId: requireUuid(id, 'nodeId') });
-};
-
 type TeacherBlockRequest = { id: string; operation: TeacherBlockOperation };
 
 function teacherBlockChange({ id, operation }: TeacherBlockRequest) {
   return { kind: 'change-teacher-block', nodeId: requireUuid(id, 'nodeId'), operation } as const;
 }
 
-export const previewTeacherBlock = async ({
-  id,
-  operation,
-  ...participant
-}: RoadmapParticipant & TeacherBlockRequest) => {
-  return readChangeImpact(participant, teacherBlockChange({ id, operation }));
+const changeParsers: Record<ChangeWithImpact['kind'], (input: JsonObject) => ChangeWithImpact> = {
+  'hide-node': ({ nodeId }) => ({ kind: 'hide-node', nodeId: requireUuid(nodeId, 'nodeId') }),
+  'delete-node': ({ nodeId }) => ({ kind: 'delete-node', nodeId: requireUuid(nodeId, 'nodeId') }),
+  'change-teacher-block': ({ nodeId, operation }) =>
+    teacherBlockChange({
+      id: nodeId as string,
+      operation: requireOneOf(operation, 'operation', TEACHER_BLOCK_OPERATIONS),
+    }),
+  'create-dependency': (input) => dependencyChange(parseDependency({ input })),
 };
+
+function parseChangeWithImpact(input: JsonObject): ChangeWithImpact {
+  const kinds = Object.keys(changeParsers) as ChangeWithImpact['kind'][];
+  return changeParsers[requireOneOf(input.kind, 'kind', kinds)](input);
+}
+
+export const readRoadmapChangeImpact = async <Kind extends ChangeWithImpact['kind']>({
+  input,
+  ...participant
+}: RoadmapParticipant & { input: JsonObject & { kind?: Kind } }) =>
+  readChangeImpact(participant, parseChangeWithImpact(input) as ChangeWithImpact & { kind: Kind });
 
 export const changeTeacherBlock = roadmapCommand({
   capability: 'edit',
-  parse: ({ previewVersion, ...request }: TeacherBlockRequest & { previewVersion?: string }) => ({
+  parse: ({
+    changeImpactVersion,
+    ...request
+  }: TeacherBlockRequest & { changeImpactVersion?: string }) => ({
     change: teacherBlockChange(request),
-    previewVersion,
+    changeImpactVersion,
   }),
   access: 'roadmap',
-  run: async ({ tx, roadmap, input: { change, previewVersion } }) => {
-    const { impact } = await persistConfirmedChange(tx, roadmap.id, change, previewVersion);
+  run: async ({ tx, roadmap, input: { change, changeImpactVersion } }) => {
+    const { impact } = await persistConfirmedChange(tx, roadmap.id, change, changeImpactVersion);
     return { result: impact, facts: [] };
   },
 });

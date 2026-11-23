@@ -3,11 +3,11 @@ import { NextResponse } from 'next/server';
 import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
 import { createRoadmapForActor, readRoadmapForParticipant } from '@/features/roadmap/server';
 
-export const GET = courseRoute(async ({ identifier, user }) =>
-  NextResponse.json(await readRoadmapForParticipant({ userId: user.id, identifier })),
+export const GET = courseRoute(async ({ actor }) =>
+  NextResponse.json(await readRoadmapForParticipant(actor)),
 );
 
-export const POST = courseRoute(async ({ identifier, user, request }) => {
+export const POST = courseRoute(async ({ actor: { identifier }, user, request }) => {
   const created = await createRoadmapForActor(
     user,
     identifier,

@@ -1,10 +1,12 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { UncertainNodeCreationError } from './placement-recovery';
 import { roadmapUrl } from '@/features/roadmap/client';
+import { CHANGE_IMPACT_VERSION_HEADER } from '@/shared/change-impact';
 import {
+  changeImpactFailures,
+  changeImpactPath,
   httpCommands,
   type AnyHttpCommand,
-  type ChangeImpactHttpCommand,
   type RouteRequest,
 } from '@/features/roadmap/session/http-commands';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
@@ -12,8 +14,7 @@ import { readApiErrorBody } from '@/shared/api-error';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
 type RequestOptions = {
-  readonly previewHeader?: string;
-  readonly previewVersion?: string;
+  readonly changeImpactVersion?: string;
   readonly load?: 'roadmap' | 'canvas-preview';
   readonly creation?: boolean;
   readonly signal?: AbortSignal;
@@ -34,12 +35,12 @@ export function createHttpRoadmapCanvasSessionPersistence(
   async function request(
     { method, path, body }: RouteRequest,
     failure: string,
-    { previewHeader, previewVersion, load, creation, signal }: RequestOptions = {},
+    { changeImpactVersion, load, creation, signal }: RequestOptions = {},
   ) {
     const json = body !== undefined && !(body instanceof FormData);
     const headers = {
       ...(json && { 'Content-Type': 'application/json' }),
-      ...(previewHeader && previewVersion ? { [previewHeader]: previewVersion } : {}),
+      ...(changeImpactVersion && { [CHANGE_IMPACT_VERSION_HEADER]: changeImpactVersion }),
     };
     let response: Response;
     try {
@@ -91,15 +92,15 @@ export function createHttpRoadmapCanvasSessionPersistence(
       ).json(),
 
     async readChangeImpact(command) {
-      const { changeImpact }: ChangeImpactHttpCommand = httpCommands[command.kind];
-      return (await request({ path: changeImpact.path(command) }, changeImpact.failure)).json();
+      return (
+        await request({ path: changeImpactPath(command) }, changeImpactFailures[command.kind])
+      ).json();
     },
 
-    async execute(command, previewVersion) {
+    async execute(command, changeImpactVersion) {
       const entry: AnyHttpCommand = httpCommands[command.kind];
       const options = {
-        previewHeader: entry.previewHeader,
-        previewVersion,
+        changeImpactVersion,
         creation: command.kind === 'add-node',
       };
       const sent = await Promise.allSettled(

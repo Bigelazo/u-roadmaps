@@ -7,8 +7,8 @@ import {
   updateRoadmapResource,
 } from '@/features/roadmap/server';
 
-export const PATCH = courseRoute(async ({ identifier, user, params, request }) => {
-  const target = { userId: user.id, identifier, id: params.resourceId };
+export const PATCH = courseRoute(async ({ actor, params, request }) => {
+  const target = { ...actor, id: params.resourceId };
   const isUpload = request.headers.get('content-type')?.startsWith('multipart/form-data');
   if (isUpload) {
     const form = await parseFormData(request);
@@ -25,10 +25,7 @@ export const PATCH = courseRoute(async ({ identifier, user, params, request }) =
   return NextResponse.json({ resource: result.resource });
 });
 
-export const DELETE = courseRoute(async ({ identifier, user, params }) => {
-  await removeRoadmapResource(
-    { userId: user.id, identifier, id: params.resourceId },
-    roadmapChangePort,
-  );
+export const DELETE = courseRoute(async ({ actor, params }) => {
+  await removeRoadmapResource({ ...actor, id: params.resourceId }, roadmapChangePort);
   return new NextResponse(null, { status: 204 });
 });

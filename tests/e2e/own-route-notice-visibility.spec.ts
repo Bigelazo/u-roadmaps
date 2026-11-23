@@ -3,7 +3,7 @@ import { createExistingNode } from './existing-node';
 import { insert, sql } from './database';
 import { ok } from './helpers';
 import { countNotices, listNotices, prepareOpening } from './notices';
-import { hideNode } from './previewed-writes';
+import { hideNode } from './confirmed-actions';
 
 for (const target of ['dependency', 'node-type-name'] as const)
   test(`hidden ${target} notices leave Inbox/counts, return when visible, and recognize without summary`, async ({
@@ -49,7 +49,12 @@ for (const target of ['dependency', 'node-type-name'] as const)
         ]),
       );
       await recognize();
-      await ok(await author.delete(course.apiPath(`/dependencies/${dependencyId}`)), 204);
+      await ok(
+        await author.delete(course.apiPath('/dependencies'), {
+          data: { dependencyIds: [dependencyId] },
+        }),
+        204,
+      );
     } else {
       await recognize();
       await ok(
@@ -63,7 +68,7 @@ for (const target of ['dependency', 'node-type-name'] as const)
       (await allNotices()).filter(({ data }) => data.noticeTarget === target);
     const count = async () => await countNotices(recipient, `roadmapId=${course.roadmapId}`);
     const nodePath = course.apiPath(`/nodes/${hiddenId}`);
-    const hide = async () => ok(await hideNode(author, nodePath));
+    const hide = async () => ok(await hideNode(author, course.apiPath(), hiddenId));
     const show = async () => ok(await author.patch(nodePath, { data: { isVisible: true } }));
     await expect.poll(targetNotices).toHaveLength(1);
     const id = (await targetNotices())[0].id;

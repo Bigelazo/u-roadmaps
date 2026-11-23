@@ -47,7 +47,7 @@ Los comandos y su orden están definidos en [package.json](../../package.json).
 para su preparación. Para ejecutar uno de esos archivos:
 
 ```sh
-pnpm test:unit tests/features/roadmap/preview-version.test.ts
+pnpm test:unit tests/features/roadmap/change-impact-version.test.ts
 ```
 
 Para los unitarios que comparan distintos orígenes de NextAuth, cargar el entorno

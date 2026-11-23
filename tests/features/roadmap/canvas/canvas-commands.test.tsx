@@ -108,8 +108,8 @@ function intercepting<Kind extends CanvasCommand['kind']>(
 ): RoadmapCanvasSessionPersistence {
   return {
     ...adapter,
-    execute(command, previewVersion) {
-      const forward = () => adapter.execute(command, previewVersion);
+    execute(command, changeImpactVersion) {
+      const forward = () => adapter.execute(command, changeImpactVersion);
       return command.kind === kind
         ? intercept(command as CanvasCommandOf<Kind>, forward)
         : forward();

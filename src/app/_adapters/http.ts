@@ -91,63 +91,43 @@ export function authenticatedJson<Context = unknown>(
     });
 }
 
-type CourseRouteOptions<Identifier, Prepared, WithBody extends boolean> = {
-  prepare?: (request: Request) => Prepared | Promise<Prepared>;
+type CourseRouteOptions<Identifier, WithBody extends boolean> = {
   identify?: (params: RouteParams) => Identifier;
   body?: WithBody;
-  authWithParams?: boolean;
 };
 
-type CourseRouteInput<Identifier, Prepared, WithBody extends boolean> = {
+type CourseRouteInput<Identifier, WithBody extends boolean> = {
   request: Request;
   params: RouteParams;
-  identifier: Identifier;
   user: AuthenticatedUser;
-  prepared: Prepared;
+  actor: { userId: string; identifier: Identifier };
   body: WithBody extends true ? JsonObject : undefined;
 };
 
 export function courseRoute<
-  Prepared = undefined,
   WithBody extends boolean = false,
   Identifier = CourseOfferingIdentifier,
 >(
-  handle: (input: CourseRouteInput<Identifier, Prepared, WithBody>) => Promise<Response>,
-  options: CourseRouteOptions<Identifier, Prepared, WithBody> = {},
+  handle: (input: CourseRouteInput<Identifier, WithBody>) => Promise<Response>,
+  options: CourseRouteOptions<Identifier, WithBody> = {},
 ) {
   const identify =
     options.identify ??
     ((params: RouteParams) =>
       requireCourseOfferingIdentifier(params as CourseOfferingIdentifierParams) as Identifier);
-  const parseBody = (request: Request) => (options.body ? parseJsonObject(request) : undefined);
   return (request: Request, context: RouteContext) =>
     handleApplicationResult(async () => {
-      const prepared = (options.prepare ? await options.prepare(request) : undefined) as Prepared;
-      let params: RouteParams;
-      let identifier: Identifier;
-      let body: JsonObject | undefined;
-      let user: AuthenticatedUser;
-      if (options.authWithParams) {
-        [params, body, user] = await Promise.all([
-          context.params,
-          parseBody(request),
-          requireAuthenticatedUser(),
-        ]);
-        identifier = identify(params);
-      } else {
-        params = await context.params;
-        identifier = identify(params);
-        [body, user] = await Promise.all([parseBody(request), requireAuthenticatedUser()]);
-      }
+      const [params, user] = await Promise.all([context.params, requireAuthenticatedUser()]);
+      const body = options.body ? await parseJsonObject(request) : undefined;
+      const identifier = identify(params);
       if (!options.identify && !readMethods.has(request.method))
         await synchronizeSessionParticipation(identifier as CourseOfferingIdentifier);
       return handle({
         request,
         params,
-        identifier,
         user,
-        prepared,
-        body: body as CourseRouteInput<Identifier, Prepared, WithBody>['body'],
+        actor: { userId: user.id, identifier },
+        body: body as CourseRouteInput<Identifier, WithBody>['body'],
       });
     });
 }
