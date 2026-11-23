@@ -4,6 +4,7 @@ import { createExistingNode } from './existing-node';
 import { literal, sql } from './database';
 import { openInbox, openNativeStream, streamFrames, type StreamWindow } from './notices';
 import { connectNodes } from './confirmed-actions';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 test('native SSE isolates Roadmap frames from a User outside the Course', async ({
   browser,
@@ -95,6 +96,7 @@ test('Resource notices reach other tabs on page load while student content stays
     await other.goto('/academic-overview');
     const path = course.apiPath(`/nodes/${nodeId}/resources`);
     const created = await teacher.request.post(path, {
+      headers: sameSiteRequestHeaders,
       data: { title: 'Primera guía', type: 'LINK', url: 'https://example.test/guide' },
     });
     expect(created.status()).toBe(201);
@@ -114,6 +116,7 @@ test('Resource notices reach other tabs on page load while student content stays
       expect(
         (
           await teacher.request.patch(course.apiPath(`/resources/${resourceId}`), {
+            headers: sameSiteRequestHeaders,
             data: { title },
           })
         ).status(),

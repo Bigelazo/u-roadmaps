@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import DevelopmentBar from '@/development/components/DevelopmentBar';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 const { refresh, replace } = vi.hoisted(() => ({ refresh: vi.fn(), replace: vi.fn() }));
 
@@ -46,7 +47,7 @@ test('developer can open the persona menu and select a persona', async () => {
 
   expect(fetch).toHaveBeenCalledWith('/api/development/session', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...sameSiteRequestHeaders },
     body: JSON.stringify({ userId: '10000000-0000-4000-8000-000000000001' }),
   });
   expect(replace).toHaveBeenCalledWith('/academic-overview');

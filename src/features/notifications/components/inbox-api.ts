@@ -1,4 +1,5 @@
 import type { ChangeSummary } from '../contracts/change-summary';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/notifications${path}`, { cache: 'no-store', ...init });
@@ -9,7 +10,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function postJson<T = unknown>(path: string, body: unknown) {
   return request<T>(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...sameSiteRequestHeaders },
     body: JSON.stringify(body),
   });
 }

@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 import {
   Dialog,
   DialogClose,
@@ -93,7 +94,7 @@ export function ReportProblemDialog({ version }: Readonly<{ version: string }>) 
     try {
       const response = await fetch('/api/problem-reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...sameSiteRequestHeaders },
         body: JSON.stringify({
           ...draft,
           pageUrl: `${window.location.origin}${pathname}`,

@@ -1,4 +1,5 @@
 import type { AcademicOverviewBrowserResponse } from '../types';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 import {
   ACADEMIC_CACHE_IDENTITY,
   ACADEMIC_CACHE_PREFIX,
@@ -74,6 +75,7 @@ function storeCache(cache: AcademicCourseCache) {
 async function requestOverview(userId: string, synchronize: boolean, requestGeneration: number) {
   const response = await fetch('/api/academic-overview/browser', {
     method: synchronize ? 'POST' : 'GET',
+    ...(synchronize && { headers: sameSiteRequestHeaders }),
     cache: 'no-store',
   });
   if (response.status === 401) {

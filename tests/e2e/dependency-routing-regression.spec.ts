@@ -1,6 +1,7 @@
 import type { Locator } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { ok } from './helpers';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 async function bounds(locator: Locator) {
   const box = await locator.boundingBox();
@@ -14,6 +15,7 @@ test('a valid-target preview matches its persisted obstacle route with source fa
   await page.setViewportSize({ width: 1440, height: 900 });
   await ok(
     await page.request.post('/api/development/session', {
+      headers: sameSiteRequestHeaders,
       data: { userId: '10000000-0000-4000-8000-000000000001' },
     }),
   );

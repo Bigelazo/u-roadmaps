@@ -3,6 +3,7 @@ import { fixtureParticipations, developmentFixtureOfferings } from '@/developmen
 import { literal, queryJson } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs, fixtureRoadmapPath, ok } from './helpers';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 const [cc1002Roadmap] = fixtureRoadmaps;
 
@@ -223,6 +224,7 @@ test('academic overview and development session retain their public JSON and coo
   );
 
   const developmentSession = await page.request.post('/api/development/session', {
+    headers: sameSiteRequestHeaders,
     data: { userId: fixture.daniela },
   });
   await ok(developmentSession);

@@ -5,6 +5,7 @@ import type {
 } from '@/features/roadmap/canvas/commands/canvas-command';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 const http = createHttpRoadmapCanvasSessionPersistence({
   courseCode: 'CC1001',
@@ -444,7 +445,12 @@ test.each(Object.entries(executions))(
 
     await expect(http.execute(command, changeImpactVersion)).resolves.toEqual(resolves);
 
-    expect(fetchMock.mock.calls).toEqual(requests.map(([path, init]) => [api(path), init]));
+    expect(fetchMock.mock.calls).toEqual(
+      requests.map(([path, init]) => [
+        api(path),
+        { ...init, headers: { ...sameSiteRequestHeaders, ...init.headers } },
+      ]),
+    );
   },
 );
 
@@ -463,7 +469,7 @@ test('omits the preview header when a change sends no Change impact version', as
 
   expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/nodes/node-1'), {
     method: 'PATCH',
-    headers: json,
+    headers: { ...sameSiteRequestHeaders, ...json },
     body: JSON.stringify({ isVisible: false }),
   });
 });
@@ -475,6 +481,7 @@ test('uploads a file Resource as multipart form data without setting its boundar
 
   expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/nodes/node-1/resources'), {
     method: 'POST',
+    headers: sameSiteRequestHeaders,
     body: expect.any(FormData),
   });
   expect((fetchMock.mock.calls[0] as unknown as Request)[1].body).toSatisfy(
@@ -494,6 +501,7 @@ test('replaces a file Resource as multipart form data carrying its edited title'
 
   expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/resources/resource-1'), {
     method: 'PATCH',
+    headers: sameSiteRequestHeaders,
     body: expect.any(FormData),
   });
   expect((fetchMock.mock.calls[0] as unknown as Request)[1].body).toSatisfy(
@@ -614,8 +622,14 @@ test('a Resource access survives navigation and only a Link needs the client to 
   ).resolves.toEqual({ countsAccess: false });
 
   expect(fetch.mock.calls).toEqual([
-    [api('/resources/link-1/access'), { method: 'POST', keepalive: true }],
-    [api('/simulation/resources/file-1/review'), { method: 'POST', keepalive: true }],
+    [
+      api('/resources/link-1/access'),
+      { method: 'POST', headers: sameSiteRequestHeaders, keepalive: true },
+    ],
+    [
+      api('/simulation/resources/file-1/review'),
+      { method: 'POST', headers: sameSiteRequestHeaders, keepalive: true },
+    ],
   ]);
 });
 

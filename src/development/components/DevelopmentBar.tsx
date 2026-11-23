@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,7 +22,7 @@ export default function DevelopmentBar({ personas }: { personas: Persona[] }) {
   async function assumePersona(userId: string) {
     const response = await fetch('/api/development/session', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...sameSiteRequestHeaders },
       body: JSON.stringify({ userId }),
     });
     if (response.ok) {

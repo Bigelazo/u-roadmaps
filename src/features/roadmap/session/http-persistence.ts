@@ -2,6 +2,7 @@ import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { UncertainNodeCreationError } from './placement-recovery';
 import { roadmapUrl } from '@/features/roadmap/client';
 import { CHANGE_IMPACT_VERSION_HEADER } from '@/shared/change-impact';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 import {
   changeImpactFailures,
   changeImpactPath,
@@ -39,6 +40,7 @@ export function createHttpRoadmapCanvasSessionPersistence(
   ) {
     const json = body !== undefined && !(body instanceof FormData);
     const headers = {
+      ...(method && sameSiteRequestHeaders),
       ...(json && { 'Content-Type': 'application/json' }),
       ...(changeImpactVersion && { [CHANGE_IMPACT_VERSION_HEADER]: changeImpactVersion }),
     };
@@ -65,7 +67,11 @@ export function createHttpRoadmapCanvasSessionPersistence(
   }
 
   async function sendBesideNavigation(path: string) {
-    const response = await fetch(roadmapUrl(identifier, path), { method: 'POST', keepalive: true });
+    const response = await fetch(roadmapUrl(identifier, path), {
+      method: 'POST',
+      headers: sameSiteRequestHeaders,
+      keepalive: true,
+    });
     if (!response.ok) throw new Error('No se pudo registrar el acceso al recurso.');
   }
 
