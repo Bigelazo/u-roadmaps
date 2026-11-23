@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextResponse } from 'next/server';
-import { vtiLoginStateCookieName } from '@/integrations/vti/server';
+import { vtiLoginStateCookieNames } from '@/integrations/vti/server';
 import { siteUrl } from '@/shared/server/environment/site-url';
 
 const authenticationCookieNames = [
@@ -10,7 +10,7 @@ const authenticationCookieNames = [
   'next-auth.csrf-token',
   '__Host-next-auth.csrf-token',
   'next-auth.callback-url',
-  vtiLoginStateCookieName,
+  ...vtiLoginStateCookieNames,
 ];
 
 export function endInstitutionalSession(request: Request) {

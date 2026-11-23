@@ -60,14 +60,21 @@ test('reads from another site are left to the route', () => {
   expect(response.headers.get('x-middleware-next')).toBe('1');
 });
 
-test('the institutional login callback keeps validating its own origin', () => {
-  const response = rejectCrossSiteMutation(
-    apiRequest(
-      'POST',
-      { origin: 'https://login.example.test', 'sec-fetch-site': 'cross-site' },
-      'https://roadmap.example.test/api/plogin',
-    ),
-  );
+test('a cross-site mutation under the institutional login path is rejected', async () => {
+  for (const url of [
+    'https://roadmap.example.test/api/plogin',
+    'https://roadmap.example.test/api/plogin/start',
+    'https://roadmap.example.test/api/plogin/2026/2/roadmap/nodes',
+    'https://roadmap.example.test/api/auth/session',
+  ]) {
+    const response = rejectCrossSiteMutation(
+      apiRequest(
+        'POST',
+        { origin: 'https://login.example.test', 'sec-fetch-site': 'cross-site' },
+        url,
+      ),
+    );
 
-  expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.status).toBe(403);
+  }
 });

@@ -57,8 +57,7 @@ test('an institutional login asks MUFASA again for that User', async () => {
 
   const login = await completeInstitutionalLogin(
     new Request('http://localhost:3000/api/plogin', {
-      method: 'POST',
-      headers: { cookie: 'vti-login-state=state' },
+      headers: { cookie: 'u-roadmaps-vti-state=state' },
     }),
     'jwt',
   );

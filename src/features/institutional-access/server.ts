@@ -7,15 +7,7 @@ export async function startInstitutionalLogin(request: Request) {
   return start(request);
 }
 
-export async function completeInstitutionalLogin(
-  request: Request,
-  rawToken: FormDataEntryValue | null,
-) {
+export async function completeInstitutionalLogin(request: Request, rawToken: string | null) {
   const { completeInstitutionalLogin: complete } = await import('./application/login');
   return complete(request, rawToken);
-}
-
-export async function unreadableInstitutionalCallback() {
-  const { unreadableInstitutionalCallback: reject } = await import('./application/login');
-  return reject();
 }

@@ -1,19 +1,16 @@
-import {
-  completeInstitutionalLogin,
-  unreadableInstitutionalCallback,
-} from '@/features/institutional-access/server';
+import { completeInstitutionalLogin } from '@/features/institutional-access/server';
 import { NextResponse } from 'next/server';
 import { applicationErrorResponse } from '@/app/_adapters/http';
 import type { ApplicationError, ApplicationResult } from '@/shared/errors/types';
 import { siteUrl } from '@/shared/server/environment/site-url';
-import { vtiLoginStateCookieName } from '@/integrations/vti/server';
+import { forgetVtiLoginState } from '@/integrations/vti/server';
 
 export const dynamic = 'force-dynamic';
 
 function authenticationErrorResponse(request: Request, error: ApplicationError) {
   console.error('[plogin] autenticación rechazada', error.code, error.details ?? {});
   const response = NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
-  response.cookies.delete(vtiLoginStateCookieName);
+  forgetVtiLoginState(response, request);
   return response;
 }
 
@@ -35,15 +32,5 @@ async function resolveInstitutionalLogin(
 
 export async function GET(request: Request) {
   const rawToken = new URL(request.url).searchParams.get('jwt');
-  return resolveInstitutionalLogin(request, completeInstitutionalLogin(request, rawToken));
-}
-
-export async function POST(request: Request) {
-  let rawToken: FormDataEntryValue | null;
-  try {
-    rawToken = (await request.formData()).get('jwt');
-  } catch {
-    return resolveInstitutionalLogin(request, unreadableInstitutionalCallback());
-  }
   return resolveInstitutionalLogin(request, completeInstitutionalLogin(request, rawToken));
 }
