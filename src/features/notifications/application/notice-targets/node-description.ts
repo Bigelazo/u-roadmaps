@@ -3,26 +3,20 @@ import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes
 import {
   isNodeViewer,
   nodeOpeners,
+  nodeRef,
+  nodeTitle,
   nodeVisibleThroughout,
+  targetNode,
   type NoticeTargetDescriptor,
   type RoadmapView,
-  type TargetValues,
 } from './descriptor';
 
-const nodeDescriptionRef = (nodeId: string) => ({
-  noticeTarget: NOTICE_TARGET.nodeDescription,
-  targetKey: `node:${nodeId}:description`,
-  nodeId,
-});
+const nodeDescriptionRef = nodeRef(NOTICE_TARGET.nodeDescription, 'description');
 
 type NodeDescriptionFact = Extract<RoadmapChangeFact, { kind: 'node-description' }>;
 
 async function canOpenNode(nodeId: string, changes: RoadmapChanges, roadmap: RoadmapView) {
   return nodeOpeners(await nodeVisibleThroughout(nodeId, changes, roadmap), nodeId, roadmap);
-}
-
-function nodeTitle({ context }: TargetValues) {
-  return String(context.nodeTitle ?? '');
 }
 
 export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> = {
@@ -35,7 +29,7 @@ export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> 
   knowers: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   audience: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   async current(target, roadmap, recipientId) {
-    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
+    const node = await targetNode(target, roadmap);
     return node
       ? {
           value: JSON.stringify(node.description),

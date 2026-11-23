@@ -40,7 +40,7 @@ El [ADR de carga de Avisos](adr/0037-los-avisos-aparecen-al-cargar-la-pagina.md)
 
 ## 1. Construir una sola vez el resultado de registro
 
-Ubicaciones: [record.ts](../src/features/notifications/infrastructure/notice-lifecycle/record.ts), `recordNoticeTargets` en la línea 45 y `recordFactRecipientTargets` en la 174.
+Ubicaciones: [record.ts](../src/features/notifications/infrastructure/notice-lifecycle/record.ts), `recordNoticeTargets` en la línea 40; la escritura por lotes de los hechos con `factRecipients` está en la línea 106.
 
 Los hechos sin destinatarios explícitos construyen `own` y `target` dentro del bucle principal. Los que tienen `factRecipients` se apartan y construyen esencialmente esos mismos objetos al final. Esa separación también requiere guardar `order` y ordenar ambos grupos después.
 
@@ -48,24 +48,24 @@ La propuesta mantiene los dos mecanismos de persistencia, pero construye `own` y
 
 - La audiencia sale de `factRecipients` cuando existe; en los demás casos se sigue calculando con el descriptor.
 - Los Valores conocidos de los hechos con destinatarios explícitos siguen escribiéndose juntos al terminar el bucle.
-- `recordFactRecipientTargets` queda dedicado a esa escritura por lotes.
+- Esa escritura por lotes es una llamada a `recordKnownValues` después del bucle.
 - Como todos los resultados se agregan durante el recorrido original, desaparecen `order` y el ordenamiento posterior.
 
 **Ahorro medido: 26 líneas**, de 297 a 271, después de aplicar Prettier. El prototipo está en `/tmp/notifications-line-audit/record.ts`.
 
 Alcance de implementación: este archivo; se mantienen sus firmas públicas, adaptadores y consumidores. No requiere cambios de esquema, fixtures ni exportaciones.
 
-Hay que conservar la exclusión del actor, los `ownTargets`, la retirada de creaciones desconocidas, `requireKnowers`, el orden de hechos y la escritura por lotes. En los descriptores actuales solo `node-access` implementa `factRecipients`; su `factContext` no tiene efectos que deban ejecutarse después de escribir los Valores conocidos. Una futura ampliación de ese contrato deberá respetar esta condición.
+Hay que conservar la exclusión del actor, los `ownTargets`, la retirada de creaciones desconocidas, el rechazo de un `currentAtEdit` que nombra a quien no conoce el valor (línea 69 de `record.ts`), la tolerancia a conocedores repetidos dentro de un hecho, el error ante un mismo destinatario y Objeto del aviso repetido entre hechos con `factRecipients`, el orden de hechos y la escritura por lotes. En los descriptores actuales solo `node-access` implementa `factRecipients`; su `factContext` no tiene efectos que deban ejecutarse después de escribir los Valores conocidos. Una futura ampliación de ese contrato deberá respetar esta condición.
 
 Validación necesaria: `actor-rule`, `access-lifecycle`, `absorption-lifecycle`, `concurrent-delivery`, `completion-promotion` y el contrato del adaptador `tests/app/api/roadmap-change-port.test.ts`. Revisar también una edición que mezcle hechos de acceso y contenido para verificar el orden conservado.
 
 ## 2. Usar la escritura por lotes también para un Valor conocido
 
-Ubicaciones: [known-values.ts](../src/features/notifications/infrastructure/notice-lifecycle/known-values.ts), `setKnownValue` en la línea 152 y `setKnownValues` en la 179; [recognize.ts](../src/features/notifications/infrastructure/notice-lifecycle/recognize.ts), llamada en la línea 262.
+Ubicaciones: [known-values.ts](../src/features/notifications/infrastructure/notice-lifecycle/known-values.ts), `setKnownValues` en la línea 113; [recognize.ts](../src/features/notifications/infrastructure/notice-lifecycle/recognize.ts), llamadas en las líneas 98 y 137.
 
-`setKnownValue` hace un `upsert` de Prisma. `setKnownValues` ya expresa en SQL la misma escritura para una colección: inserta la identidad del Objeto del aviso y, en conflicto, actualiza únicamente `knownValue` y `context`.
+La variante individual `setKnownValue`, un `upsert` de Prisma, ya fue retirada. `setKnownValues` expresa en SQL la misma escritura para una colección: inserta la identidad del Objeto del aviso y, en conflicto, actualiza únicamente `knownValue` y `context`.
 
-La búsqueda de llamadas encontró un solo consumidor de la variante individual. Puede pasar una colección de un elemento a `setKnownValues` y eliminar la función individual. Debe pasar `context: input.context ?? {}` para conservar el valor predeterminado.
+Su único consumidor, el reconocimiento en `recognize.ts`, pasa ahora una colección de un elemento a `setKnownValues`, con el contexto normalizado por `targetContext` para conservar el valor predeterminado.
 
 **Ahorro medido: 24 líneas netas** entre ambos archivos, incluido el ajuste de imports y el formato. Los prototipos están en `/tmp/notifications-line-audit/known-values.ts` y `/tmp/notifications-line-audit/recognize.ts`.
 

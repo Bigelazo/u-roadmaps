@@ -1,13 +1,9 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, nodeDeletionRef } from '../absorption';
-import { nodeViewers, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
+import { nodeTitle, nodeViewers, targetNode, type NoticeTargetDescriptor } from './descriptor';
 
 type NodeDeletedFact = Extract<RoadmapChangeFact, { kind: 'node-deleted' }>;
-
-function nodeTitle({ context }: TargetValues) {
-  return String(context.nodeTitle ?? '');
-}
 
 export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
   noticeTarget: NOTICE_TARGET.nodeDeletion,
@@ -21,8 +17,7 @@ export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
   knowers: async () => [],
   audience: (fact, _changes, roadmap) => nodeViewers(fact.previous.isVisible, roadmap),
   async current(target, roadmap) {
-    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
-    return { value: node ? PRESENT : ABSENT, visible: true };
+    return { value: (await targetNode(target, roadmap)) ? PRESENT : ABSENT, visible: true };
   },
   factContext: (fact) => ({
     nodeTitle: fact.previous.title,

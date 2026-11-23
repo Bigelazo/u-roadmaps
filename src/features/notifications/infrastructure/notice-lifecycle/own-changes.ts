@@ -11,7 +11,7 @@ import {
   type RoadmapView,
 } from '../../application/notice-targets';
 import { nodeAccessRef, nodeAccessTarget } from '../../application/notice-targets/node-access';
-import { reconcileNoticeTarget } from './reconcile';
+import { reconcileFor } from './reconcile';
 import { lazyNoticeCourseContext } from './course-context';
 import { advanceKnownValue, type RecipientRoadmap } from './known-values';
 
@@ -41,42 +41,40 @@ export async function recordOwnChanges(
 ) {
   const identity = { recipientId: changes.actorId, roadmapId: changes.roadmapId };
   if (promoted(changes)) return rebaselineStaffAccess(transaction, identity, roadmap);
-  const courseContext = lazyNoticeCourseContext(transaction, changes.roadmapId);
-  const occurredAt = new Date();
+  const { hasPending, reconcile } = reconcileFor(transaction, {
+    identity,
+    roadmap,
+    courseContext: lazyNoticeCourseContext(transaction, changes.roadmapId),
+    eventId: () => randomUUID(),
+    occurredAt: new Date(),
+  });
   for (const { descriptor, fact, target, previousValue } of ownTargets) {
     if (descriptor.keepsKnownValue === false) continue;
-    const pending = await transaction.roadmapNotice.findFirst({
-      where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
-      select: { id: true },
-    });
-    const reconcile = () =>
-      reconcileNoticeTarget(transaction, {
+    const reconcileTarget = () =>
+      reconcile({
         descriptor,
-        identity,
         target,
         fallbackKnown: previousValue,
         fallbackContext: descriptor.previousContext?.(fact),
-        roadmap,
-        courseContext,
-        eventId: randomUUID(),
-        occurredAt,
       });
-    if (pending) {
-      await reconcile();
+    if (await hasPending(target.targetKey)) {
+      await reconcileTarget();
       continue;
     }
     const current = await descriptor.current(target, roadmap, identity.recipientId);
     if (!current) continue;
     const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
-    const advanced = await advanceKnownValue(
-      transaction,
-      identity,
-      target,
-      previousValue,
-      value,
-      current.context,
-    );
-    if (!advanced) await reconcile();
+    if (
+      !(await advanceKnownValue(
+        transaction,
+        identity,
+        target,
+        previousValue,
+        value,
+        current.context,
+      ))
+    )
+      await reconcileTarget();
   }
 }
 
