@@ -1,6 +1,7 @@
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { expect } from './fixtures';
 import { CHANGE_IMPACT_VERSION_HEADER } from '@/shared/change-impact';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 type Send = (options: { headers: Record<string, string> }) => Promise<APIResponse>;
 
@@ -12,7 +13,12 @@ async function confirm(
 ) {
   const impact = await api.get(`${roadmapPath}/change-impact?${new URLSearchParams(change)}`);
   expect(impact.ok(), await impact.text()).toBe(true);
-  return send({ headers: { [CHANGE_IMPACT_VERSION_HEADER]: (await impact.json()).version } });
+  return send({
+    headers: {
+      ...sameSiteRequestHeaders,
+      [CHANGE_IMPACT_VERSION_HEADER]: (await impact.json()).version,
+    },
+  });
 }
 
 export function hideNode(api: APIRequestContext, roadmapPath: string, nodeId: string) {
