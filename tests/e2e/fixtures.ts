@@ -17,6 +17,7 @@ import {
   fixtureUsers,
 } from '@/development/fixtures/catalog';
 import { insert, literal, queryJson, sql } from './database';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 import type { NoticeClass } from '@/features/notifications/application/notice-effect';
 import { fixtureRoadmapPath, sessionCookie, silenceExtensionPrompt } from './helpers';
 import {
@@ -256,6 +257,15 @@ export const test = base.extend<{
     await provide(context);
   },
 
+  request: async ({ playwright, baseURL }, provide) => {
+    const request = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: sameSiteRequestHeaders,
+    });
+    await provide(request);
+    await request.dispose();
+  },
+
   ownedTestData: async ({}, provide) => {
     const owned: OwnedTestData = {
       courseCodes: [],
@@ -488,7 +498,10 @@ export const test = base.extend<{
       const client =
         clients.get(user.id) ??
         sessionCookie(user.id).then((cookie) =>
-          playwright.request.newContext({ baseURL, extraHTTPHeaders: { cookie } }),
+          playwright.request.newContext({
+            baseURL,
+            extraHTTPHeaders: { cookie, ...sameSiteRequestHeaders },
+          }),
         );
       clients.set(user.id, client);
       return client;

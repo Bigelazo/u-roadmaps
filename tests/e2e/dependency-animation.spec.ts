@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { ok } from './helpers';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 type EdgeSample = { id: string; progress: number; tip: string; tipError: number };
 type NodeSample = { id: string; scale: number };
@@ -179,6 +180,7 @@ test('Dependencies draw sequentially with moving tips on entry and reload, prese
   await observeDrawing(page);
   await ok(
     await page.request.post('/api/development/session', {
+      headers: sameSiteRequestHeaders,
       data: { userId: '10000000-0000-4000-8000-000000000001' },
     }),
   );

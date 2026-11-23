@@ -3,6 +3,7 @@ import { expect, test, type E2EPrimaryCourseOffering } from './fixtures';
 import { authenticateAs, ok, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
 import { deleteNode } from './confirmed-actions';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 async function panNodeIntoView(page: Page, nodeId: string) {
   const pane = page.locator('.react-flow__pane');
@@ -111,6 +112,7 @@ test('a teacher keeps a local draft and resolves incompatible remote edits befor
       authenticateAs(recipient, course.users.teachingAssistant.id),
     ]);
     const response = await author.request.post(course.apiPath('/nodes'), {
+      headers: sameSiteRequestHeaders,
       data: {
         title: 'Borrador compartido',
         nodeTypeId: '00000000-0000-4000-8000-000000000001',
@@ -127,6 +129,7 @@ test('a teacher keeps a local draft and resolves incompatible remote edits befor
     await page.getByLabel('Título', { exact: true }).fill('Mi borrador local');
     await ok(
       await author.request.patch(course.apiPath(`/nodes/${nodeId}`), {
+        headers: sameSiteRequestHeaders,
         data: { title: 'Edición de otra persona' },
       }),
     );

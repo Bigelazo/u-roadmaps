@@ -7,6 +7,7 @@ import { roadmapUrl, versionUrl } from '@/features/roadmap/client';
 import { creatorLabel, originLabel } from '@/features/roadmap/ui/version-labels';
 import { versionHistoryApiUrl } from '@/shared/version-history-url';
 import { readApiErrorBody } from '@/shared/api-error';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 import { Button } from '@/shared/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group';
@@ -66,7 +67,7 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
     const version = versions?.find((candidate) => termKey(candidate) === source);
     const response = await fetch(roadmapUrl(identifier), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...sameSiteRequestHeaders },
       body: JSON.stringify(
         version ? { source: { year: version.year, semester: version.semester } } : {},
       ),

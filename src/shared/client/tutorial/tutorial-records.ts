@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 function post(path: string, body: Record<string, string>) {
   void fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...sameSiteRequestHeaders },
     body: JSON.stringify(body),
   }).catch(() => undefined);
 }

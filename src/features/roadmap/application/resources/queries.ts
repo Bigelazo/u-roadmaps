@@ -38,7 +38,11 @@ export async function getRoadmapNodeResources({
 }
 
 export async function downloadRoadmapResource(
-  { resourceId, ...participant }: RoadmapParticipant & { resourceId: string },
+  {
+    resourceId,
+    recordsAccess = true,
+    ...participant
+  }: RoadmapParticipant & { resourceId: string; recordsAccess?: boolean },
   changePort: RoadmapChangePort,
 ) {
   const id = requireUuid(resourceId, 'resourceId');
@@ -53,7 +57,7 @@ export async function downloadRoadmapResource(
     return { fileKey, fileContentType, title, countsAccess };
   });
   const file = await openStoredFile(resource.fileKey);
-  if (resource.countsAccess)
+  if (resource.countsAccess && recordsAccess)
     await recordFileResourceAccess(
       { ...participant, resourceId: id, fileKey: resource.fileKey },
       changePort,

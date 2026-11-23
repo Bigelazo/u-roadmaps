@@ -1,6 +1,7 @@
 import type { CDPSession, Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -158,6 +159,7 @@ for (const width of [390, 360]) {
     await page.setViewportSize({ width, height: 844 });
     await ok(
       await page.request.post('/api/development/session', {
+        headers: sameSiteRequestHeaders,
         data: { userId: '10000000-0000-4000-8000-000000000001' },
       }),
     );
@@ -279,6 +281,7 @@ test('touch Arrow mode reaches Nodes under its banner on a landscape phone', asy
   await page.setViewportSize({ width: 844, height: 390 });
   await ok(
     await page.request.post('/api/development/session', {
+      headers: sameSiteRequestHeaders,
       data: { userId: '10000000-0000-4000-8000-000000000001' },
     }),
   );

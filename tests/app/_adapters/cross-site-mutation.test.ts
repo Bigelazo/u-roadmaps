@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'vitest';
 import { NextRequest } from 'next/server';
 import { rejectCrossSiteMutation } from '@/app/_adapters/cross-site-mutation';
+import { sameSiteRequestHeaders } from '@/shared/same-site-request';
 
 const roadmapUrl = 'https://roadmap.example.test/api/CC5003/2026/2/roadmap/nodes';
 
@@ -14,7 +15,11 @@ afterEach(() => {
 
 test('a mutation sent from another site is rejected before reaching the route', async () => {
   const response = rejectCrossSiteMutation(
-    apiRequest('POST', { origin: 'https://www.u-cursos.cl', 'sec-fetch-site': 'cross-site' }),
+    apiRequest('POST', {
+      origin: 'https://www.u-cursos.cl',
+      'sec-fetch-site': 'cross-site',
+      ...sameSiteRequestHeaders,
+    }),
   );
 
   expect(response.status).toBe(403);
@@ -44,12 +49,71 @@ test('a mutation from the application itself reaches the route', () => {
     apiRequest('POST', {
       origin: 'https://roadmap.example.test',
       'sec-fetch-site': 'same-origin',
+      ...sameSiteRequestHeaders,
     }),
   );
-  const withoutBrowserHeaders = rejectCrossSiteMutation(apiRequest('POST'));
+  const withoutBrowserHeaders = rejectCrossSiteMutation(apiRequest('POST', sameSiteRequestHeaders));
 
   expect(sameOrigin.headers.get('x-middleware-next')).toBe('1');
   expect(withoutBrowserHeaders.headers.get('x-middleware-next')).toBe('1');
+});
+
+test('a same-origin mutation without the application request header is rejected', async () => {
+  process.env.NEXTAUTH_URL = 'https://roadmap.example.test';
+
+  for (const headers of [
+    { origin: 'https://roadmap.example.test', 'sec-fetch-site': 'same-origin' },
+    {} as Record<string, string>,
+  ]) {
+    const response = rejectCrossSiteMutation(apiRequest('DELETE', headers));
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: 'CROSS_SITE_REQUEST' } });
+  }
+});
+
+test('the native form posts reach their routes from the same origin without the header', () => {
+  for (const url of [
+    'https://roadmap.example.test/api/logout',
+    'https://roadmap.example.test/api/plogin/start',
+  ]) {
+    const response = rejectCrossSiteMutation(
+      apiRequest('POST', { 'sec-fetch-site': 'same-origin' }, url),
+    );
+
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+  }
+});
+
+test('the native form exemption covers only its exact paths', () => {
+  for (const url of [
+    'https://roadmap.example.test/api/logout/other',
+    'https://roadmap.example.test/api/plogin/start/other',
+    'https://roadmap.example.test/api/plogin',
+  ]) {
+    const response = rejectCrossSiteMutation(
+      apiRequest('POST', { 'sec-fetch-site': 'same-origin' }, url),
+    );
+
+    expect(response.status).toBe(403);
+  }
+});
+
+test('a cross-site native form post is rejected', () => {
+  for (const url of [
+    'https://roadmap.example.test/api/logout',
+    'https://roadmap.example.test/api/plogin/start',
+  ]) {
+    const response = rejectCrossSiteMutation(
+      apiRequest(
+        'POST',
+        { origin: 'https://www.u-cursos.cl', 'sec-fetch-site': 'cross-site' },
+        url,
+      ),
+    );
+
+    expect(response.status).toBe(403);
+  }
 });
 
 test('reads from another site are left to the route', () => {

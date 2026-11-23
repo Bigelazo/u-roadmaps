@@ -39,6 +39,8 @@ const {
 } = await import('@/features/roadmap/server');
 const { POST: accessRoute } =
   await import('@/app/api/[courseCode]/[year]/[semester]/roadmap/resources/[resourceId]/access/route');
+const { GET: fileRoute } =
+  await import('@/app/api/[courseCode]/[year]/[semester]/roadmap/resources/[resourceId]/file/route');
 const { POST: completionRoute } =
   await import('@/app/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/completion/route');
 const { createRoadmap } = await import('@/features/roadmap/application/roadmap');
@@ -127,6 +129,32 @@ test('every student download counts, while teaching staff and closed Roadmaps re
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
   await download(student(course), resource.id);
   expect(await studentResource(course, resource.id)).toMatchObject({ accessCount: 3 });
+});
+
+test('a file read arriving from another site is served without counting as an access', async ({
+  course,
+}) => {
+  const resource = await fileResource(course);
+  const [, context] = courseRequest(course, course.studentId, { resourceId: resource.id });
+  const read = (fetchSite: string) =>
+    fileRoute(
+      new Request('http://localhost/file', { headers: { 'sec-fetch-site': fetchSite } }),
+      context,
+    );
+
+  const crossSite = await read('cross-site');
+  expect(crossSite.status).toBe(200);
+  expect(await crossSite.text()).toBe('Contenido');
+  expect(await studentResource(course, resource.id)).toMatchObject({
+    accessCount: 0,
+    isReviewed: false,
+  });
+
+  expect((await read('same-origin')).status).toBe(200);
+  expect(await studentResource(course, resource.id)).toMatchObject({
+    accessCount: 1,
+    isReviewed: true,
+  });
 });
 
 test('opening a Link records an access for the student, never for teaching staff or a File', async ({
