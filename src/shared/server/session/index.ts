@@ -14,6 +14,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.sub) {
         session.user.id = token.sub;
         session.user.useLocalFixtureData = token.useLocalFixtureData === true;
+        session.user.issuedAt = typeof token.iat === 'number' ? token.iat : 0;
       }
       return session;
     },

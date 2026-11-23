@@ -42,3 +42,7 @@ export async function reconcileInstitutionalUser({ rut, institutionalEmail, name
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
 }
+
+export async function revokeUserSessions(userId: string) {
+  await prisma.user.updateMany({ where: { id: userId }, data: { sessionsRevokedAt: new Date() } });
+}
