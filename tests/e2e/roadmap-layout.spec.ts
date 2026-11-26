@@ -398,24 +398,31 @@ test('keeps radial node actions evenly sized and separated', async ({ page, cour
   }
 });
 
-function recordColumnWidths(column: Locator) {
+type ColumnFrame = { width: number; holdsClosingPanel: boolean };
+
+function recordColumnFrames(column: Locator) {
   return column.evaluate(
     (element) =>
-      new Promise<number[]>((resolve) => {
-        const widths: number[] = [];
+      new Promise<ColumnFrame[]>((resolve) => {
+        const frames: ColumnFrame[] = [];
         const startedAt = performance.now();
         const sample = () => {
-          widths.push(element.getBoundingClientRect().width);
+          frames.push({
+            width: element.getBoundingClientRect().width,
+            holdsClosingPanel:
+              element.hasAttribute('inert') &&
+              Boolean(element.querySelector('#roadmap-editor-panel')?.checkVisibility()),
+          });
           if (performance.now() - startedAt < 800) requestAnimationFrame(sample);
-          else resolve(widths);
+          else resolve(frames);
         };
         requestAnimationFrame(sample);
       }),
   );
 }
 
-function intermediateWidths(widths: number[], panelWidth: number) {
-  return widths.filter((width) => width > 1 && width < panelWidth - 1);
+function intermediateFrames(frames: ColumnFrame[], panelWidth: number) {
+  return frames.filter(({ width }) => width > 1 && width < panelWidth - 1);
 }
 
 test('slides the side panel open and closed beside the canvas', async ({ page, course }) => {
@@ -428,20 +435,19 @@ test('slides the side panel open and closed beside the canvas', async ({ page, c
   const canvas = page.getByLabel('Lienzo del roadmap');
   const closedCanvas = await bounds(canvas);
 
-  const opening = recordColumnWidths(column);
+  const opening = recordColumnFrames(column);
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
-  const openingWidths = await opening;
+  const openingFrames = await opening;
   const { width: panelWidth } = await bounds(panel);
-  expect(intermediateWidths(openingWidths, panelWidth).length).toBeGreaterThan(0);
+  expect(intermediateFrames(openingFrames, panelWidth).length).toBeGreaterThan(0);
   expect((await bounds(column)).width).toBeCloseTo(panelWidth, 0);
   expect((await bounds(canvas)).width).toBeCloseTo(closedCanvas.width - panelWidth, 0);
 
-  const closing = recordColumnWidths(column);
+  const closing = recordColumnFrames(column);
   await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
-  await expect(column).toHaveAttribute('inert');
-  await expect(panel).toBeVisible();
-  const closingWidths = await closing;
-  expect(intermediateWidths(closingWidths, panelWidth).length).toBeGreaterThan(0);
+  const closingFrames = intermediateFrames(await closing, panelWidth);
+  expect(closingFrames.length).toBeGreaterThan(0);
+  expect(closingFrames.every(({ holdsClosingPanel }) => holdsClosingPanel)).toBe(true);
   await expect(panel).toBeHidden();
   await expect(column).not.toHaveAttribute('inert');
   expect((await bounds(canvas)).width).toBeCloseTo(closedCanvas.width, 0);
@@ -459,15 +465,15 @@ test('opens and closes the side panel without motion when reduced motion is requ
   const column = page.locator('[data-slot="roadmap-panel-column"]');
   const panel = page.locator('#roadmap-editor-panel');
 
-  const opening = recordColumnWidths(column);
+  const opening = recordColumnFrames(column);
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
-  const openingWidths = await opening;
+  const openingFrames = await opening;
   const { width: panelWidth } = await bounds(panel);
-  expect(intermediateWidths(openingWidths, panelWidth)).toEqual([]);
+  expect(intermediateFrames(openingFrames, panelWidth)).toEqual([]);
 
-  const closing = recordColumnWidths(column);
+  const closing = recordColumnFrames(column);
   await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
-  const closingWidths = await closing;
-  expect(intermediateWidths(closingWidths, panelWidth)).toEqual([]);
+  const closingFrames = await closing;
+  expect(intermediateFrames(closingFrames, panelWidth)).toEqual([]);
   await expect(panel).toBeHidden();
 });

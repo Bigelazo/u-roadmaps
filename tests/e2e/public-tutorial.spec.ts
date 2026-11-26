@@ -1,4 +1,10 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+
+const heroTutorialButton = (page: Page) =>
+  page
+    .getByRole('region', { name: 'Los contenidos de tus cursos merecen un mapa.' })
+    .getByRole('button', { name: 'Probar tutorial' });
 
 for (const { option, experience } of [
   { option: 'Docente', experience: 'teaching' },
@@ -13,7 +19,7 @@ for (const { option, experience } of [
         activityRequests.push(request.url());
     });
     await page.goto('/');
-    await page.getByRole('button', { name: 'Probar tutorial' }).click();
+    await heroTutorialButton(page).click();
     const choice = page.getByRole('dialog', { name: '¿Deseas realizar el tutorial?' });
     await expect(choice).toContainText(
       'Aprende los conceptos básicos de la plataforma en un Roadmap de prueba.',
@@ -26,7 +32,7 @@ for (const { option, experience } of [
 
     await page.getByRole('link', { name: 'Salir', exact: true }).click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByRole('button', { name: 'Probar tutorial' })).toBeVisible();
+    await expect(heroTutorialButton(page)).toBeVisible();
     expect(activityRequests).toEqual([]);
   });
 
@@ -62,7 +68,7 @@ test('an anonymous visitor can dismiss the tutorial choice and protected courses
   request,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Probar tutorial' }).click();
+  await heroTutorialButton(page).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL('/');

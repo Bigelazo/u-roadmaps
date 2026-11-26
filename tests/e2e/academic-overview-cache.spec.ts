@@ -282,6 +282,7 @@ test('stale and tampered browser information never grants server permissions or 
     }),
     403,
   );
+  const requestsBeforeReload = await academicHistoryRequests(user);
   await sql(
     `UPDATE "Participation" SET "isActive"=false WHERE "userId"=${literal(user.id)} AND "courseOfferingId"=${literal(course.id)};`,
   );
@@ -289,7 +290,7 @@ test('stale and tampered browser information never grants server permissions or 
   await expect(page.getByText(course.courseName, { exact: true })).toHaveCount(0);
   await expect(page.getByText('No registramos cursos inscritos', { exact: false })).toBeVisible();
   await ok(await api.get(course.apiPath()), 403);
-  expect(await academicHistoryRequests(user)).toBe(2);
+  expect(await academicHistoryRequests(user)).toBe(requestsBeforeReload);
 });
 
 test('loading, institutional failure and recovery retain the desktop and mobile presentation', async ({

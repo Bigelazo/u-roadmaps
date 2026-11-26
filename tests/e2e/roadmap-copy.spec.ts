@@ -92,6 +92,7 @@ const copyScenario = test.extend<{
       ],
     });
     await reportPosition(teachingAssistant, next, 'TEACHING_ASSISTANT');
+    await reportPosition(teacher, closed, 'COURSE_PROFESSOR');
     const api = await apiAs(teacher);
     const before: RoadmapBody = await (await api.get(closed.apiPath())).json();
     const scheduledNodeId = before.nodes.find(({ isVisible }) => isVisible)!.id;
