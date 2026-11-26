@@ -27,7 +27,12 @@ export function SiteFooter() {
           <FooterLink href="/privacy">Privacidad</FooterLink>
           <FooterLink href="/third-party-licenses">Licencias de terceros</FooterLink>
           <ReportProblemDialog version={packageJson.version} />
-          <span className="tabular-nums">v{packageJson.version}</span>
+          <a
+            href={`${repositoryUrl}/releases/tag/v${packageJson.version}`}
+            className="inline-flex min-h-11 items-center tabular-nums underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            v{packageJson.version}
+          </a>
           <Suspense fallback={<RepositoryLink href={repositoryUrl} stars={null} />}>
             <StarredRepositoryLink />
           </Suspense>
