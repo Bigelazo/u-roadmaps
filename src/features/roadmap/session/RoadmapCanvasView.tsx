@@ -389,7 +389,7 @@ export function RoadmapCanvasView({ input }: Props) {
             className={buttonVariants({
               variant: 'outline',
               className: cn(
-                'absolute top-4 right-4 z-10 col-start-1 row-start-1 sm:top-6 sm:right-6',
+                'absolute top-4 right-4 z-10 col-start-1 col-end-2 row-start-1 sm:top-6 sm:right-6',
                 isCanvasPreview && 'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
               ),
             })}

@@ -1327,9 +1327,10 @@ test('landing access starts VTI and dismisses authentication failures without re
   await expect(
     page.getByRole('banner').getByRole('button', { name: 'Ingresar con U-Pasaporte' }),
   ).toBeVisible();
-  await expect(page.getByRole('figure', { name: 'Ruta de aprendizaje de ejemplo' })).toBeVisible();
+  await expect(hero.getByRole('figure', { name: 'Ruta de aprendizaje de ejemplo' })).toBeVisible();
   await expect(
     page
+      .getByRole('region', { name: 'Del listado al mapa' })
       .getByRole('list', { name: 'Nodos de la ruta de ejemplo' })
       .getByRole('listitem')
       .filter({ hasText: 'Funciones: Contenido disponible y siguiente paso' }),

@@ -45,6 +45,40 @@ async function advanceTo(page: Page, index: number) {
   }
 }
 
+type PulseRecord = { pulses: number; offsets: Set<string> };
+
+async function recordDependencyPulses(page: Page) {
+  await page.evaluate(() => {
+    const record: PulseRecord = { pulses: 0, offsets: new Set() };
+    Object.assign(window, { dependencyPulses: record });
+    new MutationObserver((mutations) => {
+      for (const { type, addedNodes, target } of mutations) {
+        if (type === 'childList')
+          record.pulses += [...addedNodes].filter(
+            (node) =>
+              node instanceof Element && node.hasAttribute('data-tutorial-dependency-pulse'),
+          ).length;
+        else if (target instanceof Element && target.hasAttribute('data-tutorial-dependency-pulse'))
+          record.offsets.add(target.getAttribute('stroke-dashoffset') ?? '');
+      }
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributeFilter: ['stroke-dashoffset'],
+    });
+  });
+  const read = () =>
+    page.evaluate(() => {
+      const { pulses, offsets } = (window as unknown as { dependencyPulses: PulseRecord })
+        .dependencyPulses;
+      return { pulses, offsets: offsets.size };
+    });
+  return {
+    pulses: async () => (await read()).pulses,
+    offsets: async () => (await read()).offsets,
+  };
+}
+
 async function completionsOf(userId: string) {
   return queryJson<number>(
     `SELECT count(*)::int FROM "Completion" WHERE "userId" = ${literal(userId)};`,
@@ -74,17 +108,16 @@ test('a student walks through the tutorial and returns to their Roadmap', async 
     )
     .toBeGreaterThan(250);
   await page.screenshot({ path: 'test-results/tutorial-node-zoom.png' });
+  const recorded = await recordDependencyPulses(page);
   await advanceTo(page, 5);
-  const pulses = page.locator('[data-tutorial-dependency-pulse]');
-  await expect(pulses).toHaveCount(3);
-  const before = await pulses.first().getAttribute('stroke-dashoffset');
-  await expect.poll(() => pulses.first().getAttribute('stroke-dashoffset')).not.toBe(before);
+  await expect.poll(recorded.pulses).toBe(3);
+  await expect.poll(recorded.offsets).toBeGreaterThan(1);
   await expect(page.locator('[data-tutorial-highlight-group]')).toHaveClass(
     /driver-active-element/,
   );
   await page.screenshot({ path: 'test-results/tutorial-control-dependencies.png' });
   await advanceTo(page, 6);
-  await expect(pulses).toHaveCount(0);
+  await expect(page.locator('[data-tutorial-dependency-pulse]')).toHaveCount(0);
   await advanceTo(page, 8);
   const detail = page.locator('#student-node-detail-panel');
   await expect(detail).toHaveClass(/driver-active-element/);

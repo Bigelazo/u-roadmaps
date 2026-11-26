@@ -127,6 +127,22 @@ Tres cosas que conviene saber antes de desplegar:
 
 Si pones un proxy delante, desactiva el buffering para `/api/notifications/stream` y deja pasar cuerpos de al menos 11 MB.
 
+## Versiones
+
+La versión vive en el campo `version` de [package.json](package.json) y sigue [versionado semántico](https://semver.org/lang/es/): se sube el número mayor cuando un cambio obliga a migrar datos o despliegues a mano, el menor cuando se agrega una funcionalidad y el de parche cuando solo se corrigen errores. El pie de página muestra esa versión y enlaza a sus [notas de versión](https://github.com/Bigelazo/u-roadmaps/releases).
+
+Para publicar una versión:
+
+1. Sube `version` en `package.json` en un PR propio y fusiónalo en `main`.
+2. Desde ese commit de `main`, crea la etiqueta y la versión en GitHub con el mismo número antecedido de `v`:
+
+```bash
+git switch main && git pull
+gh release create v1.2.3 --target main --generate-notes
+```
+
+La etiqueta tiene que existir antes de desplegar: si no, el enlace del pie de página lleva a una página inexistente.
+
 ## Cómo está organizado el código
 
 ```text

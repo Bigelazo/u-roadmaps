@@ -28,6 +28,7 @@ for (const position of [
       participants: [{ user, role: 'TEACHER' }],
     });
     await reportPosition(user, offering, position);
+    await reportPosition(user, course, position);
     const api = await apiAs(user);
     const response = await api.post(offering.apiPath(), { data: {} });
     await ok(response, 403);
